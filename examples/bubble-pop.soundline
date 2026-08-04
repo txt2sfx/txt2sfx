@@ -1,0 +1,5 @@
+# Bubble wrap pop: a soft low body plus a bright noise snap.
+# The pitch drop must stay under 20ms or it turns into a cartoon "pew".
+sound "bubble pop" 35ms pop
+  thud: tone sine 480Hz -> 80Hz in 12ms | gain 0.9 decay 30ms
+  snap: noise white >> bp ~3200Hz[500..8000] Q6 | gain 0.7 decay 18ms

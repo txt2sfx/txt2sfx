@@ -1,0 +1,5 @@
+# Boot on gravel: broadband crunch, high grit, one loose stone.
+sound "footstep gravel" 220ms foley
+  crunch: noise pink >> bp ~900Hz[300..2500] Q2 >> dist drive 2 mix 0.4 | gain 0.55 attack 4ms decay 120ms
+  grit: noise white >> hp ~4500Hz[2000..9000] | gain 0.3 decay 60ms delay 25ms
+  stone: modal wood 1450Hz Q30 | gain 0.18 decay 90ms delay 60ms

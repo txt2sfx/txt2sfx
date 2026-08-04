@@ -1,0 +1,4 @@
+# Crisp interface tick: an impulse plus a tiny tonal body.
+sound "ui click" 45ms ui
+  tick: click 2ms >> hp 1200Hz | gain 0.6 decay 25ms
+  body: tone sine 1800Hz | gain 0.25 decay 18ms

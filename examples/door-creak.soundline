@@ -1,0 +1,7 @@
+# Rusty hinge: a slow rising resonant saw over friction noise, then a soft stop.
+# Honest limitation: v0 has no LFO, so the stick-slip stutter of a real creak
+# is approximated by the resonant filter rather than modelled.
+sound "door creak" 900ms foley
+  hinge: tone saw ~180Hz[90..400] -> 260Hz in 700ms >> bp ~1400Hz[600..3000] Q8 | gain 0.35 attack 40ms decay 850ms
+  friction: noise pink >> bp ~2200Hz[900..5000] Q10 | gain 0.2 decay 800ms
+  stop: sub 80Hz | gain 0.3 decay 200ms delay 700ms

@@ -1,0 +1,5 @@
+# Steel on steel: a noise strike transient plus two metallic modal rings.
+sound "sword clash" 700ms impact
+  strike: noise white >> bp ~5200Hz[2500..9000] Q3 | gain 0.5 decay 40ms
+  blade: modal metal 2100Hz ratios 1:2.41:3.86:5.12 Q120 >> verb 220ms mix 0.2 | gain 0.45 decay 600ms
+  body: modal metal 620Hz Q60 | gain 0.3 decay 350ms delay 5ms

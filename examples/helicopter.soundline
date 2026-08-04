@@ -1,0 +1,6 @@
+# Rotor chop: one short sub thump recirculated by a feedback delay (~11 blades/s).
+# Marked `loop` — the tail is meant to be spliced back onto the head.
+sound "helicopter" 1500ms cycle loop
+  chop: sub ~62Hz[40..110] >> delay ~90ms[60..140] feedback 0.88 mix 1 | gain 0.55 decay 45ms
+  wash: noise brown >> lp ~700Hz[300..1600] | gain 0.3 attack 120ms decay 1500ms
+  whine: tone tri ~1900Hz[900..3000] | gain 0.06 attack 200ms decay 1400ms

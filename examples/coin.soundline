@@ -1,0 +1,4 @@
+# NES-style coin pickup: two square-wave notes, B5 then a held E6.
+sound "coin" 260ms pickup
+  blip: tone square 988Hz | gain 0.5 decay 70ms
+  ring: tone square 1319Hz | gain 0.45 decay 180ms delay 70ms

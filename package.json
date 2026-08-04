@@ -1,0 +1,27 @@
+{
+  "name": "txt2sfx",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Text-to-SFX as code. Sounds that weigh bytes, not megabytes.",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -b packages/shared packages/core",
+    "typecheck": "tsc -b packages/shared packages/core",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "tsc -b --clean packages/shared packages/core"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

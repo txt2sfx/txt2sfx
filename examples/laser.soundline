@@ -1,0 +1,4 @@
+# Blaster shot: a fast downward chirp riding a short sub thump.
+sound "laser" 180ms laser
+  zap: chirp saw ~1800Hz[900..4000] -> 220Hz in 120ms | gain 0.6 decay 150ms
+  body: sub 90Hz -> 60Hz in 90ms | gain 0.35 decay 120ms

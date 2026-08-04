@@ -1,0 +1,5 @@
+# Ascending sweep with FM sparkle and a plucked final note.
+sound "powerup" 520ms pickup
+  sweep: tone square ~440Hz[220..660] -> 1760Hz in 380ms | gain 0.4 decay 420ms
+  shine: fm 1200Hz ratio 3.5 index 6 -> 0.5 in 300ms | gain 0.25 decay 350ms delay 60ms
+  tail: pluck 2637Hz damp 0.3 | gain 0.3 attack 5ms decay 180ms delay 340ms

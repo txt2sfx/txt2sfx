@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+apps/server/data/*.sqlite
+apps/server/data/*.sqlite-journal
+apps/web/.vite/
+.DS_Store

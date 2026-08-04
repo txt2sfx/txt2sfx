@@ -1,0 +1,5 @@
+# soundline files are compared byte-for-byte against the serializer output,
+# which always emits LF. Never let a checkout rewrite them to CRLF — and keep
+# every other text file consistent with them, on every platform.
+* text=auto eol=lf
+*.soundline text eol=lf
