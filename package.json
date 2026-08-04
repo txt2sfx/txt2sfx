@@ -10,8 +10,10 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "pnpm --filter @txt2sfx/web dev",
     "build": "tsc -b packages/shared packages/core",
-    "typecheck": "tsc -b packages/shared packages/core",
+    "build:web": "pnpm --filter @txt2sfx/web build",
+    "typecheck": "tsc -b packages/shared packages/core && pnpm --filter @txt2sfx/web typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "tsc -b --clean packages/shared packages/core"

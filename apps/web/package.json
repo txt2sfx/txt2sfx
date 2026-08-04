@@ -1,0 +1,26 @@
+{
+  "name": "@txt2sfx/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "soundline playground: edit, hear, tweak, export. Local-only — no keys, no server.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "@txt2sfx/core": "workspace:*",
+    "@txt2sfx/shared": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

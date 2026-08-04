@@ -1,5 +1,11 @@
-# Bubble wrap pop: a soft low body plus a bright noise snap.
-# The pitch drop must stay under 20ms or it turns into a cartoon "pew".
-sound "bubble pop" 35ms pop
-  thud: tone sine 480Hz -> 80Hz in 12ms | gain 0.9 decay 30ms
-  snap: noise white >> bp ~3200Hz[500..8000] Q6 | gain 0.7 decay 18ms
+# Game bubble pop, matched against a reference recording: a ~25 ms burst that
+# peaks near 1.1 kHz and decays about 1.2 dB per millisecond. The reference also
+# carries a ~150 ms room tail; that belongs to the engine's reverb, not inside a
+# 60 ms pop.
+# The pitch RISES — a collapsing cavity's resonance climbs as it shrinks, and
+# sweeping it downwards instead is what turns a pop into a dull thud.
+sound "bubble pop" 55ms pop
+  body: tone tri ~700Hz[500..1400] -> 1120Hz in 14ms >> lp ~2200Hz[900..4000] Q1 | gain 0.8 hold 3ms decay 38ms
+  # attack 0ms is required, not stylistic: the impulse is 1 ms long and the
+  # default 1 ms attack would still be opening when it is already over.
+  edge: click 1ms >> bp ~2800Hz[1200..6000] Q1 | gain 0.38 attack 0ms decay 6ms

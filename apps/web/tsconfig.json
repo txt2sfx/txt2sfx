@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+
+    /* Vite emits the bundle; tsc is only a type checker here, so the project
+       stays outside the `tsc -b` chain that builds `shared` and `core`. */
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+
+    /* The app resolves the workspace packages to their sources, exactly like
+       `vite.config.ts` and `vitest.config.ts` do: a change in `core` is visible
+       here without a build step, and there is no stale `dist/` to explain. */
+    "baseUrl": ".",
+    "paths": {
+      "@txt2sfx/shared": ["../../packages/shared/src/index.ts"],
+      "@txt2sfx/core": ["../../packages/core/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}
