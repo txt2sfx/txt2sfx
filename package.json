@@ -17,10 +17,13 @@
     "clean": "tsc -b --clean packages/shared packages/core"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "node-web-audio-api": "^2.1.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
