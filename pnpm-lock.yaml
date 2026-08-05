@@ -49,8 +49,26 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.1)
 
+  packages/analyzer:
+    dependencies:
+      '@txt2sfx/shared':
+        specifier: workspace:*
+        version: link:../shared
+
   packages/core:
     dependencies:
+      '@txt2sfx/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/optimizer:
+    dependencies:
+      '@txt2sfx/analyzer':
+        specifier: workspace:*
+        version: link:../analyzer
+      '@txt2sfx/core':
+        specifier: workspace:*
+        version: link:../core
       '@txt2sfx/shared':
         specifier: workspace:*
         version: link:../shared

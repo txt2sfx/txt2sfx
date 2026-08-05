@@ -88,6 +88,12 @@ function rmsFrames(samples: Float32Array, sampleRate: number, frameMs: number): 
  * first sample of that transient's foot. Steepest-rise rather than
  * first-above-threshold on purpose: a threshold picks up the reference's quiet
  * pre-roll and aligns the two sounds by their room noise.
+ *
+ * The search includes frame 0, measured against the silence before the signal.
+ * A render whose layers all carry `attack 0ms` starts at full amplitude and has
+ * no positive rise anywhere — every frame is quieter than the one before — so a
+ * search starting at frame 1 finds its best rise of zero somewhere in the
+ * trailing pad and puts the onset after the sound has finished.
  */
 export function onsetIndex(signal: Signal): number {
   const frameMs = 1;
@@ -97,8 +103,8 @@ export function onsetIndex(signal: Signal): number {
 
   let bestRise = -Infinity;
   let bestFrame = 0;
-  for (let f = 1; f < rms.length; f++) {
-    const rise = (rms[f] ?? 0) - (rms[f - 1] ?? 0);
+  for (let f = 0; f < rms.length; f++) {
+    const rise = (rms[f] ?? 0) - (f === 0 ? 0 : (rms[f - 1] ?? 0));
     if (rise > bestRise) {
       bestRise = rise;
       bestFrame = f;

@@ -19,7 +19,7 @@
  */
 
 import type { ArgValue, Loc, NodeArgs, NumberLiteral, SoundAST, Unit } from '@txt2sfx/shared';
-import { formatNumber } from '@txt2sfx/core';
+import { formatNumber, roundLiteral } from '@txt2sfx/core';
 
 /** One optimizable value, ready to be bound to a range input. */
 export interface Slot {
@@ -88,17 +88,11 @@ export function collectSlots(ast: SoundAST): Slot[] {
 /**
  * How many decimals to keep.
  *
- * A slider that writes `3218.7431640625Hz` into the source turns a readable
- * recipe into noise, so the precision is capped at what the ear can tell apart
- * for the magnitude in question.
+ * Shared with the optimizer through `@txt2sfx/core`: both write computed numbers
+ * back into a recipe, and two private copies of this table would eventually
+ * disagree about how the same value is spelled.
  */
-function round(value: number): number {
-  const abs = Math.abs(value);
-  if (abs >= 100) return Math.round(value);
-  if (abs >= 10) return Math.round(value * 10) / 10;
-  if (abs >= 1) return Math.round(value * 100) / 100;
-  return Math.round(value * 1000) / 1000;
-}
+const round = roundLiteral;
 
 /**
  * Whether the knob should travel logarithmically.

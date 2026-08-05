@@ -77,6 +77,24 @@ export function formatNumber(n: number): string {
   return n.toFixed(9).replace(/0+$/, '').replace(/\.$/, '');
 }
 
+/**
+ * Round a value to the precision a soundline is written with.
+ *
+ * Anything that computes a number and puts it back into the source has to agree
+ * on this, or the same value serializes two ways: a slider writing
+ * `3218.7431640625Hz` turns a readable recipe into noise, and an optimizer that
+ * searches at full float precision and *then* rounds ships a recipe that is not
+ * the candidate it measured. The precision is capped at what the ear can tell
+ * apart for the magnitude in question, so rounding is inaudible by construction.
+ */
+export function roundLiteral(value: number): number {
+  const abs = Math.abs(value);
+  if (abs >= 100) return Math.round(value);
+  if (abs >= 10) return Math.round(value * 10) / 10;
+  if (abs >= 1) return Math.round(value * 100) / 100;
+  return Math.round(value * 1000) / 1000;
+}
+
 /** Serialize a literal, including its optional `~value[min..max]` slot. */
 export function formatLiteral(lit: NumberLiteral): string {
   const body = `${formatNumber(lit.value)}${lit.unit}`;

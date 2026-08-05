@@ -11,12 +11,12 @@
   },
   "scripts": {
     "dev": "pnpm --filter @txt2sfx/web dev",
-    "build": "tsc -b packages/shared packages/core",
+    "build": "tsc -b packages/shared packages/core packages/analyzer packages/optimizer",
     "build:web": "pnpm --filter @txt2sfx/web build",
-    "typecheck": "tsc -b packages/shared packages/core && pnpm --filter @txt2sfx/web typecheck",
+    "typecheck": "tsc -b packages/shared packages/core packages/analyzer packages/optimizer && pnpm --filter @txt2sfx/web typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "tsc -b --clean packages/shared packages/core"
+    "clean": "tsc -b --clean packages/shared packages/core packages/analyzer packages/optimizer"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

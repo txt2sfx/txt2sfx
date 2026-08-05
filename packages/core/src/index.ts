@@ -1,11 +1,11 @@
 /**
  * `@txt2sfx/core` — the soundline DSL, its compiler and its two backends.
  *
- * Current surface: lexer, parser, serializer, the signature table they share, the
- * compiler that turns an AST into an {@link AudioIR}, and the two backends that
- * play that IR — live `AudioNode`s and exported JavaScript — plus offline
- * rendering and a WAV writer. `validate` lands in phase 3 and will be re-exported
- * from here, so this module stays the single public entry point.
+ * Current surface: lexer, parser, serializer, the signature table they share,
+ * the physical-invariant validator, the compiler that turns an AST into an
+ * {@link AudioIR}, and the two backends that play that IR — live `AudioNode`s
+ * and exported JavaScript — plus offline rendering and a WAV writer. This module
+ * is the single public entry point.
  *
  * @example
  * ```ts
@@ -31,6 +31,16 @@ export type { ParseResult } from './grammar/parser.js';
 export { serialize, serializeLayer } from './grammar/serializer.js';
 
 export {
+  INVARIANTS,
+  formatIssue,
+  formatIssues,
+  hasErrors,
+  validate,
+  validateRender,
+} from './validate/index.js';
+export type { RenderFacts, Rule } from './validate/index.js';
+
+export {
   EFFECTS,
   EFFECT_NAMES,
   ENVELOPE,
@@ -49,6 +59,7 @@ export {
   describeUnits,
   formatLiteral,
   formatNumber,
+  roundLiteral,
   toHz,
   toLinear,
   toMs,
