@@ -277,14 +277,20 @@ const attackVsVoice: Rule = (ast, out) => {
     const attackMs = numberOf(layer.envelope.args, ENVELOPE, 'attack');
     if (attackMs <= voiceMs / 2) continue;
 
-    const lost = 20 * Math.log10(Math.max(voiceMs / (2 * attackMs), 1e-3));
+    /* No decibel figure in the hint on purpose. The envelope's own attenuation is
+       computable — the ramp only reaches `voice / attack` of its peak before the
+       source ends — but the audible loss is not: the layer's chain and the source's
+       own spectrum decide the rest, which is why the case that motivated this rule
+       measured -41 dBFS where the envelope alone accounts for about -15. A number
+       that specific and that wrong is worse than no number, and the instruction is
+       the part the model acts on. */
     out.push({
       severity: attackMs > voiceMs ? 'error' : 'warn',
       layer: layer.name,
       rule: 'envelope.attack-longer-than-voice',
       got: `attack ${ms(attackMs)} over a ${ms(voiceMs)} ${layer.source.name}`,
       expected: `attack <= ${ms(voiceMs / 2)}`,
-      hint: `Write 'attack 0ms' in '${layer.name}'. The envelope is still opening when the impulse is over, so the layer renders about ${formatNumber(Math.round(lost))} dB below its gain — a click needs no attack ramp to avoid a discontinuity, it *is* one.`,
+      hint: `Write 'attack 0ms' in '${layer.name}'. The envelope is still opening when the impulse is already over, so the layer never reaches the gain it asks for and can end up inaudible. A click needs no attack ramp to avoid a discontinuity — it *is* one.`,
       loc: layer.envelope.loc,
     });
   }

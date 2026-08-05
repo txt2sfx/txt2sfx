@@ -1,0 +1,3 @@
+# The bank is generated: `pnpm --filter @txt2sfx/server seed` rebuilds it from
+# examples/, so the database file itself is never committed.
+data/

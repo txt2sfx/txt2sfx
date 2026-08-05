@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CENTROID_POINTS,
   ENVELOPE_POINTS,
+  SILENCE_LUFS,
   extractProfile,
   onsetIndex,
   peakOf,
@@ -104,10 +105,18 @@ describe('extractProfile: synthetic signals', () => {
     expect(tail(extractProfile(sine(800, 300)).rmsEnvelope)).toBeCloseTo(1, 1);
   });
 
-  it('reports level in a plausible LUFS range and silence as -Infinity', () => {
+  /**
+   * Silence floors at {@link SILENCE_LUFS} rather than reporting `-Infinity`, and
+   * that is a transport requirement, not a preference: a profile is stored in the
+   * recipe bank and sent over HTTP, and `-Infinity` arrives from JSON as `null`.
+   */
+  it('reports level in a plausible LUFS range and floors silence', () => {
     expect(extractProfile(sine(1000, 300, 1)).loudnessLufsApprox).toBeGreaterThan(-10);
     expect(extractProfile(sine(1000, 300, 0.05)).loudnessLufsApprox).toBeLessThan(-20);
-    expect(extractProfile({ samples: new Float64Array(RATE), sampleRate: RATE }).loudnessLufsApprox).toBe(-Infinity);
+
+    const silence = extractProfile({ samples: new Float64Array(RATE), sampleRate: RATE });
+    expect(silence.loudnessLufsApprox).toBe(SILENCE_LUFS);
+    expect(JSON.parse(JSON.stringify(silence)).loudnessLufsApprox).toBe(SILENCE_LUFS);
   });
 
   /**

@@ -152,6 +152,38 @@ describe('stopping', () => {
     expect(budget.generations).toBe(4);
   });
 
+  /**
+   * The stall contract, checked as an invariant rather than on one lucky seed: if a
+   * run stopped because it stalled, the last `stallGenerations` reports must show
+   * the same best fitness. Anything else means the counter counted a generation
+   * that improved — and a false stall is the expensive direction, since it is what
+   * tells the agent loop to send a language model off to redesign a topology.
+   */
+  it('never reports a stall while the best fitness is still improving', async () => {
+    const window = 20;
+    let stalledRuns = 0;
+
+    for (const seed of [3, 8, 12, 15, 21, 29, 34, 42]) {
+      const result = await differentialEvolution(rastrigin, {
+        dimensions: 6,
+        seed,
+        generations: 200,
+        stallGenerations: window,
+      });
+      if (result.stopped !== 'stalled') continue;
+      stalledRuns++;
+
+      const tail = result.history.slice(-window);
+      const settled = tail[0]?.bestFitness;
+      for (const report of tail) {
+        expect(report.bestFitness).toBe(settled);
+      }
+    }
+
+    /* The assertion above is vacuous if nothing stalled, so make sure something did. */
+    expect(stalledRuns).toBeGreaterThan(0);
+  });
+
   it('never spends more evaluations than population times generations plus one', async () => {
     const result = await differentialEvolution(sphere(0.5), {
       dimensions: 3,

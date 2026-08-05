@@ -31,6 +31,7 @@ export { dominantBin, fft, hann, isPow2, magnitudes, nextPow2, prevPow2, refineP
 export {
   CENTROID_POINTS,
   ENVELOPE_POINTS,
+  SILENCE_LUFS,
   extractProfile,
   onsetIndex,
   peakOf,

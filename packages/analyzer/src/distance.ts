@@ -30,7 +30,7 @@
 
 import type { SoundProfile } from '@txt2sfx/shared';
 import { magnitudes, prevPow2 } from './fft.js';
-import { onsetIndex, peakOf, type Signal } from './profile.js';
+import { SILENCE_LUFS, onsetIndex, peakOf, type Signal } from './profile.js';
 
 /* ------------------------------------------------------------------------- *
  * Scalar helpers
@@ -147,9 +147,17 @@ export function profileDistanceParts(
   return { ...parts, total };
 }
 
-/** Silence reports as -Infinity LUFS; treat it as the bottom of the scale. */
+/**
+ * Clamp a loudness to the bottom of the scale.
+ *
+ * `extractProfile` already floors silence at {@link SILENCE_LUFS}, so this only
+ * fires for a profile that arrived from somewhere else — the recipe bank stores
+ * client-supplied profiles, and one carrying `-Infinity` or a NaN would otherwise
+ * turn every distance computed against it into NaN, which no comparison can
+ * recover from.
+ */
 function finiteLufs(value: number): number {
-  return Number.isFinite(value) ? value : -70;
+  return Number.isFinite(value) ? Math.max(value, SILENCE_LUFS) : SILENCE_LUFS;
 }
 
 /** Weighted distance between two acoustic profiles, 0 for identical. */

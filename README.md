@@ -26,9 +26,9 @@ optimizable slot `~value[min..max]` for a numerical optimizer to nail down.
 > offline render, JS export that renders sample-identically to the live graph),
 > the physical-invariant validator, the acoustic analyzer (own FFT, profiles,
 > distance metrics, human-readable diffs), the differential-evolution optimizer
-> that fits `~` slots to a target sound, and a local web playground — editor,
-> slot sliders, spectrogram, WAV/JS export, and a compare-against-reference
-> panel. Still ahead: the recipe bank server and the LLM agent loop.
+> that fits `~` slots to a target sound, the recipe bank server, and a local web
+> playground — editor, slot sliders, spectrogram, WAV/JS export, and a
+> compare-against-reference panel. Still ahead: the LLM agent loop.
 > The full plan lives in
 > [`.plans/txt2sfx-v0.md`](.plans/txt2sfx-v0.md); this README is replaced by
 > the real one in the last phase.
@@ -38,10 +38,26 @@ optimizable slot `~value[min..max]` for a numerical optimizer to nail down.
 ```bash
 npm install -g pnpm@10   # corepack is gone from Node 25
 pnpm install
-pnpm test                # 389 tests: DSL, synthesis, codegen parity, validator, analyzer, optimizer
+pnpm test                # 462 tests: DSL, synthesis, codegen parity, validator, analyzer, optimizer, bank
 pnpm build
 pnpm dev                 # playground on http://localhost:5173
 ```
+
+The recipe bank is a separate process, and an outside agent can use it without
+cloning anything:
+
+```bash
+pnpm --filter @txt2sfx/server seed    # renders examples/ into a SQLite bank
+pnpm --filter @txt2sfx/server start   # http://127.0.0.1:8787
+curl http://127.0.0.1:8787/api/llms.txt
+```
+
+`GET /api/llms.txt` is the whole contract in one request — grammar, primitive and
+effect tables, per-category physical limits, and few-shot recipes — generated from
+the same tables the parser and validator use, so it cannot drift from what they
+accept. There is no native dependency to compile — the bank uses Node's built-in
+`node:sqlite`. It needs a Node whose SQLite was built with FTS5, which means
+22.16+, none of 23.x, or 24+; the server checks on startup and says so.
 
 ```ts
 import { codegen, parse, renderSound, serialize, validate } from '@txt2sfx/core';
@@ -66,6 +82,7 @@ devDependency — the core packages themselves stay dependency-free).
 | `packages/analyzer` | FFT, acoustic profiles, distance metrics, human-readable diffs. Zero deps. |
 | `packages/optimizer` | Differential evolution over a recipe's `~value[min..max]` slots. Zero deps. |
 | `apps/web` | Vite + React playground: edit, hear, measure, compare, export. |
+| `apps/server` | Recipe bank: SQLite + FTS5 behind a small REST API, plus `/api/llms.txt`. |
 | `examples/` | Ten reference recipes, also used to seed the recipe bank. |
 | `.plans/` | The v0 build plan, phase by phase. |
 

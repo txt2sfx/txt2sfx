@@ -45,6 +45,18 @@ const RMS_FRAME_MS = 1;
 /** -60 dBFS relative to the RMS peak: where a sound is declared over. */
 const TAIL_FLOOR = 0.001;
 
+/**
+ * Loudness reported for silence, in LUFS.
+ *
+ * A floor rather than `-Infinity`, and the reason is a failure chain rather than
+ * taste. A `SoundProfile` is stored in the recipe bank and sent over HTTP, and
+ * `-Infinity` does not survive JSON — it arrives as `null`. The bank's shape check
+ * then rejects the profile, and the caller is told it did not send one, having sent
+ * one. Below about -70 LUFS nothing is audible anyway, so nothing is lost by
+ * clamping, and the number stays a number everywhere it travels.
+ */
+export const SILENCE_LUFS = -70;
+
 /** Largest absolute sample. */
 export function peakOf(samples: ArrayLike<number>): number {
   let peak = 0;
@@ -315,9 +327,10 @@ function loudnessOf(signal: Signal, from: number, to: number): number {
     sum += out * out;
     count++;
   }
-  if (count === 0) return -Infinity;
+  if (count === 0) return SILENCE_LUFS;
   const meanSquare = sum / count;
-  return meanSquare <= 0 ? -Infinity : -0.691 + 10 * Math.log10(meanSquare);
+  if (meanSquare <= 0) return SILENCE_LUFS;
+  return Math.max(SILENCE_LUFS, -0.691 + 10 * Math.log10(meanSquare));
 }
 
 /**

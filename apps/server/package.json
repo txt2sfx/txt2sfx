@@ -1,0 +1,27 @@
+{
+  "name": "@txt2sfx/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Recipe bank: SQLite + FTS5 behind a small REST API, and the one-request entry point for an outside agent. The engine range is where Node's built-in SQLite is compiled with FTS5: 22.16+, none of 23.x, 24+.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.16.0 <23 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "dev": "tsc -b && node dist/index.js",
+    "seed": "tsc -b && node dist/seed.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@txt2sfx/analyzer": "workspace:*",
+    "@txt2sfx/core": "workspace:*",
+    "@txt2sfx/shared": "workspace:*",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "node-web-audio-api": "^2.1.0"
+  }
+}
