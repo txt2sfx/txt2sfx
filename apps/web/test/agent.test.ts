@@ -197,6 +197,21 @@ describe('progress lines', () => {
     ).toContain('1 error(s), 1 warning(s)');
     expect(describeEvent({ type: 'validated', iteration: 1, soundline: '', issues: [] })).toContain('clean');
     expect(describeEvent({ type: 'rendered', iteration: 1, peak: 0.5 })).toContain('0.500');
+    /* The distance, not the fitness. The fitness carries penalties the user never
+       asked about — a clipping candidate, an anchor holding the search to the recipe
+       — and a live number that ends up disagreeing with the verdict is worse than no
+       live number at all. */
+    expect(
+      describeEvent({
+        type: 'generation',
+        iteration: 1,
+        generation: 7,
+        bestFitness: 0.482,
+        distance: 0.371,
+        source: 'sound "x" 40ms pop\n',
+        diversity: 0.2,
+      }),
+    ).toBe('⚙ generation 7 · distance 0.371');
     expect(
       describeEvent({ type: 'optimized', iteration: 1, distance: 0.03, initialDistance: 0.19, stopped: 'target' }),
     ).toBe('⚙ fitted slots: 0.190 → 0.030 (target)');

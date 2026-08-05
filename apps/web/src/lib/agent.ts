@@ -321,8 +321,10 @@ export function describeEvent(event: AgentEvent): string {
       return `▮ rendered, peak ${d3(event.peak)}`;
     case 'generation':
       /* Rendered as a live line that updates rather than appended, so a 44-generation
-         fit does not bury the shape of the run. See `PromptBar`. */
-      return `⚙ generation ${String(event.generation)} · best ${d3(event.bestFitness)}`;
+         fit does not bury the shape of the run. The distance, not the fitness: the
+         fitness carries penalties the user did not ask about, and a live number that
+         disagrees with the final verdict is worse than no live number. See `PromptBar`. */
+      return `⚙ generation ${String(event.generation)} · distance ${d3(event.distance)}`;
     case 'optimized':
       return `⚙ fitted slots: ${d3(event.initialDistance)} → ${d3(event.distance)} (${event.stopped})`;
     case 'feedback':

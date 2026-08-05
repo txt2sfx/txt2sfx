@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse, serialize, validate } from '@txt2sfx/core';
 import { extractProfile } from '@txt2sfx/analyzer';
-import { applyVector, collectSlots, optimize } from '../src/index.js';
+import { applyVector, collectSlots, optimize, seedVector, valueToPosition } from '../src/index.js';
 import { loadExample, renderSignal, targetFrom } from './helpers/render.js';
 
 /** Push every slot to one end of its range — the corruption to recover from. */
@@ -22,6 +22,17 @@ const corrupt = (source: string, position: number): string => {
     slots,
     slots.map(() => position),
   );
+};
+
+/** How far a result travelled from the recipe it started at, in cube units. */
+const drift = (source: string, values: readonly number[]): number => {
+  const slots = collectSlots(parse(source));
+  const start = seedVector(slots);
+  let sum = 0;
+  slots.forEach((slot, index) => {
+    sum += Math.abs(valueToPosition(slot, values[index] ?? slot.value) - (start[index] ?? 0));
+  });
+  return sum / Math.max(1, slots.length);
 };
 
 describe('recovery: the phase acceptance criterion', () => {
@@ -194,7 +205,186 @@ describe('what the optimizer is not allowed to do', () => {
   );
 });
 
+/**
+ * "The same recipe, with better numbers" is a promise this module makes in its own
+ * docblock, and for a long time nothing in the code kept it.
+ *
+ * The distance metric is scale-normalized and onset-aligned, so it cannot see the
+ * difference between *this sound, closer* and *a different sound that happens to
+ * score well*; a broadband wash with the right envelope and centroid trajectory
+ * beats a recognizable version of what was asked for. Fitting a recipe against an
+ * unrelated reference is that pressure at its worst, and it is exactly what the
+ * playground does every time a model's design is fitted to a recording.
+ */
+describe('staying the recipe it was given', () => {
+  it(
+    'wanders less with an anchor than without one, fitted to an unrelated sound',
+    async () => {
+      const source = loadExample('bubble-pop');
+      /* Gravel against a bubble pop: nothing in the search space is close, so the
+         search is free to go looking anywhere, which is the whole problem. */
+      const target = await targetFrom(parse(loadExample('footstep-gravel')));
+      const settings = {
+        source,
+        target,
+        render: renderSignal,
+        generations: 12,
+        populationSize: 10,
+        seed: 4,
+      } as const;
+
+      const free = await optimize(settings);
+      const held = await optimize({ ...settings, anchor: 0.25, initialSpread: 0.25 });
+
+      const wandered = drift(source, free.values);
+      const stayed = drift(source, held.values);
+      expect(stayed).toBeLessThan(wandered);
+      /* Not a wall, though: the point is a cost, not a cage. The anchored run still
+         has to have improved on the recipe as written. */
+      expect(held.distance).toBeLessThanOrEqual(held.initialDistance);
+    },
+    240_000,
+  );
+
+  it(
+    'reports a distance the anchor is not folded into',
+    async () => {
+      const source = loadExample('bubble-pop');
+      const target = await targetFrom(parse(source));
+      const result = await optimize({
+        source: corrupt(source, 1),
+        target,
+        render: renderSignal,
+        generations: 4,
+        populationSize: 6,
+        seed: 8,
+        anchor: 0.9,
+      });
+
+      /* A distance is a distance: comparable across runs, across anchors, and
+         against the threshold the agent loop accepts on. Penalties belong to the
+         search, and a reported number that quietly carried one would make an
+         accepted recipe and a rejected one incomparable. */
+      expect(result.distance).toBeGreaterThanOrEqual(0);
+      expect(result.distance).toBeLessThanOrEqual(1);
+      expect(result.de.bestFitness).toBeGreaterThanOrEqual(result.distance);
+    },
+    120_000,
+  );
+});
+
+describe('stopping a fit', () => {
+  it(
+    'returns the best recipe it had reached when the signal fires',
+    async () => {
+      const source = loadExample('bubble-pop');
+      const target = await targetFrom(parse(source));
+      const controller = new AbortController();
+      const seen: number[] = [];
+
+      const result = await optimize({
+        source: corrupt(source, 1),
+        target,
+        render: renderSignal,
+        generations: 200,
+        populationSize: 8,
+        seed: 5,
+        stallGenerations: 10_000,
+        signal: controller.signal,
+        onGeneration: (report) => {
+          seen.push(report.generation);
+          if (report.generation === 3) controller.abort();
+        },
+      });
+
+      expect(result.de.stopped).toBe('aborted');
+      /* 200 generations were authorised and four were spent. Before the signal
+         reached the search, this is precisely what a cancelled run kept doing. */
+      expect(seen.length).toBeLessThanOrEqual(4);
+      /* And the wait was not wasted: what comes back is a recipe, and a better one. */
+      expect(serialize(parse(result.source))).toBe(result.source);
+      expect(result.distance).toBeLessThan(result.initialDistance);
+    },
+    120_000,
+  );
+
+  it(
+    'hands each generation the leader as something that can be played',
+    async () => {
+      const source = loadExample('bubble-pop');
+      const target = await targetFrom(parse(source));
+      const reports: { source: string; distance: number; bestFitness: number }[] = [];
+
+      await optimize({
+        source: corrupt(source, 1),
+        target,
+        render: renderSignal,
+        generations: 4,
+        populationSize: 6,
+        seed: 11,
+        stallGenerations: 100,
+        anchor: 0.2,
+        onGeneration: (report) =>
+          reports.push({
+            source: report.source,
+            distance: report.distance,
+            bestFitness: report.bestFitness,
+          }),
+      });
+
+      expect(reports).toHaveLength(4);
+      for (const report of reports) {
+        /* Renderable as it stands — a number cannot be listened to, and the failure
+           this exists to catch is inaudible in the number. */
+        expect(() => validate(parse(report.source))).not.toThrow();
+        expect(report.source).toContain('sound "bubble pop"');
+        /* The honest distance, so a live line and the final verdict agree. */
+        expect(report.distance).toBeLessThanOrEqual(report.bestFitness + 1e-9);
+      }
+      /* Best-so-far, so the leader can only improve. */
+      for (let i = 1; i < reports.length; i++) {
+        expect(reports[i]?.bestFitness).toBeLessThanOrEqual(reports[i - 1]?.bestFitness ?? 1);
+      }
+    },
+    120_000,
+  );
+});
+
 describe('degenerate and cheap paths', () => {
+  /**
+   * Quantization means a neighbourhood of positions is one recipe, and DE proposes
+   * the same recipe over and over — which used to be paid for in renders, the most
+   * expensive thing in the loop, for an answer already known.
+   */
+  it(
+    'renders each distinct recipe once, however many times it is proposed',
+    async () => {
+      /* One slot, two millimetres wide: 21 distinct recipes exist at the precision
+         a soundline is written with, and the search will ask for far more than 21
+         candidates. */
+      const source = 'sound "pop" 55ms pop\n  body: tone tri 900Hz | gain 0.8 decay ~30ms[29..31]\n';
+      const target = await targetFrom(parse('sound "pop" 55ms pop\n  body: tone tri 900Hz | gain 0.8 decay 30ms\n'));
+
+      let renders = 0;
+      const result = await optimize({
+        source,
+        target,
+        render: (ast) => {
+          renders++;
+          return renderSignal(ast);
+        },
+        generations: 20,
+        populationSize: 8,
+        seed: 3,
+        stallGenerations: 10_000,
+      });
+
+      expect(result.de.evaluations).toBeGreaterThan(100);
+      expect(renders).toBeLessThanOrEqual(21);
+    },
+    120_000,
+  );
+
   it(
     'reports the distance of a recipe with no slots and leaves it alone',
     async () => {

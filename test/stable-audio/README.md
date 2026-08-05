@@ -11,6 +11,34 @@ python test/stable-audio/run.py "glass bottle shattering on concrete"
 The first run provisions everything it needs; later runs go straight to generation.
 Output lands in `test/stable-audio/out/` as 44.1 kHz stereo WAV.
 
+## From the playground
+
+Once the venv exists, `pnpm dev` can drive this script directly: the Compare panel grows a
+**⤓ Render target** button that renders the prompt in the prompt bar and loads the result as
+the reference — so the diffusion take is one click from the A/B player, the spectrogram diff,
+`⌖ Fit to reference`, and the **match reference** box on a generate run. Renders already in
+`out/` are in the dropdown next to it; re-rendering yesterday's prompt is pure waste.
+
+The endpoint (`apps/web/plugins/stable-audio.ts`, dev-only, `apply: 'serve'`) deliberately
+does **not** provision anything — it drives an installation that is already there, because a
+1.7 GB download and a licence gate behind a spinner in a browser tab is the wrong shape.
+Run the command above once, then the button works.
+
+Two things live in the dev server's environment rather than in the page:
+
+```powershell
+$env:HF_TOKEN = "hf_..."                                    # gated weights
+$env:STABLE_AUDIO_REPO = "someone/stable-audio-open-small"  # optional: default repo
+pnpm dev
+```
+
+`HF_TOKEN` has to be exported *before* the dev server starts — a token in the terminal where
+you first ran `run.py` is not visible to it, and the panel says so when it is missing. If the
+gate is in the way, the `repo` box next to the button is the `--repo` flag: point it at a
+mirror your Hugging Face cache already holds and no token is needed. That choice is
+remembered in `localStorage` (it is a repo id, not a credential), and `STABLE_AUDIO_REPO`
+sets the default for a machine.
+
 ## What the first run does
 
 1. **Provisions a venv** at `test/stable-audio/.venv` on **CPython 3.10** — `stable-audio-tools`

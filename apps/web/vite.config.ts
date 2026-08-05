@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { examplesFs } from './plugins/examples-fs.js';
+import { stableAudio } from './plugins/stable-audio.js';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const r = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
@@ -12,7 +13,7 @@ const r = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
  * the result should not require a build step in between.
  */
 export default defineConfig({
-  plugins: [react(), examplesFs(r('../../examples'))],
+  plugins: [react(), examplesFs(r('../../examples')), stableAudio(r('../../test/stable-audio'))],
   resolve: {
     alias: {
       '@txt2sfx/shared': r('../../packages/shared/src/index.ts'),

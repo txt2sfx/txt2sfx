@@ -64,7 +64,7 @@ import {
  * - `no-soundline` / `parse-error` / `invalid` / `render` — the last attempt failed
  *   that stage and the iteration budget ran out.
  * - `distance` — valid and audible, but further from the target than asked, with
- *   the optimizer still improving when its budget ended.
+ *   the optimizer still improving when its budget ended or when it was cancelled.
  */
 export type Outcome =
   | 'accepted'
@@ -129,7 +129,21 @@ export type AgentEvent =
       readonly type: 'generation';
       readonly iteration: number;
       readonly generation: number;
+      /** Fitness of the leader: distance plus whatever penalties applied to it. */
       readonly bestFitness: number;
+      /** Its distance to the target, penalties excluded — comparable to the verdict. */
+      readonly distance: number;
+      /**
+       * The leader as a writable recipe.
+       *
+       * Carried so a UI can render and *play* the search while it runs. Without it
+       * a consumer has a number and nothing to listen to, and the expensive failure
+       * here is inaudible in the number: a search that improves the metric while
+       * walking away from the sound that was asked for looks like a healthy curve
+       * and sounds like a different sound. One playback settles it; forty-four
+       * generations of waiting to find out does not.
+       */
+      readonly source: string;
       /** Population spread; 0 means the search has converged. */
       readonly diversity: number;
     }
@@ -138,7 +152,7 @@ export type AgentEvent =
       readonly iteration: number;
       readonly distance: number;
       readonly initialDistance: number;
-      readonly stopped: 'target' | 'stalled' | 'budget';
+      readonly stopped: 'target' | 'stalled' | 'budget' | 'aborted';
     }
   | { readonly type: 'feedback'; readonly iteration: number; readonly message: string }
   | { readonly type: 'done'; readonly outcome: Outcome; readonly accepted: boolean };
@@ -193,6 +207,17 @@ export interface GenerateOptions {
     readonly populationSize?: number;
     readonly seed?: number;
     readonly stallGenerations?: number;
+    /**
+     * How firmly the fit is held to the topology the model just designed.
+     *
+     * Worth setting here, and not only in the optimizer's own tests: this loop is
+     * the one caller whose seed recipe is a *design*, not a starting guess. The
+     * search left to itself optimizes the metric, and the metric is scale-normalized
+     * and onset-aligned — a wash with the right envelope beats a recognizable
+     * version of the intended sound. See `OptimizeOptions.anchor`.
+     */
+    readonly anchor?: number;
+    readonly initialSpread?: number;
   };
   readonly onEvent?: (event: AgentEvent) => void;
   readonly signal?: AbortSignal;
@@ -417,12 +442,22 @@ export async function generateSound(options: GenerateOptions): Promise<GenerateR
       ...(options.optimizer?.stallGenerations === undefined
         ? {}
         : { stallGenerations: options.optimizer.stallGenerations }),
+      ...(options.optimizer?.anchor === undefined ? {} : { anchor: options.optimizer.anchor }),
+      ...(options.optimizer?.initialSpread === undefined
+        ? {}
+        : { initialSpread: options.optimizer.initialSpread }),
+      /* The same signal the provider gets. Before this, Stop reached the model call
+         and nothing else: a cancelled run went quiet while a population's worth of
+         renders per generation kept burning the thread it was cancelled from. */
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
       onGeneration: (report) =>
         emit({
           type: 'generation',
           iteration,
           generation: report.generation,
           bestFitness: report.bestFitness,
+          distance: report.distance,
+          source: report.source,
           diversity: report.diversity,
         }),
     });
@@ -467,12 +502,17 @@ export async function generateSound(options: GenerateOptions): Promise<GenerateR
      * `stopped: 'target'` for a zero-dimensional run, meaning "nothing to
      * optimize" rather than "target reached", so this cannot be read off `de`.
      */
-    const stuck = fitted.de.stopped === 'stalled' || fitted.slots.length === 0;
+    const stuck =
+      fitted.de.stopped !== 'aborted' && (fitted.de.stopped === 'stalled' || fitted.slots.length === 0);
 
     if (!stuck) {
-      /* Still improving when the generation budget ran out. Asking for a new
-         topology here would discard a search that was working; the caller's move
-         is more generations, not another model call. */
+      /* Two ways to get here, and neither is a verdict on the topology.
+         Still improving when the generation budget ran out: asking for a new
+         topology would discard a search that was working, and the caller's move is
+         more generations, not another model call. Or cancelled: the fitted recipe is
+         the best the search reached before the user gave up on it, worth handing
+         back — while spending their next turn on a redesign they did not ask for is
+         the one thing pressing Stop was meant to prevent. */
       attempts.push({
         iteration,
         reply,

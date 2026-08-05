@@ -1,11 +1,15 @@
 /**
  * Text in, soundline out — the front door of the playground.
  *
- * The panel owns the run and nothing else: the prompt, the provider choice, the
- * key, and the log of what the loop did. The recipe it produces is handed up, and
- * from there it is an ordinary editor buffer like any other, because the whole
- * point of a text format is that a generated recipe and a hand-written one are the
- * same kind of thing.
+ * The panel owns the run and nothing else: the provider choice, the key, and the
+ * log of what the loop did. The recipe it produces is handed up, and from there it
+ * is an ordinary editor buffer like any other, because the whole point of a text
+ * format is that a generated recipe and a hand-written one are the same kind of
+ * thing.
+ *
+ * The prompt itself belongs to `App`: under dev a second engine answers the same
+ * sentence to produce the reference (see `components/StableAudio.tsx`), and a
+ * comparison between two engines given two different sentences is worthless.
  *
  * ## The key
  *
@@ -27,6 +31,17 @@
  * clipping, the optimizer moved the numbers, and the model was only asked again
  * when there was something it could act on. A spinner would hide exactly that.
  *
+ * ## Watching the fit, and leaving with it
+ *
+ * A fit against a reference is the one stage that takes a minute, and it used to be
+ * a minute of one number moving. That is the wrong thing to watch: the failure mode
+ * of a metric-driven search is a candidate that scores better and sounds like
+ * something else, which a falling number cannot show. So the leader of each
+ * generation comes back as a recipe, and `FitPreview` renders and plays it while the
+ * search continues. Stop reaches the search itself now, and keeps the best it had
+ * reached; `⤓ take it` does the same in one click, because a leader that is already
+ * the sound someone wanted should not have to survive another thirty generations.
+ *
  * @packageDocumentation
  */
 
@@ -46,9 +61,13 @@ import {
 } from '../lib/agent.js';
 import { bridge } from '../lib/bridge.js';
 import { canRemember, keystore } from '../lib/keystore.js';
+import { FitPreview } from './FitPreview.js';
 
 /** What the panel needs from the app around it. */
 export interface PromptBarProps {
+  /** The prompt, owned by `App` so the reference can be rendered from the same text. */
+  readonly prompt: string;
+  readonly onPromptChange: (prompt: string) => void;
   /** Recipes the mock provider may answer with — whatever the gallery is showing. */
   readonly recipes: readonly DemoRecipe[];
   /** Few-shot source for the real providers. `null` when no bank is reachable. */
@@ -75,8 +94,22 @@ export interface PromptBarProps {
  *
  * The cost is real: every generation is a population's worth of offline renders on
  * the UI thread. That is what the per-generation progress line is for.
+ *
+ * `anchor` and `initialSpread` are the two settings that keep the search on the
+ * recipe the model designed, and they were added the first time a run was watched
+ * end to end: a `game-bubble-pop` that was accepted as "a bit eight-bit but right"
+ * came back, after 44 quiet generations, as a completely different sound with a
+ * better number. Both causes were structural rather than unlucky. Fifteen of the
+ * sixteen starting individuals were uniform samples over every slot's full range,
+ * so the design survived as one individual in a population whose centre of mass
+ * was somewhere else entirely within a few generations; and the fitness had no
+ * term for staying itself, while the metric it does have is peak-normalized and
+ * onset-aligned — a broadband wash with the right envelope and centroid can beat a
+ * recognizable pop. A spread of 0.25 starts the population around the design; an
+ * anchor of 0.25 makes wandering off it cost something. Neither is a wall: a
+ * candidate that is genuinely much closer still wins.
  */
-const OPTIMIZER = { generations: 44, populationSize: 16 } as const;
+const OPTIMIZER = { generations: 44, populationSize: 16, anchor: 0.25, initialSpread: 0.25 } as const;
 
 /**
  * Trips through the model.
@@ -89,6 +122,8 @@ const OPTIMIZER = { generations: 44, populationSize: 16 } as const;
 const MAX_ITERATIONS = 5;
 
 export function PromptBar({
+  prompt,
+  onPromptChange,
   recipes,
   bank,
   seed,
@@ -96,7 +131,6 @@ export function PromptBar({
   takenNames,
   onGenerated,
 }: PromptBarProps): React.JSX.Element {
-  const [prompt, setPrompt] = useState('');
   const [kind, setKind] = useState<ProviderKind>('mock');
   const [apiKey, setApiKey] = useState('');
   /* Empty means "whatever the provider's default is". Editable because vendors
@@ -110,11 +144,24 @@ export function PromptBar({
   const [log, setLog] = useState<readonly string[]>([]);
   /** The search's live line, kept out of the log so it updates instead of piling up. */
   const [progress, setProgress] = useState<string | null>(null);
+  /**
+   * The candidate currently winning the fit.
+   *
+   * Kept here rather than left in the event stream because it is the answer to the
+   * question a fit used to leave unanswerable: *what does it sound like now*. The
+   * search is a minute of numbers moving; the recipe behind the numbers is a sound
+   * that can be played and looked at while it moves (see `FitPreview`).
+   */
+  const [best, setBest] = useState<{ source: string; distance: number } | null>(null);
   const [running, setRunning] = useState(false);
+  /** Stop has been asked for and the search has not noticed yet. Usually one render. */
+  const [stopping, setStopping] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const abort = useRef<AbortController | null>(null);
+  /** The leader was taken by hand, so the run's own result must not be filed twice. */
+  const taken = useRef(false);
 
   const options = providerOptions(import.meta.env.DEV);
   const option = options.find((entry) => entry.kind === kind);
@@ -140,10 +187,13 @@ export function PromptBar({
       const { prompt, kind, apiKey, model } = config;
       const controller = new AbortController();
       abort.current = controller;
+      taken.current = false;
       setRunning(true);
+      setStopping(false);
       setLog([]);
       setResult(null);
       setError(null);
+      setBest(null);
 
       const provider =
         kind === 'mock'
@@ -182,8 +232,9 @@ export function PromptBar({
         if (controller.signal.aborted) return;
         if (event.type === 'generation') {
           setProgress(
-            `⚙ fitting generation ${String(event.generation)}/${String(OPTIMIZER.generations)} · best ${event.bestFitness.toFixed(3)}${event.diversity < 0.01 ? ' · converged' : ''}`,
+            `⚙ fitting generation ${String(event.generation)}/${String(OPTIMIZER.generations)} · distance ${event.distance.toFixed(3)}${event.diversity < 0.01 ? ' · converged' : ''}`,
           );
+          setBest({ source: event.source, distance: event.distance });
           return;
         }
         setProgress(null);
@@ -192,12 +243,23 @@ export function PromptBar({
       signal: controller.signal,
     })
       .then((outcome) => {
-        if (controller.signal.aborted) return;
         setResult(outcome);
+        /* A cancelled run still produced something, and the optimizer now returns
+           the best individual it had reached rather than abandoning it. Discarding
+           that on the way out — which is what the old `aborted` guard here did —
+           made Stop cost the user the whole wait they had just decided to cut. */
+        if (controller.signal.aborted) {
+          setLog((lines) => [
+            ...lines,
+            taken.current
+              ? '● taken — the candidate is in the gallery, tune it with the sliders'
+              : '● stopped — keeping the best the search had reached',
+          ]);
+        }
         /* Anything that parsed is worth handing over, accepted or not: a recipe
            that is valid but 0.3 from the target is the starting point for the
            sliders, and throwing it away would waste the run. */
-        if (outcome.soundline !== '') {
+        if (outcome.soundline !== '' && !taken.current) {
           onGenerated({
             name: recipeName(prompt, takenNames),
             source: outcome.soundline,
@@ -206,13 +268,21 @@ export function PromptBar({
         }
       })
       .catch((failure: unknown) => {
-        if (controller.signal.aborted) return;
+        /* An abort mid-request arrives here as a rejection. That is a cancellation,
+           not a fault, and reporting the fetch's own wording as an error would blame
+           the run for doing what it was told. */
+        if (controller.signal.aborted) {
+          setLog((lines) => [...lines, '● cancelled before anything was measured']);
+          return;
+        }
         setError(failure instanceof Error ? failure.message : String(failure));
       })
       .finally(() => {
         if (abort.current === controller) abort.current = null;
         setProgress(null);
+        setBest(null);
         setRunning(false);
+        setStopping(false);
       });
     },
     [bank, onGenerated, recipes, reference, remember, seed, takenNames],
@@ -267,19 +337,44 @@ export function PromptBar({
   useEffect(() => {
     bridge.setRunner((nextPrompt, runOptions) => {
       const wantsTarget = runOptions.target === true && reference !== null;
-      setPrompt(nextPrompt);
+      onPromptChange(nextPrompt);
       setKind('bridge');
       setMatchReference(wantsTarget);
       start({ prompt: nextPrompt, kind: 'bridge', apiKey: '', model: '', useTarget: wantsTarget });
     });
-  }, [reference, start]);
+  }, [onPromptChange, reference, start]);
 
+  /**
+   * Ask the run to stop, and wait for it to actually stop.
+   *
+   * Deliberately not `setRunning(false)` here. The old version did, and it lied:
+   * the abort signal reached the model call and nothing else, so the optimizer kept
+   * rendering a population per generation on this thread while the panel said the
+   * run was over — a cancelled fit that still owned the machine. The signal now
+   * reaches the search, which checks it before every render, so the honest thing is
+   * to show `stopping` for the one render it takes and let the promise's `finally`
+   * declare the run finished.
+   */
   const cancel = useCallback(() => {
-    abort.current?.abort();
-    abort.current = null;
-    setRunning(false);
-    setLog((lines) => [...lines, '● cancelled']);
+    if (abort.current === null) return;
+    setStopping(true);
+    abort.current.abort();
   }, []);
+
+  /**
+   * Keep the candidate on screen and end the run.
+   *
+   * The third thing missing from a long fit, after seeing and hearing it: leaving
+   * with it. A leader that is already the sound the user wanted has no reason to
+   * spend thirty more generations drifting, and the Slots panel is the same search
+   * by hand and audible immediately.
+   */
+  const take = useCallback(() => {
+    if (best === null) return;
+    taken.current = true;
+    onGenerated({ name: recipeName(prompt, takenNames), source: best.source, prompt });
+    cancel();
+  }, [best, cancel, onGenerated, prompt, takenNames]);
 
   return (
     <div className="prompt">
@@ -297,11 +392,11 @@ export function PromptBar({
           value={prompt}
           placeholder="a heavy metal door slamming shut in a corridor"
           aria-label="describe the sound"
-          onChange={(event) => setPrompt(event.target.value)}
+          onChange={(event) => onPromptChange(event.target.value)}
         />
         {running ? (
-          <button type="button" onClick={cancel}>
-            ■ Stop
+          <button type="button" onClick={cancel} disabled={stopping}>
+            {stopping ? '■ stopping…' : '■ Stop'}
           </button>
         ) : (
           <button type="submit" className="primary" disabled={blocked}>
@@ -411,6 +506,10 @@ export function PromptBar({
           {result === null ? null : <Verdict result={result} hadTarget={useTarget} />}
         </div>
       )}
+
+      {/* Outside the log on purpose: the log is a scrolling column with a ceiling,
+          and a picture that has to be scrolled into view is a picture nobody sees. */}
+      {best === null || !running ? null : <FitPreview source={best.source} seed={seed} onTake={take} />}
     </div>
   );
 }

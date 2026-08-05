@@ -248,6 +248,75 @@ describe('generateSound — with a target', () => {
     /* One model call: the model was never asked to fix a search problem. */
     expect(provider.requests).toHaveLength(1);
   }, 60_000);
+
+  /**
+   * Cancelling a run has to reach the search, and has to keep what it found.
+   *
+   * The signal used to be handed to the provider and nowhere else, so a cancelled
+   * run went quiet while the optimizer carried on rendering a population per
+   * generation — and the recipe it had reached was thrown away on the way out. Both
+   * halves are the same bug from the user's side: pressing Stop cost them the machine
+   * *and* the wait they had just decided to cut short.
+   */
+  it('stops the fit when the caller aborts, and keeps the best recipe it reached', async () => {
+    /* A click as the target for a bubble pop: no slot value makes this recipe that
+       sound, so the search cannot finish early and the abort is what ends the run. */
+    const target = await targetFrom(UI_CLICK);
+    const provider = mockProvider({ replies: [fenced(BUBBLE_POP_DISPLACED), fenced(BUBBLE_POP)] });
+    const controller = new AbortController();
+
+    const result = await generateSound({
+      prompt: 'bubble wrap pop',
+      provider,
+      render: renderSignal,
+      target,
+      maxIterations: 2,
+      targetDistance: 0.0001,
+      /* 500 generations authorised, one spent. The stall window is left wide so the
+         only thing that can stop this run is the signal. */
+      optimizer: { generations: 500, populationSize: 8, seed: 5, stallGenerations: 200 },
+      signal: controller.signal,
+      onEvent: (event) => {
+        if (event.type === 'generation' && event.generation === 1) controller.abort();
+      },
+    });
+
+    expect(result.outcome).toBe('distance');
+    /* The recipe survives the cancellation, fitted as far as the search got. */
+    expect(result.soundline).toContain('sound "bubble pop"');
+    expect(result.distance).toBeDefined();
+    /* And the model is not asked for a redesign on the strength of a search nobody
+       finished measuring — spending the user's next turn on work they just cancelled
+       is the other half of what Stop is for. */
+    expect(provider.requests).toHaveLength(1);
+  }, 60_000);
+
+  it('reports the leader of each generation as a playable recipe', async () => {
+    const target = await targetFrom(BUBBLE_POP);
+    const provider = mockProvider({ replies: [fenced(BUBBLE_POP_DISPLACED)] });
+    const generations: { source: string; distance: number }[] = [];
+
+    await generateSound({
+      prompt: 'bubble wrap pop',
+      provider,
+      render: renderSignal,
+      target,
+      targetDistance: 0.0001,
+      optimizer: { generations: 3, populationSize: 6, seed: 5, stallGenerations: 50, anchor: 0.25 },
+      onEvent: (event) => {
+        if (event.type === 'generation') generations.push({ source: event.source, distance: event.distance });
+      },
+    });
+
+    expect(generations).toHaveLength(3);
+    /* A UI watching a fit needs something to render and play, not a number: the
+       failure worth catching mid-search is a candidate that scores better and sounds
+       like a different sound, and that is invisible in the number. */
+    for (const generation of generations) {
+      expect(generation.source).toContain('sound "bubble pop"');
+      expect(generation.distance).toBeGreaterThan(0);
+    }
+  }, 60_000);
 });
 
 describe('generateSound — plumbing', () => {

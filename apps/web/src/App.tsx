@@ -38,9 +38,11 @@ import { Compare } from './components/Compare.js';
 import { Diagnostics } from './components/Diagnostics.js';
 import { Editor } from './components/Editor.js';
 import { ExportPanel } from './components/ExportPanel.js';
+import { FitPreview } from './components/FitPreview.js';
 import { Gallery } from './components/Gallery.js';
 import { PromptBar } from './components/PromptBar.js';
 import { Sliders } from './components/Sliders.js';
+import { StableAudio } from './components/StableAudio.js';
 import { Timeline } from './components/Timeline.js';
 import { Visualizer } from './components/Visualizer.js';
 import { renderSignalFor, targetFromBuffer } from './lib/agent.js';
@@ -51,6 +53,7 @@ import { bankEntries, exampleEntries, mergeCatalog, type Entry } from './lib/cat
 import { bundledRecipes, canSave, fetchRecipes, saveRecipe } from './lib/examples.js';
 import { playBuffer, playLive, type Playback } from './lib/engine.js';
 import { render } from './lib/engine.js';
+import { fetchRender, renderTarget } from './lib/stable-audio.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
 
 /** How long to wait after the last edit before re-rendering offline. */
@@ -73,6 +76,20 @@ type Store = 'examples' | 'bank';
 const FIT_GENERATIONS = 60;
 const FIT_POPULATION = 20;
 
+/**
+ * How firmly a hand-started fit is held to the recipe in the editor.
+ *
+ * The same values the prompt bar uses, for the same reason and then one more. The
+ * search optimizes a distance, and the distance is peak-normalized and onset-aligned:
+ * it cannot tell "this sound, closer" from "a different sound that scores well", so
+ * left free it takes the second trade and the recipe comes back a stranger. The extra
+ * reason here is that this button is pressed *on a recipe someone is editing* — the
+ * numbers are being refined, and a search that rewrites all of them at once has
+ * answered a question nobody asked.
+ */
+const FIT_ANCHOR = 0.25;
+const FIT_SPREAD = 0.25;
+
 export function App(): React.JSX.Element {
   const [examples, setExamples] = useState<readonly Entry[]>(() => exampleEntries(bundledRecipes()));
   /** Recipes that exist only in this tab: generated, or not yet saved anywhere. */
@@ -83,6 +100,11 @@ export function App(): React.JSX.Element {
   const [bankList, setBankList] = useState<readonly Entry[]>([]);
   const [bankNonce, setBankNonce] = useState(0);
 
+  /* The prompt lives here rather than inside the prompt bar because two engines
+     answer it: our loop, and — under dev — the diffusion model that renders the
+     reference. Asking each of them a slightly different sentence would make the
+     comparison meaningless, so there is one sentence. */
+  const [prompt, setPrompt] = useState('');
   const [selected, setSelected] = useState<string>(() => bundledRecipes()[0]?.name ?? '');
   /** Editor buffers, keyed by recipe name. Absent means "as stored". */
   const [edits, setEdits] = useState<Readonly<Record<string, string>>>({});
@@ -100,8 +122,13 @@ export function App(): React.JSX.Element {
   const [referenceError, setReferenceError] = useState<string | null>(null);
   /** Progress of a hand-started fit, or its verdict. Null when none has run. */
   const [fitting, setFitting] = useState<string | null>(null);
+  /** Whether one is running now — the status text is prose and cannot be asked. */
+  const [fitRunning, setFitRunning] = useState(false);
+  /** The candidate currently winning it, so the wait is watchable. */
+  const [fitBest, setFitBest] = useState<string | null>(null);
 
   const playback = useRef<Playback | null>(null);
+  const fitAbort = useRef<AbortController | null>(null);
   const lastPlayed = useRef<string>('');
 
   /* Ask the dev endpoint what is actually on disk. The bundled snapshot only
@@ -411,7 +438,11 @@ export function App(): React.JSX.Element {
    * difference between "my structure is wrong" and "my numbers are wrong".
    */
   const fit = useCallback(() => {
-    if (ast === null || reference === null || fitting !== null) return;
+    if (ast === null || reference === null || fitRunning) return;
+    const controller = new AbortController();
+    fitAbort.current = controller;
+    setFitRunning(true);
+    setFitBest(null);
     setFitting('fitting…');
     void optimize({
       source,
@@ -419,21 +450,47 @@ export function App(): React.JSX.Element {
       render: renderSignalFor(seed),
       generations: FIT_GENERATIONS,
       populationSize: FIT_POPULATION,
-      onGeneration: (report) =>
+      anchor: FIT_ANCHOR,
+      initialSpread: FIT_SPREAD,
+      signal: controller.signal,
+      onGeneration: (report) => {
+        /* The distance, not the fitness: the fitness carries the anchor and the
+           clipping penalty, and a live number that ends up disagreeing with the
+           verdict two lines below it is worse than no live number. */
         setFitting(
-          `generation ${String(report.generation)}/${String(FIT_GENERATIONS)} · best ${report.bestFitness.toFixed(3)}`,
-        ),
+          `generation ${String(report.generation)}/${String(FIT_GENERATIONS)} · distance ${report.distance.toFixed(3)}`,
+        );
+        setFitBest(report.source);
+      },
     })
       .then((result) => {
         /* Writing the fitted text back is the whole point: the search works in the
-           space of writable recipes, so what it found *is* a recipe. */
+           space of writable recipes, so what it found *is* a recipe. This runs after
+           a cancelled fit too — the optimizer returns the best individual it had
+           reached, and Stop is meant to cost the rest of the wait and nothing else. */
         if (result.slots.length > 0) setSource(result.source);
         setFitting(
           `${result.initialDistance.toFixed(3)} → ${result.distance.toFixed(3)} (${result.de.stopped})${result.slots.length === 0 ? ' — no ~slots to fit' : ''}`,
         );
       })
-      .catch((error: unknown) => setFitting(String(error)));
-  }, [ast, fitting, reference, seed, setSource, source]);
+      .catch((error: unknown) => setFitting(String(error)))
+      .finally(() => {
+        if (fitAbort.current === controller) fitAbort.current = null;
+        setFitRunning(false);
+        setFitBest(null);
+      });
+  }, [ast, fitRunning, reference, seed, setSource, source]);
+
+  /**
+   * Stop the hand fit where it stands.
+   *
+   * The signal reaches the search itself, which checks it before every candidate
+   * render, so this ends within one render rather than at the end of the generation
+   * budget — and the `then` above still writes back what it found.
+   */
+  const stopFit = useCallback(() => {
+    fitAbort.current?.abort();
+  }, []);
 
   /* The bridge API is installed once, so it reaches the current `fit` through a ref
      for the same reason `measure` reads `live`. */
@@ -550,6 +607,23 @@ export function App(): React.JSX.Element {
         loadReference(new File([blob], name));
         return name;
       },
+      /**
+       * Render a target with Stable Audio and load it, in one call.
+       *
+       * The hand-driven loop's missing half: `measure()` reports a distance only
+       * when there is something to be distant from, and finding a WAV of "a heavy
+       * door slamming" by hand is the slow step. Resolves once the render is the
+       * reference, so `run(prompt, { target: true })` can follow immediately.
+       */
+      target: async (
+        text: string,
+        opts: { seconds?: number; seed?: number } = {},
+      ): Promise<string> => {
+        const file = await renderTarget({ prompt: text, ...opts });
+        loadReference(await fetchRender(file));
+        return file;
+      },
+
       clearReference,
       reference: () => {
         const loaded = live.current.reference;
@@ -738,6 +812,8 @@ export function App(): React.JSX.Element {
         <main className="main">
           <section className="pane pane-wide">
             <PromptBar
+              prompt={prompt}
+              onPromptChange={setPrompt}
               recipes={demoRecipes}
               bank={bankHealth === null ? null : bank.recipes}
               seed={seed}
@@ -766,20 +842,29 @@ export function App(): React.JSX.Element {
               <h2>Slots</h2>
               <div className="pane-head-actions">
                 {fitting === null ? null : <span className="fit-status">{fitting}</span>}
-                <button
-                  type="button"
-                  onClick={fit}
-                  disabled={reference === null || ast === null || slots.length === 0 || fitting?.startsWith('generation') === true || fitting === 'fitting…'}
-                  title={
-                    reference === null
-                      ? 'load a reference in the Compare panel first'
-                      : `fit every ~slot to ${reference.name} (${String(FIT_GENERATIONS)} generations)`
-                  }
-                >
-                  ⌖ Fit to reference
-                </button>
+                {fitRunning ? (
+                  <button type="button" onClick={stopFit} title="stop the search and keep the best it found">
+                    ■ Stop
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={fit}
+                    disabled={reference === null || ast === null || slots.length === 0}
+                    title={
+                      reference === null
+                        ? 'load a reference in the Compare panel first'
+                        : `fit every ~slot to ${reference.name} (${String(FIT_GENERATIONS)} generations)`
+                    }
+                  >
+                    ⌖ Fit to reference
+                  </button>
+                )}
               </div>
             </div>
+            {/* A fit is a minute of one number moving, and the number cannot be
+                listened to. The leader can. */}
+            {fitBest === null ? null : <FitPreview source={fitBest} seed={seed} onTake={stopFit} />}
             <Sliders slots={slots} layerNames={ast?.layers.map((l) => l.name) ?? []} onChange={onSlotChange} />
           </section>
 
@@ -790,6 +875,10 @@ export function App(): React.JSX.Element {
 
           <section className="pane pane-wide">
             <h2>Compare with a reference</h2>
+            {/* Where a reference can come from besides a file: the same prompt,
+                rendered by a diffusion model on this machine. A target, not a
+                competitor — see `components/StableAudio.tsx`. */}
+            <StableAudio prompt={prompt} onRendered={loadReference} />
             <Compare
               candidateName={selected}
               candidate={rendered?.buffer ?? null}

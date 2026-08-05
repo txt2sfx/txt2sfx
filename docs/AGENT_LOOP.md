@@ -29,6 +29,16 @@ hears about failures it can act on:
 | `render` + `validateRender` | peak and near-silence — the two facts the text cannot predict | the same shape, plus the note that these were measured |
 | `optimize` | distance to the target, by moving `~` slots only | *usually nothing* — see below |
 
+The optimizer is told to refine *this* design, not to find the best-scoring sound in
+the search space. Those are different objectives and the metric cannot tell them
+apart: it is peak-normalized and onset-aligned, so a broadband wash with the right
+envelope and centroid trajectory outscores a recognizable version of what was asked
+for. Two settings carry the difference (`optimizer.initialSpread`,
+`optimizer.anchor`) — the population starts around the recipe instead of over the
+whole cube, and drifting away from it costs fitness. Neither is a cage: a candidate
+that is genuinely much closer still wins. Without them a fit against a reference
+reliably ends somewhere else, which is how they came to exist.
+
 Every message repeats one instruction: mark numbers you are unsure of as
 `~value[min..max]`. Precision is not the model's job.
 
@@ -153,11 +163,26 @@ debugging session the message was written for.
 
 ## Progress and transcripts
 
-`onEvent` reports `request`, `reply`, `validated`, `rendered`, `optimized`, `feedback` and
-`done`, so a UI can show the loop working rather than a spinner. `result.attempts` keeps
-every reply, what was extracted from it, the issues, the distance and the feedback that
-went back — which is what makes a bench row explain itself: `render → accepted` means the
-loop caught a clipping buffer and the model fixed it.
+`onEvent` reports `retrieval`, `request`, `reply`, `validated`, `rendered`, `generation`,
+`optimized`, `feedback` and `done`, so a UI can show the loop working rather than a
+spinner. `result.attempts` keeps every reply, what was extracted from it, the issues, the
+distance and the feedback that went back — which is what makes a bench row explain itself:
+`render → accepted` means the loop caught a clipping buffer and the model fixed it.
+
+The `generation` event carries the leader **as a recipe**, not only its fitness, because a
+number cannot be listened to and the failure worth catching mid-search is inaudible in the
+number: a candidate that scores better while sounding like something else looks exactly
+like healthy progress. It also carries `distance` beside `bestFitness` — the distance with
+the penalties taken back out, so a live line and the final verdict cannot disagree.
+
+## Stopping
+
+`signal` reaches the search, not only the model call. It is checked before every
+candidate render, and the run returns normally with `stopped: 'aborted'` and the best
+individual it had reached — so cancelling costs the user the rest of the wait and nothing
+else. An abandoned generation is deliberately **not** a stall: nothing was learned about
+the landscape, and `stalled` is the one signal that sends a model off to redesign a
+topology, which is the last thing a cancelled run should pay for.
 
 ## In the playground
 
@@ -174,10 +199,20 @@ The prompt bar is this loop with a form in front of it (`apps/web/src/lib/agent.
   the next-best candidate on each call so the repair path is exercised rather than stubbed.
   When the candidates run out it says so in one sentence — which this loop reads as a
   refusal and reports verbatim, and which is the correct end to a scripted conversation.
-- **The optimizer runs smaller than in the benchmark** (16 × 14 rather than 16 × 24): every
+- **The optimizer runs smaller than in the benchmark** (16 × 44 rather than 24 × 60): every
   generation is a population's worth of offline renders on the UI thread, and a search that
   takes a minute reads as a hang. When a result is close but not close enough, the Slots
   panel is the same search by hand, and audible immediately.
+- **The fit is watchable.** The leader of each generation is rendered and drawn between
+  generations, with a play button and a `⤓ take it` that ends the run and hands the
+  candidate to the editor. `■ Stop` reaches the search itself and keeps what it found.
+  Before that it reached the model call and nothing else: a cancelled run went quiet while
+  a population of renders per generation kept the thread, and the recipe it had reached was
+  thrown away — so pressing Stop cost the machine *and* the wait it was cutting short.
+- **The search is held to the recipe** (`anchor` and `initialSpread`, both 0.25) for the
+  reason in the table above. This is where the absence was found: an accepted
+  `game-bubble-pop`, a bit eight-bit but right, came back after 44 silent generations as a
+  different sound with a better number.
 - **`match reference`** turns a reference loaded in the Compare panel into the loop's
   `target`, so the model is told what to aim at and the optimizer has a distance to
   minimize. Without it a recipe is accepted as soon as it parses, validates and renders to

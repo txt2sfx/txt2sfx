@@ -34,6 +34,24 @@ export interface DEOptions {
   readonly dimensions: number;
   /** Starting point, usually the recipe as written. Included in generation 0. */
   readonly seedVector?: Vector;
+  /**
+   * Spread of generation 0 around {@link seedVector}, as a standard deviation in
+   * cube units. Omitted means the classical thing: uniform over the whole cube.
+   *
+   * The two settings answer two different questions, and conflating them is how a
+   * search ends up solving the wrong one. *Recover these numbers from scratch* —
+   * a corrupted recipe, a bank entry being re-fitted — wants a population spread
+   * over everything, because the answer could be anywhere. *Refine this design* —
+   * a topology a model just wrote, against a reference — wants a population near
+   * the design, because everywhere else in the cube is a different sound that
+   * happens to score well, and DE/rand/1/bin draws its donors from wherever the
+   * population is. With fifteen uniform individuals against one seed, the
+   * population's centre of mass is not the recipe after the first few generations,
+   * and no amount of budget brings it back.
+   *
+   * Ignored without a `seedVector`: there is then no centre to spread around.
+   */
+  readonly initialSpread?: number;
   /** Individuals per generation. */
   readonly populationSize?: number;
   /** Generations to run, unless `targetFitness` is reached first. */
@@ -56,6 +74,17 @@ export interface DEOptions {
   readonly stallGenerations?: number;
   /** Called after each generation, for progress reporting. */
   readonly onGeneration?: (report: GenerationReport) => void;
+  /**
+   * Stop the search where it stands.
+   *
+   * Checked before every evaluation, not once per generation: one evaluation is a
+   * render, one generation is a population of them, and a Stop button that takes a
+   * whole generation to answer is a Stop button nobody believes. The run returns
+   * normally with `stopped: 'aborted'` and the best individual found so far —
+   * abandoning it would throw away the only thing the user has to show for the
+   * wait, and they pressed Stop *because* they wanted that thing.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /** State after one generation. */
@@ -75,7 +104,7 @@ export interface DEResult {
   readonly generations: number;
   readonly evaluations: number;
   /** Why the run stopped — the agent loop branches on this. */
-  readonly stopped: 'target' | 'stalled' | 'budget';
+  readonly stopped: 'target' | 'stalled' | 'budget' | 'aborted';
   readonly history: readonly GenerationReport[];
 }
 
@@ -137,6 +166,22 @@ function makeRandom(seed: number): () => number {
 
 const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
+/**
+ * Standard normal from two uniforms, Box-Muller.
+ *
+ * Only the first of the pair is used and the second is thrown away, which wastes
+ * half the draws and does not matter: these are consumed once per coordinate of
+ * generation 0. Keeping a cached second value would make the number of PRNG calls
+ * depend on how many coordinates were asked for previously, and two runs of the
+ * same seed have to sample the same population.
+ */
+function gaussian(random: () => number): number {
+  /* `random()` can return exactly 0 — MINSTD's first output is (1-1)/m — and
+     log(0) is -Infinity, which clamps to a cube edge instead of failing loudly. */
+  const u = Math.max(random(), 1e-12);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * random());
+}
+
 /** Mean absolute deviation from the population centroid, averaged over axes. */
 function diversityOf(population: readonly Vector[]): number {
   const dimensions = population[0]?.length ?? 0;
@@ -187,25 +232,52 @@ export async function differentialEvolution(fitness: Fitness, options: DEOptions
     };
   }
 
-  /* Generation 0: the recipe as written, plus uniform samples around it. The
-     seed is kept because a hand-tuned recipe is usually a good starting point,
-     and losing it to a random population would be a regression the caller
-     cannot see. */
+  /* Generation 0: the recipe as written, plus samples around it. The seed is kept
+     because a hand-tuned recipe is usually a good starting point, and losing it to
+     a random population would be a regression the caller cannot see. Whether the
+     rest of the population is drawn from the whole cube or from a neighbourhood of
+     the seed is `initialSpread`, and it is the difference between recovering a set
+     of numbers and refining a design — see the option. */
+  const seed = options.seedVector?.map(clamp01);
+  const spread = options.initialSpread;
+  const near = seed !== undefined && spread !== undefined && spread > 0;
   const population: number[][] = [];
-  if (options.seedVector !== undefined) population.push(options.seedVector.map(clamp01));
+  if (seed !== undefined) population.push(seed);
   while (population.length < size) {
-    population.push(Array.from({ length: dimensions }, () => random()));
+    population.push(
+      near
+        ? Array.from({ length: dimensions }, (_, d) =>
+            clamp01((seed[d] ?? 0.5) + spread * gaussian(random)),
+          )
+        : Array.from({ length: dimensions }, () => random()),
+    );
   }
 
   let evaluations = 0;
   const scores: number[] = [];
   for (const individual of population) {
+    /* Never before the first: a run that returns no evaluated individual at all
+       has nothing to report, and the caller asked for the best so far. */
+    if (evaluations > 0 && options.signal?.aborted === true) break;
     scores.push(await fitness(individual));
     evaluations++;
   }
 
   let bestIndex = 0;
   for (let i = 1; i < scores.length; i++) if ((scores[i] as number) < (scores[bestIndex] as number)) bestIndex = i;
+
+  if (scores.length < population.length) {
+    /* Aborted while generation 0 was still being measured. There is a best of
+       what was seen, and no history, which is exactly what happened. */
+    return {
+      best: population[bestIndex] as number[],
+      bestFitness: scores[bestIndex] as number,
+      generations: 0,
+      evaluations,
+      stopped: 'aborted',
+      history: [],
+    };
+  }
 
   const history: GenerationReport[] = [];
   let stalled = 0;
@@ -231,8 +303,13 @@ export async function differentialEvolution(fitness: Fitness, options: DEOptions
      * improving two generations before it gave up.
      */
     const previousBest = scores[bestIndex] as number;
+    let aborted = false;
 
     for (let i = 0; i < size; i++) {
+      if (options.signal?.aborted === true) {
+        aborted = true;
+        break;
+      }
       /* Three distinct donors, none of them the target. */
       const picks: number[] = [];
       while (picks.length < 3) {
@@ -258,7 +335,20 @@ export async function differentialEvolution(fitness: Fitness, options: DEOptions
 
       const score = await fitness(trial);
       evaluations++;
-      if (score <= (scores[i] as number)) {
+      /**
+       * Strictly better, not as-good-as.
+       *
+       * Storn and Price accept ties, and on a continuous landscape that is free:
+       * exact equality is a measure-zero event. This landscape is not continuous.
+       * Slot values are quantized by `roundLiteral` before they are rendered, so a
+       * whole neighbourhood of positions produces the *same audio* and therefore
+       * the same score — and with `<=` every one of those trials replaces its
+       * parent. The population then random-walks across the plateau at no cost in
+       * fitness, and since nothing else anchors it, what it walks away from is the
+       * recipe. The reported best never worsens while the sound quietly becomes a
+       * different sound; that is precisely the failure this was found through.
+       */
+      if (score < (scores[i] as number)) {
         population[i] = trial;
         scores[i] = score;
         if (score < (scores[bestIndex] as number)) bestIndex = i;
@@ -276,7 +366,11 @@ export async function differentialEvolution(fitness: Fitness, options: DEOptions
     options.onGeneration?.(report);
 
     stalled = (scores[bestIndex] as number) < previousBest ? 0 : stalled + 1;
-    if (target !== undefined && report.bestFitness <= target) stopped = 'target';
+    /* An abandoned generation is not evidence about the landscape: reporting it as
+       a stall would tell the agent loop the numbers are as good as this structure
+       allows and send a model off to redesign a topology nobody finished measuring. */
+    if (aborted) stopped = 'aborted';
+    else if (target !== undefined && report.bestFitness <= target) stopped = 'target';
     else if (stalled >= stallLimit) stopped = 'stalled';
   }
 

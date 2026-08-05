@@ -99,7 +99,7 @@ flowchart LR
 ```powershell
 npm install -g pnpm@10        # corepack is gone from Node 25
 pnpm install
-pnpm test                     # 616 tests
+pnpm test                     # 632 tests
 pnpm dev                      # playground on http://localhost:5173
 ```
 
@@ -110,6 +110,13 @@ rather than storing it in `localStorage`; what that does and does not protect ag
 spelled out in `apps/web/src/lib/keystore.ts`, and **forget** undoes it. With **mock** selected there is no key and no network
 at all: the answer comes from the recipes already on the page, and the rest of the loop —
 validator, render, optimizer, export — runs exactly as it does with a real model.
+
+Under `pnpm dev` the Compare panel can also produce its own reference: **⤓ Render target**
+sends the same prompt to Stable Audio Open Small running locally, and loads the result as
+the reference to A/B against, fit sliders to, and tick **match reference** for. That is a
+diffusion render used as the *target*, not as the output — the shipped artifact is still a
+recipe. It needs the one-time provisioning in [test/stable-audio/README.md](test/stable-audio/README.md),
+and nothing about it exists in a static build.
 
 The recipe bank runs as its own process and needs no native build — it uses Node's built-in
 `node:sqlite`:
@@ -194,8 +201,15 @@ generated from the parser's own tables and served at `/api/llms.txt`.
   generators are a fixed cost — and that cost is exactly what buys a project with no audio
   assets. The compiler always emits complete working code and reports what it cost.
 - **Similarity judgement is still numeric.** The optimizer minimizes a spectral and
-  envelope distance, which is not the same as "sounds like the thing". A CLAP judge and
-  vision-model comparison of spectrograms are v0.2.
+  envelope distance, which is not the same as "sounds like the thing". The metric is
+  scale-normalized and onset-aligned, so it cannot distinguish *this sound, closer* from
+  *a different sound that happens to score well* — a broadband wash with the right
+  envelope and centroid outscores a recognizable version of what was asked for. The fit is
+  therefore anchored to the recipe the model designed rather than left free to chase the
+  number (`anchor`, `initialSpread` in [AGENT_LOOP.md](docs/AGENT_LOOP.md)), it is
+  watchable and playable generation by generation, and it can be stopped without losing
+  what it found. None of that makes the metric hear. A CLAP judge and vision-model
+  comparison of spectrograms are v0.2.
 - **One reference recipe knowingly breaks an invariant.** `helicopter` rings for about four
   seconds behind a header claiming 1.5, because its rotor *is* a delay line with high
   feedback. It is loaded into the bank with the error reported rather than hidden, and the

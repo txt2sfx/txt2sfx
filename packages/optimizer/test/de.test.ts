@@ -113,6 +113,129 @@ describe('the seed vector', () => {
   });
 });
 
+describe('where generation 0 is drawn from', () => {
+  /** Every candidate the fitness was shown, in order. */
+  const recorder = (): { seen: Vector[]; fitness: (v: Vector) => Promise<number> } => {
+    const seen: Vector[] = [];
+    return {
+      seen,
+      fitness: async (v: Vector): Promise<number> => {
+        seen.push([...v]);
+        return 0.5;
+      },
+    };
+  };
+
+  const furthest = (seen: readonly Vector[], seed: readonly number[]): number => {
+    let worst = 0;
+    for (const candidate of seen) {
+      for (let d = 0; d < candidate.length; d++) {
+        worst = Math.max(worst, Math.abs((candidate[d] as number) - (seed[d] as number)));
+      }
+    }
+    return worst;
+  };
+
+  const seed = [0.5, 0.5, 0.5, 0.5];
+
+  it('spreads over the whole cube by default, because the answer could be anywhere', async () => {
+    const { seen, fitness } = recorder();
+    await differentialEvolution(fitness, {
+      dimensions: 4,
+      seedVector: seed,
+      populationSize: 24,
+      generations: 0,
+      seed: 5,
+    });
+    expect(seen).toHaveLength(24);
+    /* Uniform samples reach the corners: that is the point of them, and it is what
+       makes recovering corrupted slot values possible at all. */
+    expect(furthest(seen, seed)).toBeGreaterThan(0.4);
+  });
+
+  /**
+   * The other half of the same decision, and the one this option was added for.
+   *
+   * A population sampled uniformly leaves the recipe as one individual in sixteen,
+   * and DE draws its donors from wherever the population is — so within a few
+   * generations the search is exploring a neighbourhood the recipe is not in. That
+   * is correct for "find these numbers" and wrong for "refine this design", where
+   * everywhere else in the cube is a different sound that happens to score well.
+   */
+  it('stays near the recipe when asked, so a design is refined rather than replaced', async () => {
+    const { seen, fitness } = recorder();
+    await differentialEvolution(fitness, {
+      dimensions: 4,
+      seedVector: seed,
+      populationSize: 24,
+      generations: 0,
+      seed: 5,
+      initialSpread: 0.05,
+    });
+    expect(seen).toHaveLength(24);
+    /* Normal, so a tail is allowed — but nothing near a corner at four sigma. */
+    expect(furthest(seen, seed)).toBeLessThan(0.3);
+    /* The recipe itself is still individual zero. */
+    expect(seen[0]).toEqual(seed);
+  });
+
+  it('ignores a spread it has no centre for', async () => {
+    const { seen, fitness } = recorder();
+    await differentialEvolution(fitness, {
+      dimensions: 3,
+      populationSize: 16,
+      generations: 0,
+      seed: 9,
+      initialSpread: 0.01,
+    });
+    /* No seed vector, so "near the seed" is meaningless and the cube is the only
+       honest default. A spread applied around 0.5 anyway would silently confine a
+       search that asked for nothing of the kind. */
+    expect(furthest(seen, [0.5, 0.5, 0.5])).toBeGreaterThan(0.3);
+  });
+
+  it('samples the same population twice for the same seed', async () => {
+    const run = async (): Promise<Vector[]> => {
+      const { seen, fitness } = recorder();
+      await differentialEvolution(fitness, {
+        dimensions: 5,
+        seedVector: [0.2, 0.4, 0.6, 0.8, 0.1],
+        generations: 0,
+        seed: 13,
+        initialSpread: 0.2,
+      });
+      return seen;
+    };
+    expect(await run()).toEqual(await run());
+  });
+});
+
+/**
+ * A plateau must not move the answer.
+ *
+ * Storn and Price accept a trial that merely ties, which costs nothing on a
+ * continuous landscape. This one is quantized — slot values are rounded before they
+ * are rendered — so equal scores are common, and with `<=` the population drifts
+ * across the plateau for free, away from the recipe it started at, while the
+ * reported best never worsens. The sound changes and the number does not, which is
+ * the hardest kind of regression to see.
+ */
+describe('ties', () => {
+  it('does not let an equally good candidate displace the incumbent', async () => {
+    const seedVector = [0.2, 0.7, 0.45];
+    const flat = async (): Promise<number> => 0.5;
+    const result = await differentialEvolution(flat, {
+      dimensions: 3,
+      seedVector,
+      seed: 6,
+      generations: 12,
+      stallGenerations: 10_000,
+    });
+    expect(result.best).toEqual(seedVector);
+    expect(result.bestFitness).toBe(0.5);
+  });
+});
+
 describe('stopping', () => {
   it('stops on reaching the target and says so', async () => {
     const result = await differentialEvolution(sphere(0.5), {
@@ -207,6 +330,98 @@ describe('stopping', () => {
 
     /* The assertion above is vacuous if nothing stalled, so make sure something did. */
     expect(stalledRuns).toBeGreaterThan(0);
+  });
+
+  /**
+   * Stop has to mean stop, and it has to keep the answer.
+   *
+   * One evaluation here is one render in the real caller, and a whole generation of
+   * them is what the playground was spending after a cancelled run: the signal
+   * reached the model call and nothing else, so the search kept working on a thread
+   * whose owner had given up on it. Checking before every evaluation is the only
+   * granularity that makes a Stop button believable.
+   */
+  it('stops between evaluations and returns the best it had reached', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const countdown = async (v: Vector): Promise<number> => {
+      calls++;
+      if (calls === 40) controller.abort();
+      return sphere(0.5)(v);
+    };
+
+    const result = await differentialEvolution(countdown, {
+      dimensions: 3,
+      seed: 4,
+      populationSize: 8,
+      generations: 200,
+      stallGenerations: 10_000,
+      signal: controller.signal,
+    });
+
+    expect(result.stopped).toBe('aborted');
+    /* At most one more evaluation than the one that pulled the trigger. 200
+       generations of eight would have been 1608. */
+    expect(result.evaluations).toBeLessThanOrEqual(41);
+    expect(result.generations).toBeLessThan(200);
+    /* The wait produced something, and it is handed back rather than discarded.
+       0.25 is what a corner of the cube scores on this landscape. */
+    expect(result.bestFitness).toBeLessThan(0.25);
+    expect(result.best).toHaveLength(3);
+  });
+
+  it('survives being stopped before generation 0 is even measured', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const fitness = async (v: Vector): Promise<number> => {
+      calls++;
+      if (calls === 3) controller.abort();
+      return sphere(0.5)(v);
+    };
+
+    const result = await differentialEvolution(fitness, {
+      dimensions: 2,
+      seedVector: [0.9, 0.9],
+      populationSize: 16,
+      generations: 50,
+      seed: 2,
+      signal: controller.signal,
+    });
+
+    expect(result.stopped).toBe('aborted');
+    expect(result.generations).toBe(0);
+    expect(result.history).toEqual([]);
+    /* Three individuals were measured, so the best of three is a real answer. */
+    expect(result.evaluations).toBe(3);
+    expect(Number.isFinite(result.bestFitness)).toBe(true);
+  });
+
+  it('does not report an abandoned generation as a stall', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const flat = async (): Promise<number> => {
+      calls++;
+      /* Halfway through generation 1, which on a flat landscape is also the
+         generation that trips a stall window of one. */
+      if (calls === 12) controller.abort();
+      return 0.5;
+    };
+
+    const result = await differentialEvolution(flat, {
+      dimensions: 2,
+      seed: 4,
+      populationSize: 8,
+      generations: 100,
+      stallGenerations: 1,
+      signal: controller.signal,
+    });
+
+    /* Both conditions are true and only one of them is informative. An abandoned
+       generation says nothing about the landscape, and `stalled` is what tells the
+       agent loop to send a language model off to redesign a topology — on the
+       strength, here, of a measurement nobody finished. */
+    expect(result.stopped).toBe('aborted');
+    expect(result.generations).toBe(1);
   });
 
   it('never spends more evaluations than population times generations plus one', async () => {
