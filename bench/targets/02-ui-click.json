@@ -1,0 +1,14 @@
+{
+  "name": "ui-click",
+  "prompt": "crisp ui click for a menu button",
+  "reference": "ui-click",
+  "maxDistance": 0.1,
+  "exercises": "Numeric recovery in six dimensions, from a recipe that marked every number it was unsure of.",
+  "attempts": [
+    [
+      "sound \"ui click\" 45ms ui",
+      "  tick: click ~1ms[0.5..5] >> hp ~2400Hz[600..3000] | gain ~0.4[0.2..0.9] attack 0ms decay ~15ms[8..40]",
+      "  body: tone sine ~900Hz[800..4000] | gain ~0.2[0.1..0.5] decay ~10ms[5..30]"
+    ]
+  ]
+}

@@ -26,6 +26,9 @@ importers:
       '@fastify/cors':
         specifier: ^10.0.1
         version: 10.1.0
+      '@txt2sfx/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
       '@txt2sfx/analyzer':
         specifier: workspace:*
         version: link:../../packages/analyzer
@@ -70,6 +73,43 @@ importers:
       vite:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.1)
+
+  bench:
+    dependencies:
+      '@txt2sfx/agent':
+        specifier: workspace:*
+        version: link:../packages/agent
+      '@txt2sfx/analyzer':
+        specifier: workspace:*
+        version: link:../packages/analyzer
+      '@txt2sfx/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@txt2sfx/optimizer':
+        specifier: workspace:*
+        version: link:../packages/optimizer
+      '@txt2sfx/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
+    devDependencies:
+      node-web-audio-api:
+        specifier: ^2.1.0
+        version: 2.1.0
+
+  packages/agent:
+    dependencies:
+      '@txt2sfx/analyzer':
+        specifier: workspace:*
+        version: link:../analyzer
+      '@txt2sfx/core':
+        specifier: workspace:*
+        version: link:../core
+      '@txt2sfx/optimizer':
+        specifier: workspace:*
+        version: link:../optimizer
+      '@txt2sfx/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/analyzer:
     dependencies:

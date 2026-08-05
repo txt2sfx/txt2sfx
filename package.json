@@ -11,12 +11,13 @@
   },
   "scripts": {
     "dev": "pnpm --filter @txt2sfx/web dev",
-    "build": "tsc -b packages/shared packages/core packages/analyzer packages/optimizer",
+    "build": "tsc -b packages/shared packages/core packages/analyzer packages/optimizer packages/agent apps/server",
     "build:web": "pnpm --filter @txt2sfx/web build",
-    "typecheck": "tsc -b packages/shared packages/core packages/analyzer packages/optimizer && pnpm --filter @txt2sfx/web typecheck",
+    "typecheck": "tsc -b packages/shared packages/core packages/analyzer packages/optimizer packages/agent apps/server && tsc -p tsconfig.test.json && pnpm --filter @txt2sfx/web typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "tsc -b --clean packages/shared packages/core packages/analyzer packages/optimizer"
+    "bench": "pnpm --filter @txt2sfx/bench bench",
+    "clean": "tsc -b --clean packages/shared packages/core packages/analyzer packages/optimizer packages/agent apps/server bench"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

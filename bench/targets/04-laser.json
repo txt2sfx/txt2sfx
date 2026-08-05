@@ -1,0 +1,18 @@
+{
+  "name": "laser",
+  "prompt": "sci-fi laser gun shot, descending zap",
+  "reference": "laser",
+  "maxDistance": 0.05,
+  "exercises": "The topology rule: attempt one is valid, audible, has no `~` slots and sounds nothing like a laser, so the only thing left to change is the structure.",
+  "attempts": [
+    [
+      "sound \"laser\" 180ms laser",
+      "  zap: tone sine 400Hz | gain 0.5 decay 150ms"
+    ],
+    [
+      "sound \"laser\" 180ms laser",
+      "  zap: chirp saw ~1800Hz[900..4000] -> 220Hz in 120ms | gain 0.6 decay 150ms",
+      "  body: sub 90Hz -> 60Hz in 90ms | gain 0.35 decay 120ms"
+    ]
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "coin",
+  "prompt": "coin pickup sound for a platformer, arcade style",
+  "reference": "coin",
+  "maxDistance": 0.05,
+  "exercises": "Validator repair: the first attempt files a 260 ms jingle under `pop`, whose contract is 60 ms.",
+  "attempts": [
+    [
+      "sound \"coin\" 260ms pop",
+      "  blip: tone square 988Hz | gain 0.5 decay 70ms",
+      "  ring: tone square 1319Hz | gain 0.45 decay 180ms delay 70ms"
+    ],
+    [
+      "sound \"coin\" 260ms pickup",
+      "  blip: tone square 988Hz | gain 0.5 decay 70ms",
+      "  ring: tone square 1319Hz | gain 0.45 decay 180ms delay 70ms"
+    ]
+  ]
+}

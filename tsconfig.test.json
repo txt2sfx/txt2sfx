@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    /* Type-check only. `tsc -b` builds `src` into `dist` per package and cannot see
+       the test files at all, so without this config a test could reference a symbol
+       that does not exist and nothing but a failing run would notice — and a test
+       that fails to *type* usually still runs, because vitest strips types instead
+       of checking them. */
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "incremental": false,
+
+    /* Tests import workspace packages by name and must resolve to sources, exactly
+       as the vitest aliases do. Resolving to `dist` instead would check the tests
+       against the last build rather than the current code. */
+    "baseUrl": ".",
+    "paths": {
+      "@txt2sfx/shared": ["./packages/shared/src/index.ts"],
+      "@txt2sfx/core": ["./packages/core/src/index.ts"],
+      "@txt2sfx/analyzer": ["./packages/analyzer/src/index.ts"],
+      "@txt2sfx/optimizer": ["./packages/optimizer/src/index.ts"],
+      "@txt2sfx/agent": ["./packages/agent/src/index.ts"]
+    }
+  },
+  /* `apps/web` is excluded on purpose: it needs JSX and DOM settings of its own and
+     is checked by `pnpm --filter @txt2sfx/web typecheck`. */
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "apps/server/src",
+    "apps/server/test",
+    "bench/src",
+    "bench/test",
+    "test",
+    "vitest.config.ts"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@txt2sfx/bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SFX-Bench v0: run the agent loop and the optimizer against reference targets and score the result. Reproducible with no API key.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.16.0 <23 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "bench": "tsc -b && node dist/run.js"
+  },
+  "dependencies": {
+    "@txt2sfx/agent": "workspace:*",
+    "@txt2sfx/analyzer": "workspace:*",
+    "@txt2sfx/core": "workspace:*",
+    "@txt2sfx/optimizer": "workspace:*",
+    "@txt2sfx/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "node-web-audio-api": "^2.1.0"
+  }
+}

@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One run per branch: a force-push while CI is running should not leave two
+# answers about the same code.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Both ends of the supported range. The lower bound is not about language
+      # features: the recipe bank uses Node's built-in `node:sqlite`, whose SQLite
+      # is compiled with FTS5 only from 22.16, in none of 23.x, and unconditionally
+      # from 24. Testing 22.16 keeps that claim honest.
+      matrix:
+        node: ['22.16', '24']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # There is no separate linter in this repository, on purpose: TypeScript
+      # runs with `strict`, `noUncheckedIndexedAccess` and
+      # `exactOptionalPropertyTypes`, and `tsconfig.test.json` type-checks the
+      # tests as well as the sources — `tsc -b` alone covers only `src`, and a
+      # test that fails to type usually still runs.
+      - name: Typecheck sources, tests and the playground
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build packages and the server
+        run: pnpm build
+
+      - name: Build the playground
+        run: pnpm build:web
+
+      # A scripted model, so this is a regression check on the pipeline rather
+      # than on a vendor: `--strict` fails the job when a target misses its
+      # distance threshold.
+      - name: Benchmark
+        run: pnpm bench -- --strict
+
+      # Exercises the one path tests cannot: a real SQLite file, FTS5 on this
+      # Node, and the renderer measuring all ten reference recipes. Not `--strict`
+      # — `helicopter` is knowingly out of contract, and the seeder is documented
+      # to load it and report it. Flip this to `--strict` when that is resolved.
+      - name: Seed the recipe bank (smoke)
+        run: pnpm --filter @txt2sfx/server seed

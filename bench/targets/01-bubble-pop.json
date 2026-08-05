@@ -1,0 +1,14 @@
+{
+  "name": "bubble-pop",
+  "prompt": "bubble wrap pop, short and bright, for a casual puzzle game",
+  "reference": "bubble-pop",
+  "maxDistance": 0.1,
+  "exercises": "Numeric recovery: the structure is right and every slot starts at the wrong end of its range.",
+  "attempts": [
+    [
+      "sound \"bubble pop\" 55ms pop",
+      "  body: tone tri ~510Hz[500..1400] -> 1120Hz in 14ms >> lp ~950Hz[900..4000] Q1 | gain 0.8 hold 3ms decay 38ms",
+      "  edge: click 1ms >> bp ~1250Hz[1200..6000] Q1 | gain 0.38 attack 0ms decay 6ms"
+    ]
+  ]
+}

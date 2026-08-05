@@ -24,9 +24,17 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { RecipeInput, SoundProfile, ValidationIssue } from '@txt2sfx/shared';
 import { SOUND_CATEGORIES } from '@txt2sfx/shared';
 import { SoundlineError, declaredDurationMs, hasErrors, parse, validate } from '@txt2sfx/core';
+import { llmsText, selectFewShot } from '@txt2sfx/agent';
 import type { RecipeBank } from '../db.js';
 import { DEFAULT_LIMIT } from '../db.js';
-import { llmsText } from '../llms.js';
+
+/**
+ * Few-shot examples embedded in `GET /api/llms.txt`.
+ *
+ * Three establishes the shape of the language and still leaves room for the
+ * caller's own task in the context window.
+ */
+const FEW_SHOT_EXAMPLES = 3;
 
 /** Shape of a rejection. */
 interface ErrorBody {
@@ -94,8 +102,16 @@ export function registerRoutes(app: FastifyInstance, bank: RecipeBank): void {
   }));
 
   app.get('/api/llms.txt', async (_request, reply) => {
-    const top = bank.retrieve('', 3);
-    return reply.type('text/plain; charset=utf-8').send(llmsText(top.recipes));
+    /* Ask for more than we show, then keep the ones that pass validation. The bank
+       is allowed to hold a recipe the validator rejects — the seeder loads
+       `helicopter` on purpose — but this document is few-shot material for someone
+       else's model, and an example that breaks an invariant teaches it to write
+       what `POST /api/recipes` will refuse. See `selectFewShot`. */
+    const top = bank.retrieve('', FEW_SHOT_EXAMPLES * 2);
+    const selection = selectFewShot(top.recipes, FEW_SHOT_EXAMPLES);
+    return reply
+      .type('text/plain; charset=utf-8')
+      .send(llmsText(selection.examples.map((example) => example.recipe)));
   });
 
   app.get('/api/recipes', async (request, reply) => {

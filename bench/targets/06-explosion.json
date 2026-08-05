@@ -1,0 +1,23 @@
+{
+  "name": "explosion",
+  "prompt": "big explosion with deep body and a long rumble tail",
+  "reference": "explosion",
+  "maxDistance": 0.05,
+  "exercises": "Render repair: the first attempt is legal on paper and clips in the buffer — the invariant that can only be measured, on the recipe with about 2 dB of headroom.",
+  "attempts": [
+    [
+      "sound \"explosion\" 1200ms explosion",
+      "  boom: sub 70Hz -> 28Hz in 400ms | gain 0.95 attack 6ms decay 900ms",
+      "  blast: noise brown >> lp ~1200Hz[400..4000] -> 180Hz in 700ms | gain 0.7 decay 800ms",
+      "  crack: noise white >> hp 3000Hz | gain 0.5 decay 90ms",
+      "  rumble: noise pink >> lp 300Hz | gain 0.35 decay 1100ms delay 120ms"
+    ],
+    [
+      "sound \"explosion\" 1200ms explosion",
+      "  boom: sub 70Hz -> 28Hz in 400ms | gain 0.7 attack 6ms decay 900ms",
+      "  blast: noise brown >> lp ~1200Hz[400..4000] -> 180Hz in 700ms | gain 0.45 decay 800ms",
+      "  crack: noise white >> hp 3000Hz | gain 0.28 decay 90ms",
+      "  rumble: noise pink >> lp 300Hz | gain 0.2 decay 1100ms delay 120ms"
+    ]
+  ]
+}

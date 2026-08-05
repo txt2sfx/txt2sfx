@@ -15,10 +15,18 @@ export default defineConfig({
       '@txt2sfx/core': r('./packages/core/src/index.ts'),
       '@txt2sfx/analyzer': r('./packages/analyzer/src/index.ts'),
       '@txt2sfx/optimizer': r('./packages/optimizer/src/index.ts'),
+      '@txt2sfx/agent': r('./packages/agent/src/index.ts'),
     },
   },
   test: {
-    include: ['packages/*/test/**/*.test.ts', 'apps/*/test/**/*.test.ts'],
+    include: [
+      'packages/*/test/**/*.test.ts',
+      'apps/*/test/**/*.test.ts',
+      'bench/test/**/*.test.ts',
+      /* Repository-level checks: documentation drift, and the claims the plan asked
+         the README to keep honest. */
+      'test/**/*.test.ts',
+    ],
     environment: 'node',
     globals: false,
   },

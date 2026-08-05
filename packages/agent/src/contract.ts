@@ -1,17 +1,19 @@
 /**
- * `GET /api/llms.txt` — everything an outside agent needs, in one request.
+ * The contract document: everything a language model needs to write soundline,
+ * in one text.
  *
- * This exists because of a requirement that is easy to underestimate: someone
- * else's agent should be able to use this project **without installing it**. An
- * agent that has to be told the grammar over several round trips, or worse, has to
- * guess it from an OpenAPI schema, will write soundline that does not parse and
- * spend its budget discovering the rules one error at a time.
+ * It has two consumers and is deliberately one function. `GET /api/llms.txt`
+ * serves it to **someone else's** agent, which must be able to use this project
+ * without installing it — one request, no round trips spent discovering the
+ * grammar. {@link systemPrompt} embeds the same text for **our own** loop. Two
+ * documents would drift, and the one that drifted would be the one nobody reads
+ * while debugging.
  *
- * Everything here is **generated from the same tables the parser and validator
- * use** — primitives, effects, envelope parameters and category limits all come
- * from `@txt2sfx/core` and `@txt2sfx/shared`. A hand-written document would be
- * correct on the day it was written and quietly wrong a phase later; this one
- * cannot describe a primitive that does not exist or omit a parameter that does.
+ * Everything here is **generated from the same tables the parser and the
+ * validator use** — `PRIMITIVES`, `EFFECTS`, `ENVELOPE`, `CATEGORY_LIMITS`,
+ * `GLOBAL_LIMITS`. A hand-written document would be correct on the day it was
+ * written and quietly wrong a phase later; this one cannot describe a primitive
+ * that does not exist or omit a parameter that does.
  *
  * @packageDocumentation
  */
@@ -85,7 +87,9 @@ function examples(recipes: readonly Recipe[]): string {
  *
  * @param recipes - Few-shot examples to include, best first. Three is enough to
  *   establish the shape and cheap enough to send in every prompt; more crowds out
- *   the task itself.
+ *   the task itself. **Filter these before passing them in** — an example that
+ *   the validator rejects teaches the model to write a recipe this same pipeline
+ *   will refuse. `selectFewShot` is that filter.
  */
 export function llmsText(recipes: readonly Recipe[]): string {
   return `# txt2sfx — soundline for language models
@@ -185,7 +189,11 @@ ${examples(recipes)}
 
 - \`GET /api/health\` — liveness and how many recipes the bank holds.
 - \`GET /api/retrieve?prompt=<text>&k=3\` — closest recipes, for few-shot. Check
-  \`fallback\`: when true, nothing matched and these are only shape examples.
+  \`fallback\`: when true, nothing matched and these are only shape examples. These
+  are matches, not endorsements: the bank stores what it was given, so a retrieved
+  recipe may break one of the invariants above. Copy structure from them and trust
+  the tables in this document over any example. (The examples embedded below are
+  already filtered to recipes that validate.)
 - \`GET /api/recipes?q=<text>&category=<category>&limit=20\` — search.
 - \`GET /api/recipes/:id\` — one recipe.
 - \`POST /api/recipes\` — store a solved sound. The soundline is **validated before

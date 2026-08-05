@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
+    "@txt2sfx/agent": "workspace:*",
     "@txt2sfx/analyzer": "workspace:*",
     "@txt2sfx/core": "workspace:*",
     "@txt2sfx/shared": "workspace:*",

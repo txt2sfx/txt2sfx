@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="120" viewBox="0 0 440 120" role="img" aria-label="txt2sfx — text to SFX as code">
+  <!-- Placeholder mark: text on the left, a waveform emerging on the right.
+       Deliberately flat and dependency-free, like the rest of the project. -->
+  <title>txt2sfx</title>
+  <g fill="none" stroke-linecap="round">
+    <!-- prompt caret -->
+    <path d="M18 40 L34 60 L18 80" stroke="#22d3ee" stroke-width="5" />
+    <!-- the sound: a decaying transient, drawn as the export would render it -->
+    <path
+      d="M232 60 L238 22 L244 96 L250 30 L256 88 L262 40 L268 78 L274 48 L280 70 L286 53 L292 66 L298 57 L304 63 L310 59 L316 61 L440 60"
+      stroke="#e879f9"
+      stroke-width="3.5"
+    />
+  </g>
+  <text
+    x="48"
+    y="74"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    font-size="42"
+    font-weight="600"
+    fill="#e2e8f0"
+  >txt2<tspan fill="#22d3ee">sfx</tspan></text>
+</svg>

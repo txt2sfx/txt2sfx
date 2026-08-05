@@ -1,0 +1,26 @@
+{
+  "name": "@txt2sfx/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The LLM half of the pipeline: providers, the system prompt built from the live grammar tables, and the generate-validate-render-optimize loop. Zero runtime dependencies — providers speak HTTP through `fetch`.",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@txt2sfx/analyzer": "workspace:*",
+    "@txt2sfx/core": "workspace:*",
+    "@txt2sfx/optimizer": "workspace:*",
+    "@txt2sfx/shared": "workspace:*"
+  }
+}
