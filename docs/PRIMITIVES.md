@@ -1,6 +1,6 @@
 # Primitives and effects
 
-Eight sources, six effects, one envelope. The **authoritative parameter tables** —
+Nine sources, six effects, one envelope. The **authoritative parameter tables** —
 units, ranges, defaults, which parameters accept trajectories — are generated from the
 signature table the parser itself uses and served at `GET /api/llms.txt`, or produced
 in-process by `llmsText()` from `@txt2sfx/agent`. Reading them there means never
@@ -21,6 +21,7 @@ implementation deliberately departs from the obvious approach.
 | `fm` | Two-operator FM: bells, mallets, sci-fi timbres that additive layers cannot reach. |
 | `sub` | The part you feel: a low sine, usually swept downwards. Explosions, impacts. |
 | `click` | Pure transient with no pitch of its own. The edge on a pop, a UI tick. |
+| `grains` | A dense field of short events: water, rain, gravel, fire, boiling, a crowd. |
 
 ## Effects
 
@@ -34,6 +35,45 @@ implementation deliberately departs from the obvious approach.
 `dist`, `delay` and `verb` take a `mix`. At `mix 0` no wet path is built; at `mix 1` no
 summing node is built. Both edges occur in the reference set (`helicopter` is `mix 1`),
 and every node not built is bytes not exported.
+
+### Why `grains` exists
+
+Not a convenience — a gap. `noise` is stationary and `chirp` is a single sweep, so
+nothing in the other eight primitives produces a *scatter of individual events*, and
+water, rain, gravel, fire and crowds are all exactly that. It was measured rather than
+guessed: against a water-splash recording, a recipe built from four filtered noise
+layers converges to a spectral flatness of about 0.42 where the reference sits at
+0.58, and the optimizer reports a genuine stall — the numbers are exhausted and the
+residual is the missing shape.
+
+One grain is a damped sine whose pitch slides by `bend` over its own length: Minnaert's
+collapsing bubble, the same physics `bubble-pop` is built on. That one shape covers the
+whole range, because two parameters decide how it is heard. `spread` sets the texture —
+a few hundred pings scattered across three octaves read as broadband ticks (rain,
+gravel), half an octave reads as individual droplets. And `bend` sets the *material*:
+
+| `bend` | what it sounds like |
+| --- | --- |
+| 1 | ice, glass, ceramic — a bright ping whose pitch does not move |
+| 1.2–1.6 | water: a collapsing cavity rises in pitch, and that rise is the cue the ear uses |
+| below 1 | a bubble rising and releasing — a falling "bloop" |
+
+That parameter exists because of a listening test, not a theory: with the bend hidden at
+6 % a splash was described as "small shards of ice scattering", which is exactly what a
+field of short bright pings with no pitch movement is. The reference measured in §9.2 of
+the plan rises about 15 % in 8 ms.
+
+Three properties are worth knowing before using it:
+
+- **Density is not loudness.** The field normalizes to unit peak, so `rate 220` is
+  busier than `rate 12` (measured: RMS 0.0442 against 0.0218) and no louder (peak 0.477
+  against 0.545). `gain` remains the only level control, which is what keeps a model
+  from re-tuning gain every time it reaches for a denser texture.
+- **`bend` means the end frequency**, not the phase coefficient. Phase `2πf·t·(1 + k·t/T)`
+  has instantaneous frequency `f·(1 + 2k·t/T)`, so the factor is halved internally; a
+  parameter that bent twice as far as it claimed would be worse than none.
+- **It costs bytes.** A one-layer `grains` recipe exports at about 980 B, most of it the
+  generator. That is the same trade every buffer source makes — see *Export size* below.
 
 ## Deviations from the obvious implementation
 

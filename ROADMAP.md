@@ -9,20 +9,26 @@ The pipeline end to end: the `soundline` language with a byte-stable round trip,
 primitives and six effects behind one intermediate representation, exact render parity
 between the live graph and the exported JavaScript, a physical-invariant validator, an
 acoustic analyzer with its own FFT, a differential-evolution optimizer over `~` slots, a
-recipe bank with FTS5 retrieval, a local playground, providers for Gemini and Anthropic,
+recipe bank with FTS5 retrieval, the playground, providers for Gemini and Anthropic,
 the generate-and-repair loop, and a reproducible benchmark.
 
 Known and deliberate gaps, all listed under *Honesty about limits* in the README:
 similarity is judged numerically; three- and four-layer exports exceed 1 KB; one reference
 recipe (`helicopter`) breaks its duration contract on purpose.
 
-## v0.1 — the playground closes the loop
+## v0.1 — the playground closes the loop *(done)*
 
-The prompt bar, the provider picker and the Gemini key field, all in tab memory, with the
-gallery reading from the bank instead of `examples/`. Technically a thin layer over
-`@txt2sfx/agent`; the reason it is a milestone of its own is that "paste a key, type a
+The prompt bar, the provider picker and the key field, all in tab memory, with the gallery
+reading from the bank as well as `examples/`. Technically a thin layer over
+`@txt2sfx/agent`; the reason it was a milestone of its own is that "paste a key, type a
 sentence, hear a sound" is the first point at which someone who has not read this
 repository can judge it.
+
+Two things landed alongside it, both because the front door made them visible. The
+playground now shows the **validator's own issues** on whatever is in the editor, hand
+edits included — it used to enforce those invariants only inside the agent loop. And a
+solved recipe can be **published to the bank** from the sidebar, which is what makes the
+bank fill up with anything other than the ten seeded examples.
 
 ## v0.2 — a judge that hears
 

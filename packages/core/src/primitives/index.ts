@@ -14,6 +14,7 @@ import { EFFECT_NAMES, PRIMITIVE_NAMES } from '../grammar/signatures.js';
 import { chirp } from './chirp.js';
 import { click } from './click.js';
 import { fm } from './fm.js';
+import { grains } from './grains.js';
 import { modal } from './modal.js';
 import { noise } from './noise.js';
 import { pluck } from './pluck.js';
@@ -37,6 +38,7 @@ export const PRIMITIVE_DEFS: Readonly<Record<string, PrimitiveDef>> = {
   fm,
   sub,
   click,
+  grains,
 };
 
 /** Every effect builder, keyed by the word that follows `>>`. */

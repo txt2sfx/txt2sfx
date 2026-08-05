@@ -29,7 +29,17 @@ import {
 
 const PROVIDER = 'gemini';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+/**
+ * A current flash tier — the loop is latency-sensitive and makes many short calls.
+ *
+ * Kept a constant that is expected to go stale: `gemini-2.5-flash` was the default
+ * here until Google closed it to new keys, and the failure is a 404 whose body says
+ * so in plain words. That is why the id is an option everywhere it is used, and why
+ * the playground lets the user type one.
+ */
+export const GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+
+const DEFAULT_MODEL = GEMINI_DEFAULT_MODEL;
 const DEFAULT_MAX_TOKENS = 8192;
 
 /** The bits of `:generateContent` we read. */

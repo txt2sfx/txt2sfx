@@ -97,6 +97,14 @@ one dimension, and the playground turns each into a slider. This is the language
 expression of the project's third principle: **the model designs structure, a numerical
 search finds the numbers.**
 
+**A slot is a delegation.** Writing `~` hands that number to the optimizer, which will
+move it wherever the metric says — so a value chosen *by ear* belongs in the recipe as a
+literal. This is not hypothetical: on a water splash, slots on the grain parameters were
+driven to their upper bounds because brighter, denser pings are the only way our
+primitives can raise spectral flatness, which is exactly the character a listener had
+just rejected. Delegate what the metric judges well (filter frequencies, levels); keep
+what you judged yourself.
+
 Slot bounds outside a parameter's documented range are a warning rather than an error —
 the recipe still renders, but the author has given the optimizer permission to generate
 an invalid sound, and finding that out here is cheaper than finding it out a thousand

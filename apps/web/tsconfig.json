@@ -18,8 +18,14 @@
     "baseUrl": ".",
     "paths": {
       "@txt2sfx/shared": ["../../packages/shared/src/index.ts"],
-      "@txt2sfx/core": ["../../packages/core/src/index.ts"]
+      "@txt2sfx/core": ["../../packages/core/src/index.ts"],
+      "@txt2sfx/analyzer": ["../../packages/analyzer/src/index.ts"],
+      "@txt2sfx/optimizer": ["../../packages/optimizer/src/index.ts"],
+      "@txt2sfx/agent": ["../../packages/agent/src/index.ts"]
     }
   },
-  "include": ["src"]
+  /* `test/` is checked here rather than in the repository's `tsconfig.test.json`,
+     which excludes this app on purpose: these tests import browser-facing modules
+     and need the same JSX and DOM settings the app itself uses. */
+  "include": ["src", "test"]
 }

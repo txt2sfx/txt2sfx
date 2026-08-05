@@ -40,8 +40,10 @@ describe('registry', () => {
     expect(registryGaps()).toEqual({ missing: [], extra: [] });
   });
 
-  it('covers the eight primitives and six effects of v0', () => {
-    expect(PRIMITIVE_NAMES).toHaveLength(8);
+  it('covers the nine primitives and six effects of v0', () => {
+    /* Nine since `grains`: `noise` is stationary and `chirp` is one sweep, so a
+       dense field of short events had no expression at all. */
+    expect(PRIMITIVE_NAMES).toHaveLength(9);
     expect(EFFECT_NAMES).toHaveLength(6);
   });
 });
@@ -60,6 +62,7 @@ const PRIMITIVE_LAYERS: Readonly<Record<string, string>> = {
   fm: 'fm 600Hz | gain 1 decay 200ms',
   sub: 'sub 60Hz | gain 1 decay 200ms',
   click: 'click 2ms | gain 1 decay 30ms',
+  grains: 'grains 1200Hz rate 60 width 10ms spread 1.5 | gain 1 decay 200ms',
 };
 
 describe('primitives', () => {

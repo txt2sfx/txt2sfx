@@ -1,0 +1,16 @@
+# Pinned reference baseline. `stable-audio-tools` itself pins torch/torchaudio 2.7.1
+# and requires CPython 3.10 (>=3.10,<3.11) — run.py provisions that interpreter with uv.
+#
+# On Windows and macOS the PyPI torch wheels are CPU-only, which is what we want.
+# On Linux, PyPI torch pulls the CUDA build (~2.5 GB); install with
+#   uv pip install --python .venv/bin/python -r requirements.txt \
+#     --extra-index-url https://download.pytorch.org/whl/cpu
+# if you would rather have the small CPU wheel.
+stable-audio-tools==0.0.20
+huggingface_hub>=0.30
+# Declared as a *training* extra, but the inference path imports it anyway:
+# models/dit.py -> models/lora/callbacks.py -> pytorch_lightning.
+pytorch_lightning==2.5.5
+# PyWavelets 1.4.1 (pinned by stable-audio-tools) is built against the numpy 1.x ABI;
+# with numpy 2.x installed, importing stable_audio_tools dies in pywt.
+numpy<2

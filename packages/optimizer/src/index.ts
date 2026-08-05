@@ -44,7 +44,7 @@ import {
 import { differentialEvolution, type DEResult, type GenerationReport, type Vector } from './de.js';
 import { applyVector, collectSlots, positionToValue, seedVector, type Slot } from './slots.js';
 
-export { DE_DEFAULTS, differentialEvolution } from './de.js';
+export { DE_DEFAULTS, differentialEvolution, stallWindowFor } from './de.js';
 export type { DEOptions, DEResult, Fitness, GenerationReport, Vector } from './de.js';
 
 export {

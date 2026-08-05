@@ -30,7 +30,10 @@ import {
 
 const PROVIDER = 'anthropic';
 const DEFAULT_BASE_URL = 'https://api.anthropic.com';
-const DEFAULT_MODEL = 'claude-opus-5';
+/** Exported so a UI can show what it will call without hard-coding the name. */
+export const ANTHROPIC_DEFAULT_MODEL = 'claude-opus-5';
+
+const DEFAULT_MODEL = ANTHROPIC_DEFAULT_MODEL;
 const API_VERSION = '2023-06-01';
 
 /**

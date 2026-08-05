@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-540-brightgreen.svg">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-616-brightgreen.svg">
   <img alt="Runtime dependencies" src="https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg">
 </p>
 
@@ -99,9 +99,17 @@ flowchart LR
 ```powershell
 npm install -g pnpm@10        # corepack is gone from Node 25
 pnpm install
-pnpm test                     # 540 tests
+pnpm test                     # 616 tests
 pnpm dev                      # playground on http://localhost:5173
 ```
+
+In the playground: type what you want to hear, pick a model, paste your key. The key lives
+in that tab's memory and is sent to that vendor and nowhere else — no proxy, no server of
+ours in the path. Ticking **remember** encrypts it with a non-extractable key in IndexedDB
+rather than storing it in `localStorage`; what that does and does not protect against is
+spelled out in `apps/web/src/lib/keystore.ts`, and **forget** undoes it. With **mock** selected there is no key and no network
+at all: the answer comes from the recipes already on the page, and the rest of the loop —
+validator, render, optimizer, export — runs exactly as it does with a real model.
 
 The recipe bank runs as its own process and needs no native build — it uses Node's built-in
 `node:sqlite`:
@@ -155,7 +163,7 @@ sound "<name>" <duration> [<category>] [loop]
   <layer>: <primitive> <args> [>> <effect> <args>]... | <envelope>
 ```
 
-Eight sources and six effects, all procedural:
+Nine sources and six effects, all procedural:
 
 | sources | | effects | |
 | --- | --- | --- | --- |
@@ -167,6 +175,7 @@ Eight sources and six effects, all procedural:
 | `fm` | two-operator FM | | |
 | `sub` | the part you feel | | |
 | `click` | pure transient | | |
+| `grains` | a field of many small events — water, rain, gravel, fire | | |
 
 The category is not a label but a contract: `pop` promises 8–60 ms with no frequency ramp
 longer than 20 ms, and a validator enforces it — which is what stops a model from handing
@@ -214,7 +223,7 @@ generated from the parser's own tables and served at `/api/llms.txt`.
 | `packages/analyzer` | FFT, acoustic profiles, distance metrics, human-readable diffs. Zero deps. |
 | `packages/optimizer` | Differential evolution over a recipe's `~value[min..max]` slots. Zero deps. |
 | `packages/agent` | LLM providers, the contract document, the generate-and-repair loop. Zero deps. |
-| `apps/web` | Vite + React playground: edit, hear, measure, compare, export. |
+| `apps/web` | Vite + React playground: prompt, generate, edit, hear, measure, compare, export, publish. |
 | `apps/server` | Recipe bank: SQLite + FTS5 behind a small REST API, plus `/api/llms.txt`. |
 | `bench` | SFX-Bench v0: reference targets and the scoring run. |
 | `examples/` | Ten reference recipes, also used to seed the recipe bank. |

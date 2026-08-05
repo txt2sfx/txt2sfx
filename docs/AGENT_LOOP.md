@@ -47,10 +47,16 @@ forms of that:
 When the search merely ran out of generations while still improving, the loop **stops and
 reports the distance** rather than asking for a rewrite. The costs are asymmetric: a
 wrongly-declared stall throws away a search that was working and sends the model off to
-redesign a topology that did not need redesigning. That asymmetry is also why
-`stallGenerations` is 20 — a third of the default budget — and not 12; measured on a
-3-dimensional Rastrigin landscape, 12 stopped at more than twice the error the same run
-reached when allowed to continue.
+redesign a topology that did not need redesigning. That asymmetry is also why the stall
+window is **a third of the generation budget** and not a quarter; measured on a
+3-dimensional Rastrigin landscape, a window of 12 against a budget of 60 stopped at more
+than twice the error the same run reached when allowed to continue.
+
+The window scales with the budget (`stallWindowFor`) rather than being the constant 20 that
+suits the default 60, and that is not tidiness. A caller that shortens a run — the
+playground does, to keep a browser responsive — used to inherit a window *larger than its
+own budget*, which can never be reached: `stopped` could then only be `'target'` or
+`'budget'`, and this entire branch became unreachable in silence.
 
 ## Without a target
 
@@ -152,3 +158,80 @@ debugging session the message was written for.
 every reply, what was extracted from it, the issues, the distance and the feedback that
 went back — which is what makes a bench row explain itself: `render → accepted` means the
 loop caught a clipping buffer and the model fixed it.
+
+## In the playground
+
+The prompt bar is this loop with a form in front of it (`apps/web/src/lib/agent.ts`,
+`components/PromptBar.tsx`). What the browser adds is small and specific:
+
+- **The key is React state**, passed to the provider factory when Generate is pressed and
+  held nowhere else — no `localStorage`, no module-level cache. Closing the tab forgets it.
+- **Anthropic needs `anthropic-dangerous-direct-browser-access: true`** or the API refuses
+  a request from a page, and the failure arrives as an opaque CORS error with no body to
+  explain it. That header is a browser fact rather than a provider fact, so it is added by
+  the `fetch` the app injects instead of being baked into a package that also runs in Node.
+- **The mock answers from the recipes on the page**, ranked against the prompt, handing back
+  the next-best candidate on each call so the repair path is exercised rather than stubbed.
+  When the candidates run out it says so in one sentence — which this loop reads as a
+  refusal and reports verbatim, and which is the correct end to a scripted conversation.
+- **The optimizer runs smaller than in the benchmark** (16 × 14 rather than 16 × 24): every
+  generation is a population's worth of offline renders on the UI thread, and a search that
+  takes a minute reads as a hang. When a result is close but not close enough, the Slots
+  panel is the same search by hand, and audible immediately.
+- **`match reference`** turns a reference loaded in the Compare panel into the loop's
+  `target`, so the model is told what to aim at and the optimizer has a distance to
+  minimize. Without it a recipe is accepted as soon as it parses, validates and renders to
+  something audible — the honest ceiling for "make me a laser".
+
+The log the panel prints is one line per event, which is the argument of the whole project
+in miniature: the validator caught the category, the render caught the clipping, the
+optimizer moved the numbers, and the model was asked again only when there was something it
+could act on.
+
+## Retrieval: rewriting the query
+
+The bank is English and its index is FTS5, so a request in another language matches
+nothing at all — «большой камень плюхнулся в озеро» finds zero rows, `retrieve` answers
+with top-rated recipes, and the run reports three examples unrelated to the request while
+looking perfectly healthy. `rewriteQuery: true` spends one short call (`searchQuery`,
+`maxTokens: 64`) turning the request into 3–8 English keywords; `retrievalQuery` overrides
+it when the caller already has them, and neither is used when there is no bank, since the
+rewrite would have no consumer.
+
+It is allowed to fail quietly, on the same grounds as a bank being down: retrieval is an
+improvement to the prompt, not a precondition. A reply that arrives as prose is *rejected*
+rather than trimmed (`parseKeywords`), because the caller has a perfectly good fallback and
+a trimmed sentence would look like keywords without being any.
+
+The `retrieval` event reports the query, the number of examples and the `fallback` flag —
+worth its own event because three examples that matched nothing look exactly like three
+that did.
+
+## Being the model yourself
+
+Under `vite dev` the picker offers a fourth provider, **bridge**, whose model is whoever is
+holding the debugger, and the page installs `window.txt2sfx` (`apps/web/src/lib/bridge.ts`).
+The request is parked, you answer it by hand, and everything downstream runs unchanged.
+
+```js
+await txt2sfx.loadReference('/@fs/C:/repo/.refs/splash.wav')  // or use the file picker
+txt2sfx.run('a stone plunging into a lake', { target: true })
+txt2sfx.request()                       // { id, turn, messages, systemBytes }
+txt2sfx.system()                        // the 12 KB generated contract, on demand
+txt2sfx.reply(id, '```soundline\n…\n```')
+txt2sfx.measure()                       // profile, issues, distance, directives
+txt2sfx.fit()                           // more generations, by hand
+```
+
+Why it earns its place: tuning the loop against a hosted model is a slow, noisy experiment —
+every change costs a round trip and a different sample, so two runs never disagree for one
+reason. Answer the request with a recipe you believe in, and the run tells you whether the
+fault was ever upstream. It is also how the honest answer to "why is this output bad?" gets
+found: on the first sound tried this way, a poor result turned out to be three separate
+faults, only one of which was the model's — a stall window larger than the generation budget
+(so the restructure branch was unreachable), a repair budget spent on syntax before the
+first measurement, and a topology the numbers could not rescue.
+
+`measure()` reads through a ref rather than a closure, deliberately: an earlier version
+returned the previous render's numbers to a caller who asked right after a run, and stale
+measurements are worse than none — they look like results.

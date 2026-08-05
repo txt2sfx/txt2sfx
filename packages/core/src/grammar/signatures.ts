@@ -225,6 +225,79 @@ const SUB: Signature = {
   ],
 };
 
+/**
+ * The one thing the other eight primitives cannot make: a field of many events.
+ *
+ * `noise` is stationary and `chirp` is one sweep, so water, rain, gravel, fire and
+ * a crowd were all out of reach — not because the numbers were wrong but because
+ * nothing in the set produces a *dense scatter of short events*. Measured against a
+ * water-splash reference, filtered noise plateaus at a spectral flatness of about
+ * 0.42 where the recording sits at 0.58, and the optimizer reports a genuine stall:
+ * the residual is structural, and no slot value closes it.
+ *
+ * One grain is a damped sine with a slight upward glide — Minnaert's bubble, the
+ * same physics the `bubble-pop` recipe is built on. That single shape covers both
+ * ends of the range: with `spread 3` and `width 2ms` a few hundred pings scattered
+ * across octaves read as broadband ticks (gravel, rain on a roof), while with
+ * `spread 0.5` and `width 30ms` they read as what they are, individual droplets.
+ */
+const GRAINS: Signature = {
+  name: 'grains',
+  kind: 'primitive',
+  doc: 'Dense field of short randomized events: water, rain, gravel, fire, crowds.',
+  params: [
+    {
+      name: 'freq',
+      kind: 'freq',
+      positional: true,
+      required: true,
+      min: 40,
+      max: 16000,
+      doc: 'Centre frequency of one grain; each grain is scattered around it by `spread`.',
+    },
+    {
+      name: 'rate',
+      kind: 'ratio',
+      default: 40,
+      min: 1,
+      max: 600,
+      doc: 'Grains per second. Below ~15 they are heard as separate events, above ~120 as texture.',
+    },
+    {
+      name: 'width',
+      kind: 'time',
+      default: 8,
+      min: 0.5,
+      max: 120,
+      doc: 'Length of one grain. Short is a tick, long is a pitched droplet.',
+    },
+    {
+      name: 'spread',
+      kind: 'ratio',
+      default: 1,
+      min: 0,
+      max: 4,
+      doc: 'Frequency scatter in octaves, centred on `freq`. Wide scatter reads as noise.',
+    },
+    {
+      name: 'jitter',
+      kind: 'ratio',
+      default: 1,
+      min: 0,
+      max: 1,
+      doc: 'Timing randomness: 0 is a metronome (a machine), 1 is natural scatter.',
+    },
+    {
+      name: 'bend',
+      kind: 'ratio',
+      default: 1.3,
+      min: 0.25,
+      max: 4,
+      doc: 'Where each grain ends up, as a multiple of its start frequency. 1 is ice or glass; 1.2-1.6 is water (a collapsing cavity rises in pitch); below 1 is a bubble rising and releasing.',
+    },
+  ],
+};
+
 const CLICK: Signature = {
   name: 'click',
   kind: 'primitive',
@@ -458,6 +531,7 @@ export const PRIMITIVES: Readonly<Record<string, Signature>> = {
   fm: FM,
   sub: SUB,
   click: CLICK,
+  grains: GRAINS,
 };
 
 /** All v0 effects, keyed by the word that follows `>>`. */

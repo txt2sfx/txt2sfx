@@ -180,6 +180,10 @@ code {
 
 /* --- sidebar ------------------------------------------------------------ */
 
+/* Sticky and viewport-tall, so Save and Publish stay reachable: the main column is
+   several screens long, and a sidebar that scrolled with it would park its buttons
+   somewhere below the Compare panel. The 52px offset is the sticky topbar's own
+   height — the two are stacked, not overlapping. */
 .sidebar {
   width: 210px;
   flex: none;
@@ -187,6 +191,10 @@ code {
   flex-direction: column;
   border-right: 1px solid var(--line);
   background: var(--panel);
+  position: sticky;
+  top: 52px;
+  align-self: flex-start;
+  max-height: calc(100vh - 52px);
 }
 
 .gallery {
@@ -279,6 +287,26 @@ code {
 
 .pane-wide {
   grid-column: 1 / -1;
+}
+
+.pane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pane-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.fit-status {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--cyan);
 }
 
 @media (max-width: 1100px) {
@@ -717,4 +745,192 @@ code {
   color: var(--emerald);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* --- prompt bar --------------------------------------------------------- */
+
+.prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prompt-row {
+  display: flex;
+  gap: 8px;
+}
+
+.prompt-input {
+  flex: 1;
+  min-width: 0;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 11px;
+}
+
+.prompt-input:focus {
+  outline: none;
+  border-color: color-mix(in oklab, var(--cyan) 55%, var(--line));
+}
+
+.prompt-controls {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.prompt-field {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.prompt-field select {
+  font: 12px/1.4 var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+.prompt-model input {
+  width: 170px;
+  font: 13px/1.4 var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+/* The key is a credential, so it gets the same monospace treatment as the code —
+   a pasted key is checked by eye, and a proportional font hides a wrong character. */
+.prompt-key input {
+  width: 230px;
+  font: 13px/1.4 var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+.prompt-note {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.prompt-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  max-height: 210px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 12px/1.6 var(--mono);
+  color: var(--ink-dim);
+}
+
+.prompt-log-line.bad {
+  color: var(--red);
+}
+
+.prompt-log-line.live {
+  color: var(--cyan);
+}
+
+.prompt-verdict {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.prompt-outcome.good {
+  color: var(--emerald);
+}
+
+.prompt-outcome.bad {
+  color: var(--amber);
+}
+
+.prompt-message {
+  margin-top: 4px;
+  color: var(--ink-faint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* --- store switch ------------------------------------------------------- */
+
+.sidebar-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.store-switch {
+  display: flex;
+}
+
+.store-switch button {
+  flex: 1;
+  border-radius: 0;
+  font-size: 12px;
+}
+
+.store-switch button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.store-switch button:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: none;
+}
+
+.store-switch button.selected {
+  color: var(--cyan);
+  border-color: color-mix(in oklab, var(--cyan) 45%, var(--line));
+  background: color-mix(in oklab, var(--cyan) 12%, var(--panel-2));
+}
+
+button.link {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--cyan);
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+.gallery-group + .gallery-group {
+  margin-top: 10px;
+}
+
+.gallery-group-label {
+  padding: 2px 8px 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gallery-rating {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--emerald);
 }

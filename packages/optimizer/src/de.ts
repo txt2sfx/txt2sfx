@@ -107,6 +107,24 @@ export const DE_DEFAULTS = {
   stallGenerations: 20,
 } as const;
 
+/**
+ * The stall window for a budget: a third of it, never below six.
+ *
+ * "A third of the budget" is the rule the paragraph above argues for;
+ * `DE_DEFAULTS.stallGenerations` is that rule evaluated for the default 60. Baking
+ * only the evaluated number in was a trap, and it caught the playground: a caller
+ * that shortens the run to 14 generations to keep a browser responsive gets a
+ * stall window of 20, which **cannot be reached**, so `stopped` is never
+ * `'stalled'` — and the agent loop's one mechanism for "the numbers are as good as
+ * this structure allows, redesign it" becomes unreachable. The failure is silent
+ * and expensive: the loop reports a distance and quietly stops asking.
+ *
+ * Six is the floor because a plateau shorter than that is noise on any budget.
+ */
+export function stallWindowFor(generations: number): number {
+  return Math.max(6, Math.round(generations / 3));
+}
+
 /** MINSTD. Full period, no weak low bits, and no dependency. */
 function makeRandom(seed: number): () => number {
   let state = Math.abs(Math.trunc(seed)) % 2147483647;
@@ -152,7 +170,7 @@ export async function differentialEvolution(fitness: Fitness, options: DEOptions
   const generations = options.generations ?? DE_DEFAULTS.generations;
   const F = options.F ?? DE_DEFAULTS.F;
   const CR = options.CR ?? DE_DEFAULTS.CR;
-  const stallLimit = options.stallGenerations ?? DE_DEFAULTS.stallGenerations;
+  const stallLimit = options.stallGenerations ?? stallWindowFor(generations);
   const random = makeRandom(options.seed ?? DE_DEFAULTS.seed);
 
   if (dimensions === 0) {

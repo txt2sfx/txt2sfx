@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "soundline playground: edit, hear, tweak, export. Local-only — no keys, no server.",
+  "description": "soundline playground: describe, generate, edit, hear, tweak, export. Your key, your machine — nothing is proxied.",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,10 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json"
   },
   "dependencies": {
+    "@txt2sfx/agent": "workspace:*",
+    "@txt2sfx/analyzer": "workspace:*",
     "@txt2sfx/core": "workspace:*",
+    "@txt2sfx/optimizer": "workspace:*",
     "@txt2sfx/shared": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

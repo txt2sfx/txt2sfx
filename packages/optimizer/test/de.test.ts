@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { DE_DEFAULTS, differentialEvolution, type Vector } from '../src/index.js';
+import { DE_DEFAULTS, differentialEvolution, stallWindowFor, type Vector } from '../src/index.js';
 
 /** Minimum 0 at the centre of the cube. Convex — anything should solve it. */
 const sphere = (centre: number) => async (v: Vector): Promise<number> =>
@@ -150,6 +150,31 @@ describe('stopping', () => {
     });
     expect(budget.stopped).toBe('budget');
     expect(budget.generations).toBe(4);
+  });
+
+  /**
+   * The stall window scales with the budget, and it has to.
+   *
+   * A caller that shortens a run — the playground does, to keep a browser
+   * responsive — used to inherit the window sized for 60 generations. A window
+   * larger than the budget can never be reached, so `stopped` could only ever be
+   * `'target'` or `'budget'`, and the agent loop's "the numbers cannot rescue this
+   * structure, redesign it" branch became unreachable without a word of warning.
+   */
+  it('derives the stall window from the budget rather than the default budget', async () => {
+    expect(stallWindowFor(60)).toBe(DE_DEFAULTS.stallGenerations);
+    expect(stallWindowFor(44)).toBe(15);
+    /* Never larger than the budget it has to fit inside. */
+    for (const generations of [14, 20, 30, 44, 60, 120]) {
+      expect(stallWindowFor(generations), `budget ${String(generations)}`).toBeLessThan(generations);
+    }
+    /* A plateau shorter than six generations is noise on any budget. */
+    expect(stallWindowFor(3)).toBe(6);
+
+    const flat = async (): Promise<number> => 0.5;
+    const short = await differentialEvolution(flat, { dimensions: 2, seed: 4, generations: 14 });
+    expect(short.stopped).toBe('stalled');
+    expect(short.generations).toBe(stallWindowFor(14));
   });
 
   /**

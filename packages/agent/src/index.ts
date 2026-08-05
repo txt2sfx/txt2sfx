@@ -43,8 +43,8 @@ export type {
   Message,
 } from './provider.js';
 
-export { anthropicProvider } from './anthropic.js';
-export { geminiProvider } from './gemini.js';
+export { anthropicProvider, ANTHROPIC_DEFAULT_MODEL } from './anthropic.js';
+export { geminiProvider, GEMINI_DEFAULT_MODEL } from './gemini.js';
 export { mockProvider } from './mock.js';
 export type { MockProvider, MockProviderOptions } from './mock.js';
 
@@ -55,6 +55,9 @@ export type { DroppedExample, FewShotExample, FewShotSelection } from './fewshot
 
 export { httpBank, staticBank } from './bank.js';
 export type { RecipeSource, RetrievedRecipes } from './bank.js';
+
+export { parseKeywords, searchQuery } from './query.js';
+export type { SearchQueryOptions } from './query.js';
 
 export { extractSoundline, initialMessage, repairMessage, systemPrompt } from './prompts.js';
 export type { Failure, InitialMessageOptions, SystemPromptOptions } from './prompts.js';

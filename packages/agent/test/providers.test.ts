@@ -150,7 +150,11 @@ describe('geminiProvider', () => {
 
     expect(text).toBe('recipe');
     const call = calls[0];
-    expect(call?.url).toContain('/v1beta/models/gemini-2.5-flash:generateContent');
+    /* The path shape, not the model id: Gemini names are retired on Google's
+       schedule (2.5-flash stopped accepting new keys and answered 404), so the
+       default is expected to move and a test pinned to it would break for a reason
+       that has nothing to do with the request shape. The override is covered below. */
+    expect(call?.url).toMatch(/\/v1beta\/models\/[\w.-]+:generateContent$/);
     /* A key in a query string lands in proxy logs, history and Referer headers. */
     expect(call?.url).not.toContain('AIza-secret');
     expect((call?.init.headers as Record<string, string>)['x-goog-api-key']).toBe('AIza-secret');

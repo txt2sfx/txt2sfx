@@ -108,6 +108,23 @@ export type IRBufferSpec =
       readonly seed: number;
       readonly sec: number;
     }
+  /** Scatter of short damped pings — the `grains` primitive. */
+  | {
+      readonly kind: 'grains';
+      readonly freq: number;
+      /** Grains per second. */
+      readonly rate: number;
+      /** Length of one grain, in seconds. */
+      readonly width: number;
+      /** Frequency scatter in octaves. */
+      readonly spread: number;
+      /** Timing randomness, 0..1. */
+      readonly jitter: number;
+      /** Frequency at the end of a grain, as a multiple of its start. */
+      readonly bend: number;
+      readonly seed: number;
+      readonly sec: number;
+    }
   /** Decaying noise impulse response for the `verb` effect's convolver. */
   | { readonly kind: 'verb'; readonly sec: number; readonly damp: number; readonly seed: number };
 

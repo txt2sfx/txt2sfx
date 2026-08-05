@@ -46,6 +46,7 @@ import { optimize, type RenderFn, type Target } from '@txt2sfx/optimizer';
 import type { LLMProvider, Message } from './provider.js';
 import type { RecipeSource } from './bank.js';
 import { selectFewShot, type FewShotExample } from './fewshot.js';
+import { searchQuery } from './query.js';
 import {
   extractSoundline,
   initialMessage,
@@ -93,6 +94,20 @@ export interface Attempt {
 
 /** Progress, for a UI that wants to show the loop working rather than a spinner. */
 export type AgentEvent =
+  /**
+   * What retrieval was asked and what it found.
+   *
+   * Worth its own event because a silent fallback is the most expensive quiet
+   * failure in the loop: the prompt still carries three examples, they are simply
+   * unrelated to the request, and nothing downstream can tell.
+   */
+  | {
+      readonly type: 'retrieval';
+      /** The text retrieval actually used — a rewrite, when one happened. */
+      readonly query: string;
+      readonly count: number;
+      readonly fallback: boolean;
+    }
   | { readonly type: 'request'; readonly iteration: number }
   | { readonly type: 'reply'; readonly iteration: number; readonly text: string }
   | {
@@ -102,6 +117,22 @@ export type AgentEvent =
       readonly issues: readonly ValidationIssue[];
     }
   | { readonly type: 'rendered'; readonly iteration: number; readonly peak: number }
+  /**
+   * One generation of the numerical search.
+   *
+   * Chatty on purpose — a fit is the slowest thing in the loop (a population of
+   * renders per generation), and a UI with nothing to show for twenty seconds
+   * reads as a hang. A consumer that does not want a line per generation should
+   * render this as one line that updates, which is what the playground does.
+   */
+  | {
+      readonly type: 'generation';
+      readonly iteration: number;
+      readonly generation: number;
+      readonly bestFitness: number;
+      /** Population spread; 0 means the search has converged. */
+      readonly diversity: number;
+    }
   | {
       readonly type: 'optimized';
       readonly iteration: number;
@@ -129,6 +160,18 @@ export interface GenerateOptions {
   readonly bank?: RecipeSource;
   /** How many examples to retrieve. Default 3. */
   readonly examples?: number;
+  /**
+   * Rewrite the prompt into English keywords before retrieving. Default false.
+   *
+   * Costs one short model call and buys relevant few-shot examples for a request
+   * the index cannot match as written — anything not in English, and any request
+   * phrased as a sentence. Off by default because it spends a call the caller may
+   * not want, and because a caller that already has keywords should pass them as
+   * {@link retrievalQuery} instead.
+   */
+  readonly rewriteQuery?: boolean;
+  /** Use this text for retrieval instead of the prompt. Wins over `rewriteQuery`. */
+  readonly retrievalQuery?: string;
   /** Override the generated contract document — see `SystemPromptOptions`. */
   readonly contract?: string;
   /** The sound being matched. Without it there is nothing to optimize against. */
@@ -222,11 +265,28 @@ export async function generateSound(options: GenerateOptions): Promise<GenerateR
   const targetDistance = options.targetDistance ?? DEFAULT_TARGET_DISTANCE;
   const emit = options.onEvent ?? ((): void => {});
 
+  /* An explicit query wins, then a rewrite, then the prompt as written. The rewrite
+     is skipped when there is no bank: it would be a model call whose only consumer
+     does not exist. */
+  const query =
+    options.retrievalQuery ??
+    (options.rewriteQuery === true && options.bank !== undefined
+      ? await searchQuery({
+          prompt: options.prompt,
+          provider: options.provider,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        })
+      : options.prompt);
+
   const retrieved =
     options.bank === undefined
       ? { recipes: [], fallback: false }
-      : await options.bank.retrieve(options.prompt, options.examples ?? DEFAULT_EXAMPLES);
+      : await options.bank.retrieve(query, options.examples ?? DEFAULT_EXAMPLES);
   const selection = selectFewShot(retrieved.recipes, options.examples ?? DEFAULT_EXAMPLES);
+
+  if (options.bank !== undefined) {
+    emit({ type: 'retrieval', query, count: selection.examples.length, fallback: retrieved.fallback });
+  }
 
   const system = systemPrompt({
     examples: selection.examples,
@@ -357,6 +417,14 @@ export async function generateSound(options: GenerateOptions): Promise<GenerateR
       ...(options.optimizer?.stallGenerations === undefined
         ? {}
         : { stallGenerations: options.optimizer.stallGenerations }),
+      onGeneration: (report) =>
+        emit({
+          type: 'generation',
+          iteration,
+          generation: report.generation,
+          bestFitness: report.bestFitness,
+          diversity: report.diversity,
+        }),
     });
     emit({
       type: 'optimized',

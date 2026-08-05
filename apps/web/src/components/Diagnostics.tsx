@@ -9,16 +9,26 @@
  * @packageDocumentation
  */
 
+import type { ValidationIssue } from '@txt2sfx/shared';
 import type { SoundlineError } from '@txt2sfx/core';
 
 export interface DiagnosticsProps {
   readonly errors: readonly SoundlineError[];
+  /**
+   * Physical invariants, from the same validator the agent loop runs.
+   *
+   * Kept apart from `warnings` so severity survives: an `error` here is a recipe
+   * `POST /api/recipes` would refuse and the agent loop would send back, and
+   * showing it in the same colour as "your export is over budget" would misprice
+   * it.
+   */
+  readonly issues?: readonly ValidationIssue[];
   /** Sound-wide notes that are not parse errors, e.g. a clipped mix. */
   readonly warnings: readonly string[];
 }
 
-export function Diagnostics({ errors, warnings }: DiagnosticsProps): React.JSX.Element | null {
-  if (errors.length === 0 && warnings.length === 0) return null;
+export function Diagnostics({ errors, issues = [], warnings }: DiagnosticsProps): React.JSX.Element | null {
+  if (errors.length === 0 && issues.length === 0 && warnings.length === 0) return null;
 
   return (
     <div className="diagnostics">
@@ -32,6 +42,17 @@ export function Diagnostics({ errors, warnings }: DiagnosticsProps): React.JSX.E
             {error.hint === undefined ? null : <em className="diag-hint"> — {error.hint}</em>}
           </span>
           <code className="diag-code">{error.code}</code>
+        </div>
+      ))}
+      {issues.map((issue, i) => (
+        <div className={issue.severity === 'error' ? 'diag diag-error' : 'diag diag-warn'} key={`i${String(i)}`}>
+          <span className="diag-where">{issue.loc === undefined ? issue.severity : `${issue.loc.line}:${issue.loc.column}`}</span>
+          <span className="diag-body">
+            {issue.layer === null ? '' : `layer '${issue.layer}': `}
+            {issue.got} (expected {issue.expected})
+            <em className="diag-hint"> — {issue.hint}</em>
+          </span>
+          <code className="diag-code">{issue.rule}</code>
         </div>
       ))}
       {warnings.map((warning, i) => (

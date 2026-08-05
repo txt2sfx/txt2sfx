@@ -280,6 +280,113 @@ const EMIT_PLUCK =
   'else a[i]=g*.5*(a[i-ln]+a[i-ln+1])}return b}';
 
 /* ------------------------------------------------------------------------- *
+ * grains — a field of short events
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Scatter of short damped pings, summed and then normalized to unit peak.
+ *
+ * One grain is a sine that decays inside its own width while its frequency slides by
+ * `bend` — Minnaert's collapsing bubble, the same physics `bubble-pop` is built on
+ * (see §9.2 of the plan: a real pop's resonance climbs 960 → 1109 Hz in 8 ms, and
+ * sweeping it *downwards* is what turns a pop into a thud). Three random draws per
+ * grain: when it happens, how far its frequency sits from the centre, and how loud
+ * it is. Amplitude scatter is not decoration — a field of equally loud events reads
+ * as a machine, and 0.35..1 is enough to break that up.
+ *
+ * ## `bend` is what tells water from ice
+ *
+ * It was a hidden 1.06 until a listener said a grain field sounded like "small
+ * shards of ice scattering" rather than a splash, which is exactly right: a bright
+ * short ping whose pitch does not move is glass or ice, and the rising chirp is the
+ * cue the ear uses for water. At 6 % it is barely audible; the measured reference in
+ * §9.2 rises about 15 %, and a convincing droplet wants 20–60 %.
+ *
+ * The factor is applied so that `bend` means what it says — the frequency at the
+ * *end* of the grain, as a multiple of the start. Note the halving: phase
+ * `2πf·t·(1 + k·t/T)` has instantaneous frequency `f·(1 + 2k·t/T)`, so a naive
+ * `k = bend - 1` would bend twice as far as advertised, and a parameter that lies by
+ * a factor of two is worse than no parameter.
+ *
+ * ## Why it normalizes, and why that is not the same as `gain`
+ *
+ * The sum of `rate * sec` overlapping grains has no analytic bound, so unlike
+ * `modal` this generator cannot divide by a known total; it measures its own peak
+ * and scales to exactly 1. Two consequences, both wanted. The `peak <= 0.95`
+ * invariant stays provable from the layer gains, as it is for every other source.
+ * And density stops changing loudness: `rate 200` is denser than `rate 20`, not
+ * louder, so a model can reach for density without re-tuning `gain` — which is the
+ * distinction it keeps getting wrong when both are in one number.
+ *
+ * The cost is a second pass over the buffer, about 40 bytes in the export.
+ */
+function fillGrains(
+  freq: number,
+  rate: number,
+  width: number,
+  spread: number,
+  jitter: number,
+  bend: number,
+  seed: number,
+  sec: number,
+  sampleRate: number,
+): Float32Array {
+  const a = alloc(sec, sampleRate);
+  const n = a.length;
+  const count = Math.max(1, Math.round(rate * sec));
+  const step = n / count;
+  const len = Math.max(2, Math.round(width * sampleRate));
+  /* Half, so `bend` is the end frequency and not twice it — see the note above.
+     Named `bf` and not `k` because the grain loop below counts with `k`: the first
+     version of this shadowed the factor with the grain index, so every grain bent by
+     its own position and `bend` did nothing at all. Both halves of the generator had
+     the same mistake, which is why the parity test stayed green — a reminder that
+     parity proves the two players agree, not that either is right. */
+  const bf = (bend - 1) / 2;
+  let s = seed;
+  for (let k = 0; k < count; k++) {
+    s = (s * LCG_MUL) % LCG_MOD;
+    const u1 = s / LCG_MOD;
+    s = (s * LCG_MUL) % LCG_MOD;
+    const u2 = s / LCG_MOD;
+    s = (s * LCG_MUL) % LCG_MOD;
+    const u3 = s / LCG_MOD;
+    /* `jitter` moves a grain up to half a step either way, so the field keeps its
+       density: scattering without that bound thins the start and piles up the end. */
+    const at = Math.max(0, Math.round(step * (k + jitter * (u1 - 0.5))));
+    const f = freq * 2 ** (spread * (u2 - 0.5));
+    const amp = 0.35 + 0.65 * u3;
+    for (let i = 0; i < len && at + i < n; i++) {
+      /* Written to match `EMIT_GRAINS` operation for operation, including the order
+         of `* i / sampleRate`: float multiplication is not associative, and
+         `f * (i / R)` differs from `f * i / R` in the last bit — which the parity
+         test would catch as a mismatch between the live graph and the export. */
+      a[at + i] =
+        (a[at + i] ?? 0) +
+        amp * Math.exp((-4 * i) / len) * Math.sin(((2 * Math.PI * f * i) / sampleRate) * (1 + (bf * i) / len));
+    }
+  }
+  let peak = 0;
+  for (let i = 0; i < n; i++) {
+    const v = a[i] ?? 0;
+    if (v > peak) peak = v;
+    else if (-v > peak) peak = -v;
+  }
+  if (peak > 0) for (let i = 0; i < n; i++) a[i] = (a[i] ?? 0) / peak;
+  return a;
+}
+
+const EMIT_GRAINS =
+  'Y=(s_,f,rt,wd,sp,jt,bd,d_)=>{const b=A(s_),a=b.getChannelData(0),n=a.length,' +
+  'ct=Math.max(1,Math.round(rt*s_)),st=n/ct,ln=Math.max(2,Math.round(wd*R)),bf=(bd-1)/2;let s=d_;' +
+  `for(let k=0;k<ct;k++){${NOISE_STEP}const u1=s/2147483647;${NOISE_STEP}const u2=s/2147483647;` +
+  `${NOISE_STEP}const u3=s/2147483647,at=Math.max(0,Math.round(st*(k+jt*(u1-.5)))),` +
+  'g=f*2**(sp*(u2-.5)),am=.35+.65*u3;' +
+  'for(let i=0;i<ln&&at+i<n;i++)a[at+i]+=am*Math.exp(-4*i/ln)*Math.sin(2*Math.PI*g*i/R*(1+bf*i/ln))}' +
+  'let p=0;for(let i=0;i<n;i++){const v=a[i];if(v>p)p=v;else if(-v>p)p=-v}' +
+  'if(p>0)for(let i=0;i<n;i++)a[i]/=p;return b}';
+
+/* ------------------------------------------------------------------------- *
  * verb — convolution impulse response
  * ------------------------------------------------------------------------- */
 
@@ -350,6 +457,18 @@ export function fillBuffer(spec: IRBufferSpec, sampleRate: number): Float32Array
       return fillModal(spec.freq, spec.ratios, spec.q, spec.sec, sampleRate);
     case 'pluck':
       return fillPluck(spec.freq, spec.damp, spec.bright, spec.seed, spec.sec, sampleRate);
+    case 'grains':
+      return fillGrains(
+        spec.freq,
+        spec.rate,
+        spec.width,
+        spec.spread,
+        spec.jitter,
+        spec.bend,
+        spec.seed,
+        spec.sec,
+        sampleRate,
+      );
     case 'verb':
       return fillVerb(spec.sec, spec.damp, spec.seed, sampleRate);
   }
@@ -383,6 +502,7 @@ export function bufferEmitter(specs: readonly IRBufferSpec[], needsCurve: boolea
   if (kinds.has('burst')) helpers.push(EMIT_BURST);
   if (kinds.has('modal')) helpers.push(EMIT_MODAL);
   if (kinds.has('pluck')) helpers.push(EMIT_PLUCK);
+  if (kinds.has('grains')) helpers.push(EMIT_GRAINS);
   if (kinds.has('verb')) helpers.push(EMIT_VERB);
   if (needsCurve) helpers.push(EMIT_CURVE);
 
@@ -400,6 +520,8 @@ export function bufferEmitter(specs: readonly IRBufferSpec[], needsCurve: boolea
           return `M(${num(spec.sec)},${num(spec.freq)},${numList(spec.ratios)},${num(spec.q)})`;
         case 'pluck':
           return `P(${num(spec.sec)},${num(spec.freq)},${num(spec.damp)},${num(spec.bright)},${num(spec.seed)})`;
+        case 'grains':
+          return `Y(${num(spec.sec)},${num(spec.freq)},${num(spec.rate)},${num(spec.width)},${num(spec.spread)},${num(spec.jitter)},${num(spec.bend)},${num(spec.seed)})`;
         case 'verb':
           return `V(${num(spec.sec)},${num(spec.damp)},${num(spec.seed)})`;
       }

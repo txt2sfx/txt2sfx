@@ -17,6 +17,9 @@ export default defineConfig({
     alias: {
       '@txt2sfx/shared': r('../../packages/shared/src/index.ts'),
       '@txt2sfx/core': r('../../packages/core/src/index.ts'),
+      '@txt2sfx/analyzer': r('../../packages/analyzer/src/index.ts'),
+      '@txt2sfx/optimizer': r('../../packages/optimizer/src/index.ts'),
+      '@txt2sfx/agent': r('../../packages/agent/src/index.ts'),
     },
   },
   server: {

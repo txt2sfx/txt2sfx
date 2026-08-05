@@ -1,0 +1,5 @@
+# Provisioned by run.py: a CPython 3.10 venv with torch, and the rendered baselines.
+# Model weights live in the shared Hugging Face cache, not here.
+.venv/
+out/
+__pycache__/
