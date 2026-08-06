@@ -4,7 +4,8 @@
     python test/stable-audio/run.py "glass bottle shattering on concrete"
 
 First run provisions an isolated CPython 3.10 venv (stable-audio-tools pins
->=3.10,<3.11 and torch 2.7.1) next to this file and downloads ~1.7 GB of weights
+>=3.10,<3.11 and torch 2.7.1) next to this file, picks the CPU or CUDA torch wheels
+depending on whether nvidia-smi finds a device, and downloads ~1.7 GB of weights
 into the Hugging Face cache. Every run after that is offline apart from the model
 cache lookup. Nothing here is part of the txt2sfx build — it exists so a diffusion
 render can be A/B'd against the procedural one.
@@ -32,10 +33,27 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 VENV = HERE / ".venv"
 VENV_PY = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+# Holds the provisioned torch variant ("cpu" or a CUDA tag) so a later run can tell that the
+# venv is there but built for the wrong device. Older venvs wrote "ok" — treated as unknown.
 STAMP = VENV / ".deps-installed"
 REQUIREMENTS = HERE / "requirements.txt"
 OUT_DIR = HERE / "out"
 PY_VERSION = "3.10"
+
+# requirements.txt gets the CPU wheels (that is what PyPI serves on Windows/macOS). When an
+# NVIDIA GPU is present the three torch packages are swapped for the CUDA build from
+# download.pytorch.org. Versions must stay exactly the ones stable-audio-tools pins — only the
+# local version tag changes. cu128 covers every card torch 2.7 supports, sm_60 through sm_120.
+CUDA_TAG = "cu128"
+TORCH_PACKAGES = {"torch": "2.7.1", "torchaudio": "2.7.1", "torchvision": "0.22.1"}
+
+
+def torch_index(tag: str) -> str:
+    return f"https://download.pytorch.org/whl/{tag}"
+
+
+def torch_pins(tag: str) -> list[str]:
+    return [f"{name}=={version}+{tag}" for name, version in TORCH_PACKAGES.items()]
 
 # Sampling defaults come from the Stable Audio Open Small model card: 8 steps with the
 # ping-pong sampler and no classifier-free guidance, because the ARC post-training makes
@@ -84,14 +102,47 @@ def run(cmd: list[str]) -> None:
         sys.exit(code)
 
 
-def bootstrap(argv: list[str], reinstall: bool) -> "int":
+def has_nvidia_gpu() -> bool:
+    """True when nvidia-smi reports at least one device. CUDA torch is a 3 GB download, so it
+    is worth one cheap probe rather than installing it speculatively."""
+    if sys.platform == "darwin":
+        return False
+    smi = shutil.which("nvidia-smi")
+    if smi is None:
+        return False
+    try:
+        out = subprocess.run([smi, "-L"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.returncode == 0 and out.stdout.lstrip().startswith("GPU")
+
+
+def install_torch(tag: str, uv: str | None) -> None:
+    """Replace the provisioned torch wheels with the ones from the `tag` index."""
+    print(f"installing torch/{tag} wheels (~3 GB for a CUDA build, once)", flush=True)
+    if uv is not None:
+        # uv treats 2.7.1+cpu as satisfying ==2.7.1 and would do nothing, so name the
+        # packages to reinstall explicitly.
+        reinstall = [f"--reinstall-package={name}" for name in TORCH_PACKAGES]
+        run([uv, "pip", "install", "--python", str(VENV_PY), "--index-url", torch_index(tag),
+             *reinstall, *torch_pins(tag)])
+    else:
+        run([str(VENV_PY), "-m", "pip", "install", "--index-url", torch_index(tag),
+             "--force-reinstall", "--no-deps", *torch_pins(tag)])
+
+
+def bootstrap(argv: list[str], reinstall: bool, cpu_torch: bool) -> "int":
     """Create ./.venv on CPython 3.10 with the pinned deps, then re-run this script in it."""
     if reinstall and VENV.exists():
         print(f"removing {VENV}", flush=True)
         shutil.rmtree(VENV)
 
-    if not (VENV_PY.exists() and STAMP.exists()):
-        uv = shutil.which("uv")
+    stamp = STAMP.read_text(encoding="utf-8").strip() if STAMP.exists() else ""
+    if stamp and stamp != CUDA_TAG:
+        stamp = "cpu"  # the CPU wheels, or a venv from before this stamp meant anything
+    uv = shutil.which("uv")
+
+    if not (VENV_PY.exists() and stamp):
         if uv is not None:
             if not VENV_PY.exists():
                 run([uv, "venv", "--python", PY_VERSION, str(VENV)])
@@ -108,7 +159,22 @@ def bootstrap(argv: list[str], reinstall: bool) -> "int":
                 "  winget install --id astral-sh.uv        # or: pip install uv\n"
                 "or run this script with a 3.10 interpreter."
             )
-        STAMP.write_text("ok\n", encoding="utf-8")
+        # requirements.txt just gave us the CPU wheels; the swap below decides if they stay.
+        stamp = "cpu"
+        STAMP.write_text(stamp + "\n", encoding="utf-8")
+
+    # Probing is skipped once the CUDA build is in place, and costs nothing on a box with no
+    # nvidia-smi at all — so the only run that shells out is the one that might need the swap.
+    if cpu_torch:
+        want = "cpu"
+    elif stamp == CUDA_TAG or has_nvidia_gpu():
+        want = CUDA_TAG
+    else:
+        want = "cpu"
+
+    if want != stamp:
+        install_torch(want, uv)
+        STAMP.write_text(want + "\n", encoding="utf-8")
 
     return subprocess.call([str(VENV_PY), str(Path(__file__).resolve()), *argv])
 
@@ -229,6 +295,20 @@ def generate(args: argparse.Namespace) -> int:
     torch.set_num_threads(args.threads or os.cpu_count() or 4)
     device = "cuda" if (torch.cuda.is_available() and not args.cpu) else "cpu"
 
+    if device == "cuda":
+        # The DiT runs in fp32, and on Ampere and later its matmuls are ~4x faster in TF32 for
+        # a mantissa difference no diffusion sampler can hear. The autoencoder is fp16 anyway.
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        free, total = torch.cuda.mem_get_info()
+        print(
+            f"device {torch.cuda.get_device_name(0)} (sm_{''.join(map(str, torch.cuda.get_device_capability(0)))}), "
+            f"{free / 2**30:.1f} of {total / 2**30:.1f} GiB free",
+            flush=True,
+        )
+    elif torch.cuda.is_available():
+        print("device cpu (--cpu given; CUDA is available)", flush=True)
+
     print(f"model  {repo}", flush=True)
     model_dir = download_model(repo, args.revision)
 
@@ -271,8 +351,16 @@ def generate(args: argparse.Namespace) -> int:
     pretransform = getattr(model, "pretransform", None)
     ratio = getattr(pretransform, "downsampling_ratio", 0) if pretransform is not None else 0
 
+    # CUDA kernels are queued, not run, so every timing below has to be fenced or the sampling
+    # cost silently lands in whatever syncs next (here: the copy to host inside write_wav).
+    def sync() -> None:
+        if device == "cuda":
+            torch.cuda.synchronize()
+
     for i in range(args.count):
         seed = args.seed if args.seed >= 0 else random.randrange(2**32 - 1)
+        if device == "cuda":
+            torch.cuda.reset_peak_memory_stats()
         t0 = time.perf_counter()
         with torch.inference_mode():
             sampled = generate_diffusion_cond(
@@ -286,6 +374,7 @@ def generate(args: argparse.Namespace) -> int:
                 device=device,
                 return_latents=ratio > 0,
             )
+        sync()
         t_sample = time.perf_counter() - t0
 
         if ratio > 0:
@@ -296,6 +385,7 @@ def generate(args: argparse.Namespace) -> int:
             t0 = time.perf_counter()
             with torch.inference_mode():
                 audio = pretransform.decode(sampled[..., :keep])
+            sync()
             t_decode = time.perf_counter() - t0
         else:
             audio, t_decode = sampled, 0.0
@@ -309,9 +399,12 @@ def generate(args: argparse.Namespace) -> int:
         write_wav(path, audio, sample_rate)
         size = path.stat().st_size
         total = t_sample + t_decode
+        vram = ""
+        if device == "cuda":
+            vram = f"  peak {torch.cuda.max_memory_allocated() / 2**30:.2f} GiB"
         print(
             f"  {path.relative_to(HERE.parent.parent)}  {human_bytes(size)}  "
-            f"sample {t_sample:.1f}s + decode {t_decode:.1f}s = {total:.1f}s  seed {seed}",
+            f"sample {t_sample:.1f}s + decode {t_decode:.1f}s = {total:.1f}s  seed {seed}{vram}",
             flush=True,
         )
 
@@ -326,7 +419,7 @@ def generate(args: argparse.Namespace) -> int:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="run.py",
-        description="Generate a reference sound with Stable Audio Open Small (CPU).",
+        description="Generate a reference sound with Stable Audio Open Small (CUDA if present).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='example:\n  python run.py "wooden crate smashing" --count 3\n',
     )
@@ -342,6 +435,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--count", type=int, default=1, help="how many variations to render")
     p.add_argument("--threads", type=int, help="torch CPU threads (default: all cores)")
     p.add_argument("--cpu", action="store_true", help="force CPU even if CUDA is available")
+    p.add_argument("--cpu-torch", action="store_true",
+                   help="provision the CPU-only torch wheels even with an NVIDIA GPU present")
     p.add_argument("--no-chunked", action="store_true", help="decode the render in one piece (needs RAM)")
     p.add_argument("--reinstall", action="store_true", help="rebuild the venv, then run")
     return p.parse_args(argv)
@@ -352,9 +447,10 @@ def main() -> int:
     args = parse_args(argv)
 
     if not running_in_venv():
-        if not args.reinstall and not args.prompt:
+        if not (args.reinstall or args.cpu_torch) and not args.prompt:
             parse_args(["--help"])
-        return bootstrap([a for a in argv if a != "--reinstall"], args.reinstall)
+        skip = {"--reinstall", "--cpu-torch"}
+        return bootstrap([a for a in argv if a not in skip], args.reinstall, args.cpu_torch)
 
     if not args.prompt:
         parse_args(["--help"])

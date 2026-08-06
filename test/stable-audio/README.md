@@ -45,7 +45,13 @@ sets the default for a machine.
    requires `>=3.10,<3.11` and pins `torch==2.7.1`. The interpreter is fetched by
    [uv](https://docs.astral.sh/uv/) (`winget install --id astral-sh.uv`, or `pip install uv`);
    no system Python is touched. Without uv, run the script with a 3.10 interpreter yourself.
-2. **Downloads the weights** — ~1.7 GB of `model.safetensors` into the shared Hugging Face
+2. **Picks the torch build for the machine** — if `nvidia-smi` reports a device, the three torch
+   packages are reinstalled from `download.pytorch.org/whl/cu128` (a ~3 GB download, once);
+   otherwise the CPU wheels from `requirements.txt` stay. The choice is recorded in
+   `.venv/.deps-installed`, so later runs neither re-probe nor re-download, and `--reinstall`
+   lands on the same build rather than silently dropping back to CPU. `--cpu-torch` forces the
+   CPU wheels on a GPU box.
+3. **Downloads the weights** — ~1.7 GB of `model.safetensors` into the shared Hugging Face
    cache (`%USERPROFILE%\.cache\huggingface`), plus `t5-base` for the text conditioner.
    `run.py --reinstall` rebuilds the venv; the model cache is left alone.
 
@@ -78,6 +84,7 @@ python test/stable-audio/run.py "rain on a tin roof" --steps 16        # more st
 | `--seed` | random | printed and baked into the filename |
 | `--count` | `1` | variations per invocation, one file each |
 | `--threads` | all cores | torch CPU threads |
+| `--cpu-torch` | — | provision the CPU-only wheels even on a GPU box (see below) |
 | `--model` | `small` | `sfx3` = `stable-audio-3-small-sfx`, experimental (see below) |
 | `--repo` | — | any Hugging Face repo id in stable-audio-tools layout |
 | `--no-chunked` | — | decode in one piece; needs several GB free, and pages on a 16 GB box |
@@ -97,7 +104,7 @@ toolkit", not as a broken script.
 | --- | --- | --- |
 | artifact | 44.1 kHz stereo WAV, ~1–2 MB per sound | a soundline recipe → 300–1000 B of Web Audio JS |
 | dependency at runtime | 1.7 GB of weights, torch | none |
-| generation | ~22 s per 11 s render on 8 CPU cores | synthesis at play time, sub-millisecond |
+| generation | ~0.5 s per 11 s render on an RTX 3080, ~22 s on 8 CPU cores | synthesis at play time, sub-millisecond |
 | editing | re-prompt and re-roll | change a number, or move a slider the recipe declares |
 | length | fixed 11 s window | whatever the envelopes say |
 
@@ -106,6 +113,47 @@ sound like", and cannot give you a 900-byte asset you can diff in a pull request
 renders as the target, not as the competitor.
 
 ## Speed, and the one thing that matters for it
+
+### CUDA
+
+Nothing to configure: `nvidia-smi` decides the wheels at provisioning time and
+`torch.cuda.is_available()` decides the device at render time, so a GPU box just gets used.
+`--cpu` renders on the CPU without touching the install; `--cpu-torch` goes further and
+provisions the CPU wheels, which is what you want if the GPU is busy with something else and
+you would rather not have 3 GB of CUDA libraries on disk.
+
+Measured on an RTX 3080 (10 GB, sm_86, driver 591.74), `torch 2.7.1+cu128`:
+
+```
+loaded in 9.5s on cuda
+sample 1.0s + decode 0.3s = 1.3s   peak 2.27 GiB   # first render of the process
+sample 0.3s + decode 0.1s = 0.5s   peak 2.28 GiB   # every one after it
+sample 0.3s + decode 0.0s = 0.3s   peak 2.05 GiB   # --seconds 2
+```
+
+So ~0.5 s against the 22 s of the CPU baseline below, and the shape of the cost changes with
+it. The first render in a process pays ~0.8 s of cuDNN autotuning and allocator warm-up, which
+is why `--count 3` is much cheaper per sound than three invocations. Weight loading now
+dominates a single render, and it is host-side work — 1.7 GB of safetensors and the T5
+conditioner — that no GPU makes faster.
+
+The decode also stops being the expensive half: 0.1 s against 13.9 s on the CPU. That makes
+`--seconds` a trimming convenience rather than the optimisation it is on the CPU path, and it
+makes `--no-chunked` nearly free — 2.57 GiB peak instead of 2.28 GiB, same 0.1 s, and no
+crossfade seams between decoder chunks. On a 10 GB card it is the better default for a
+reference render; it stays opt-in because the memory bound is what matters on CPU.
+
+Two GPU-only details are in `run.py`:
+
+- **TF32 is enabled.** The diffusion transformer runs in fp32 and on Ampere and later its
+  matmuls are ~4x faster in TF32, for a mantissa difference well below the noise floor of an
+  8-step sample. The autoencoder is left in the fp16 the checkpoint asks for — on a GPU
+  `model_half` is the right call, and only the CPU path undoes it.
+- **The timers are fenced.** CUDA queues kernels instead of running them, so without an
+  explicit `torch.cuda.synchronize()` the sampling cost would land in whichever call syncs
+  next — here the copy to host inside `write_wav` — and the printed split would be a fiction.
+
+### CPU
 
 Measured on a Snapdragon X Plus (8 cores, 16 GB), CPU only:
 
@@ -128,7 +176,9 @@ Two things get you there, both in `run.py`:
 
 ## Notes
 
-- CPU only by default. CUDA is used if `torch.cuda.is_available()`; `--cpu` forces it off.
+- CUDA is used whenever `torch.cuda.is_available()`; `--cpu` forces the render onto the CPU and
+  `--cpu-torch` provisions the CPU wheels in the first place. Both paths are supported — the
+  fp32 autoencoder fallback and the chunked decode exist for the CPU one.
 - On Windows/ARM the venv is x86_64 CPython under Prism emulation — PyPI ships no `win_arm64`
   torch wheels, and the native ARM64 builds on download.pytorch.org start at torch 2.10 /
   CPython 3.11, while stable-audio-tools pins torch 2.7.1 on CPython 3.10. Emulation is not
