@@ -1,11 +1,16 @@
 /**
  * The playground's half of the Stable Audio endpoint.
  *
- * A diffusion render is the *target*, never the answer: the model returns 1–2 MB
- * of WAV, and what this project ships is a recipe. So everything here ends in the
- * same place a dropped file does — `App`'s reference — and from there the existing
- * machinery applies unchanged: A/B in the Compare panel, `match reference` on a
- * generate run, and `⌖ Fit to reference` on the sliders.
+ * A diffusion render is the *target*, never the answer: the model returns a few
+ * hundred KB of audio, and what this project ships is a recipe. So everything here
+ * ends in the same place a dropped file does — `App`'s reference — and from there the
+ * existing machinery applies unchanged: A/B in the Compare panel, `match reference`
+ * on a generate run, and `⌖ Fit to reference` on the sliders.
+ *
+ * Because that is the only destination, a render started from here arrives *in the
+ * stream* rather than as a file to fetch afterwards: `renderTarget` resolves with a
+ * `File` already in memory and nothing is left in `test/stable-audio/out/`. The
+ * dropdown of files is for renders a terminal run left there on purpose.
  *
  * Never throws for "the endpoint is not there": a static build has no dev server,
  * and the panel simply does not appear. See `plugins/stable-audio.ts` for what is
@@ -14,7 +19,7 @@
  * @packageDocumentation
  */
 
-/** One render already sitting in `test/stable-audio/out/`. */
+/** One render sitting in `test/stable-audio/out/`, left there by a terminal run. */
 export interface RenderFile {
   readonly file: string;
   readonly bytes: number;
@@ -36,7 +41,16 @@ export interface StableAudioStatus {
 export type RenderEvent =
   | { readonly type: 'start'; readonly argv: readonly string[] }
   | { readonly type: 'log'; readonly line: string }
-  | { readonly type: 'done'; readonly file: string; readonly ms: number }
+  | {
+      readonly type: 'done';
+      /** `<slug>-<seed>.mp3`, named by `run.py` — this file exists nowhere on disk. */
+      readonly name: string;
+      readonly mime: string;
+      readonly bytes: number;
+      readonly ms: number;
+      /** The encoded audio, base64. */
+      readonly audio: string;
+    }
   | { readonly type: 'error'; readonly message: string };
 
 /** What the panel asks for. Everything but the prompt falls back to `run.py`'s preset. */
@@ -92,6 +106,15 @@ export function parseEvent(line: string): RenderEvent | null {
   }
 }
 
+/** Base64 from the endpoint back into the bytes a `File` can be built from. */
+function decodeBase64(text: string): ArrayBuffer {
+  const binary = atob(text);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return buffer;
+}
+
 /**
  * Render a prompt with Stable Audio, reporting progress as it arrives.
  *
@@ -100,13 +123,13 @@ export function parseEvent(line: string): RenderEvent | null {
  * the only honest progress, and a spinner in their place would hide the model
  * download, the licence gate, and every other reason a first run takes minutes.
  *
- * @returns The file name of the render, resolvable with {@link renderUrl}.
+ * @returns The render itself, named as `run.py` named it and not written to disk.
  * @throws When the endpoint refuses, the child fails, or the caller aborts.
  */
 export async function renderTarget(
   request: RenderRequest,
   options: { onEvent?: (event: RenderEvent) => void; signal?: AbortSignal } = {},
-): Promise<string> {
+): Promise<File> {
   const response = await fetch('/__stable-audio', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -123,35 +146,38 @@ export async function renderTarget(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  const events: RenderEvent[] = [];
   let carry = '';
-  let file: string | null = null;
-  let failure: string | null = null;
 
   const take = (line: string): void => {
     const event = parseEvent(line);
     if (event === null) return;
     options.onEvent?.(event);
-    if (event.type === 'done') file = event.file;
-    if (event.type === 'error') failure = event.message;
+    events.push(event);
   };
 
   for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const parts = (carry + decoder.decode(value, { stream: true })).split('\n');
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    const parts = (carry + decoder.decode(chunk.value, { stream: true })).split('\n');
     carry = parts.pop() ?? '';
     for (const part of parts) take(part);
   }
   if (carry !== '') take(carry);
 
-  if (failure !== null) throw new Error(failure);
-  if (file === null) throw new Error('the render ended without producing a file');
-  return file;
+  /* The first failure rather than the last: an error is terminal on the far end, and
+     anything after it is fallout. */
+  const failure = events.find((event) => event.type === 'error');
+  if (failure !== undefined) throw new Error(failure.message);
+  const done = events.find((event) => event.type === 'done');
+  if (done === undefined) throw new Error('the render ended without producing audio');
+  return new File([decodeBase64(done.audio)], done.name, { type: done.mime });
 }
 
-/** Fetch a finished render as a `File`, ready for the reference decoder. */
+/** Fetch a render left in `out/` as a `File`, ready for the reference decoder. */
 export async function fetchRender(file: string): Promise<File> {
   const response = await fetch(renderUrl(file));
   if (!response.ok) throw new Error(`${file} → HTTP ${String(response.status)}`);
-  return new File([await response.blob()], file, { type: 'audio/wav' });
+  const type = file.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg';
+  return new File([await response.blob()], file, { type });
 }

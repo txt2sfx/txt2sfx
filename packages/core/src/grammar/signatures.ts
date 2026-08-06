@@ -172,6 +172,63 @@ const MODAL: Signature = {
   ],
 };
 
+const PLATE: Signature = {
+  name: 'plate',
+  kind: 'primitive',
+  doc: 'Dense bank of stretched modes whose decay is set in milliseconds, not by Q: long bright rings, plates, bars, bells.',
+  params: [
+    {
+      name: 'freq',
+      kind: 'freq',
+      positional: true,
+      required: true,
+      min: 40,
+      max: 12000,
+      doc: 'Frequency of the lowest mode; the rest sit above it, spaced by `stretch`.',
+    },
+    {
+      name: 'modes',
+      kind: 'ratio',
+      default: 8,
+      min: 2,
+      max: 24,
+      doc: 'How many modes ring. Spectral density, not loudness: with the default amplitude law the lowest mode still dominates. Modes landing above the Nyquist rate are dropped rather than aliased, so `stretch` and `freq` decide how many of these are actually heard.',
+    },
+    {
+      name: 'stretch',
+      kind: 'ratio',
+      default: 1.4,
+      min: 0.5,
+      max: 2.5,
+      doc: 'Mode k sits at freq * k**stretch. 1 is a harmonic series (string, tube), 1.3-1.6 a plate or bar, above 2 a bell that is all top end.',
+    },
+    {
+      name: 'slope',
+      kind: 'ratio',
+      default: 1,
+      min: 0,
+      max: 2.5,
+      doc: 'Amplitude law: mode k is k**-slope of the lowest. 1 is a struck plate; near 0 every mode is equally loud, which is dense and bright (cymbal, tank); above 1.5 only the bottom is left.',
+    },
+    {
+      name: 'decay',
+      kind: 'time',
+      default: 600,
+      min: 20,
+      max: 3000,
+      doc: 'Time the lowest mode takes to fall 60 dB, frequency-independent — that is the reason this primitive exists, since Q ties a ring to its pitch. Keep the envelope flat over it (`hold`) or the two decays multiply and neither one is what you hear.',
+    },
+    {
+      name: 'tilt',
+      kind: 'ratio',
+      default: 0.7,
+      min: 0,
+      max: 2,
+      doc: 'How much faster high modes die: tau(k) = tau(1) * k**-tilt. 0 rings forever at the top and sounds synthetic, 1 is metal losing its edge first, 2 is a dull thud with a bright flash.',
+    },
+  ],
+};
+
 const FM: Signature = {
   name: 'fm',
   kind: 'primitive',
@@ -528,6 +585,7 @@ export const PRIMITIVES: Readonly<Record<string, Signature>> = {
   chirp: CHIRP,
   pluck: PLUCK,
   modal: MODAL,
+  plate: PLATE,
   fm: FM,
   sub: SUB,
   click: CLICK,

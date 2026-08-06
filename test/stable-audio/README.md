@@ -9,15 +9,24 @@ python test/stable-audio/run.py "glass bottle shattering on concrete"
 ```
 
 The first run provisions everything it needs; later runs go straight to generation.
-Output lands in `test/stable-audio/out/` as 44.1 kHz stereo WAV.
+Output lands in `test/stable-audio/out/` as 44.1 kHz stereo **MP3 at 320 kbps** — a quarter
+of the size of the WAV, and these files are reference targets, not masters. The distance
+metric they feed is scale-normalized and onset-aligned, so neither the encoder's gain nor its
+leading delay reaches it; what lossy coding does cost is the top of the spectrum, hence the
+highest bitrate LAME offers. `--format wav` gives the bit-exact render back.
 
 ## From the playground
 
 Once the venv exists, `pnpm dev` can drive this script directly: the Compare panel grows a
 **⤓ Render target** button that renders the prompt in the prompt bar and loads the result as
 the reference — so the diffusion take is one click from the A/B player, the spectrogram diff,
-`⌖ Fit to reference`, and the **match reference** box on a generate run. Renders already in
-`out/` are in the dropdown next to it; re-rendering yesterday's prompt is pure waste.
+`⌖ Fit to reference`, and the **match reference** box on a generate run.
+
+A render started from the page **is not saved**: the endpoint runs `run.py --stdout` and the
+audio comes back inside the response, ~130 KB of base64 on the stream's last line. A target
+is consumed once, by the reference slot, and a session of clicking that button should not
+leave a directory to sweep up. Renders a *terminal* run left in `out/` are a different thing
+and are still in the dropdown next to the button — re-rendering yesterday's prompt is waste.
 
 The endpoint (`apps/web/plugins/stable-audio.ts`, dev-only, `apply: 'serve'`) deliberately
 does **not** provision anything — it drives an installation that is already there, because a
@@ -50,7 +59,10 @@ sets the default for a machine.
    otherwise the CPU wheels from `requirements.txt` stay. The choice is recorded in
    `.venv/.deps-installed`, so later runs neither re-probe nor re-download, and `--reinstall`
    lands on the same build rather than silently dropping back to CPU. `--cpu-torch` forces the
-   CPU wheels on a GPU box.
+   CPU wheels on a GPU box. That file also holds a fingerprint of `requirements.txt`: change a
+   pin and the next terminal run syncs the venv (~1 s when nothing moved) instead of needing a
+   rebuild that would re-download 3 GB of CUDA wheels. torch survives the sync — pip and uv
+   both read the installed `2.7.1+cu128` as satisfying stable-audio-tools' `==2.7.1`.
 3. **Downloads the weights** — ~1.7 GB of `model.safetensors` into the shared Hugging Face
    cache (`%USERPROFILE%\.cache\huggingface`), plus `t5-base` for the text conditioner.
    `run.py --reinstall` rebuilds the venv; the model cache is left alone.
@@ -73,6 +85,8 @@ python test/stable-audio/run.py "wooden crate smashing" --count 3      # three v
 python test/stable-audio/run.py "sci-fi door whoosh" --seconds 2       # trim the render
 python test/stable-audio/run.py "coin pickup" --seed 42                # reproducible
 python test/stable-audio/run.py "rain on a tin roof" --steps 16        # more steps
+python test/stable-audio/run.py "coin pickup" --format wav             # uncompressed
+python test/stable-audio/run.py "coin pickup" --stdout > target.mp3    # nothing in out/
 ```
 
 | flag | default | note |
@@ -83,6 +97,9 @@ python test/stable-audio/run.py "rain on a tin roof" --steps 16        # more st
 | `--sampler` | `pingpong` | `dpmpp-3m-sde`, `euler`, `rk4` also exist |
 | `--seed` | random | printed and baked into the filename |
 | `--count` | `1` | variations per invocation, one file each |
+| `--format` | `mp3` | `wav` for the bit-exact render |
+| `--bitrate` | `320` | kbps, MP3 only; the MPEG-1 ladder down to 32 |
+| `--stdout` | — | write the encoded audio to stdout, nothing to `out/`; progress goes to stderr |
 | `--threads` | all cores | torch CPU threads |
 | `--cpu-torch` | — | provision the CPU-only wheels even on a GPU box (see below) |
 | `--model` | `small` | `sfx3` = `stable-audio-3-small-sfx`, experimental (see below) |
@@ -102,7 +119,7 @@ toolkit", not as a broken script.
 
 |  | Stable Audio Open Small | txt2sfx |
 | --- | --- | --- |
-| artifact | 44.1 kHz stereo WAV, ~1–2 MB per sound | a soundline recipe → 300–1000 B of Web Audio JS |
+| artifact | 44.1 kHz stereo audio, ~450 KB of MP3 (~2 MB as WAV) per sound | a soundline recipe → 300–1000 B of Web Audio JS |
 | dependency at runtime | 1.7 GB of weights, torch | none |
 | generation | ~0.5 s per 11 s render on an RTX 3080, ~22 s on 8 CPU cores | synthesis at play time, sub-millisecond |
 | editing | re-prompt and re-roll | change a number, or move a slider the recipe declares |
@@ -151,7 +168,7 @@ Two GPU-only details are in `run.py`:
   `model_half` is the right call, and only the CPU path undoes it.
 - **The timers are fenced.** CUDA queues kernels instead of running them, so without an
   explicit `torch.cuda.synchronize()` the sampling cost would land in whichever call syncs
-  next — here the copy to host inside `write_wav` — and the printed split would be a fiction.
+  next — here the copy to host inside `pcm16` — and the printed split would be a fiction.
 
 ### CPU
 
@@ -190,4 +207,13 @@ Two things get you there, both in `run.py`:
 - `numpy<2` is pinned: `PyWavelets==1.4.1`, which stable-audio-tools requires, is built
   against the numpy 1.x ABI and import fails otherwise. `pytorch_lightning` is pinned in
   because the inference path imports it even though it is declared a training extra.
+- MP3 is encoded by `lameenc` — libmp3lame in a ~300 KB wheel, in-process, with no system
+  library to find. torchaudio cannot do it: its MP3 path needs ffmpeg's *shared* libraries and
+  the wheels do not carry them, so `torchaudio.utils.ffmpeg_utils` raises `ImportError` on a
+  plain install. If `lameenc` is missing (a venv provisioned before the pin, driven straight
+  from the playground so the bootstrap never ran) the `ffmpeg` CLI is used instead, and failing
+  that the error names the one command that fixes it.
+- `--stdout` takes fd 1 for the audio and points every other writer at stderr. Rebinding
+  `sys.stdout` would not be enough: stable-audio-tools prints `flash_attn not installed` while
+  its modules import, and those 187 bytes of English would sit in front of the first MP3 frame.
 - `flash_attn not installed` on startup is expected and harmless on CPU.

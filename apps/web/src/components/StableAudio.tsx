@@ -2,18 +2,22 @@
  * The same prompt, rendered by a diffusion model, loaded as the reference.
  *
  * This is the A/B harness in `test/stable-audio/` with a button on it. The point
- * is not to ship what the model produces — it is 1–2 MB of WAV and the project's
- * whole claim is a few hundred bytes of Web Audio — but to have something to be
- * judged against. Once the render lands in the reference slot the existing panels
- * take over: A/B playback and the spectrogram diff in Compare, `match reference`
- * on a generate run, and `⌖ Fit to reference` on the sliders.
+ * is not to ship what the model produces — it is a few hundred KB of MP3 and the
+ * project's whole claim is a few hundred bytes of Web Audio — but to have something
+ * to be judged against. Once the render lands in the reference slot the existing
+ * panels take over: A/B playback and the spectrogram diff in Compare, `match
+ * reference` on a generate run, and `⌖ Fit to reference` on the sliders.
+ *
+ * The render arrives in the response and is never written down: a target is used
+ * once, and a session of clicking this button should not leave a directory of files
+ * to sweep up. The dropdown is for renders a terminal `run.py` kept on purpose.
  *
  * ## Why the panel is loud about time
  *
  * A render is tens of seconds of CPU, and the first one ever is minutes plus a
  * licence gate. So the child's own lines are shown as they arrive rather than
- * hidden behind a spinner, and the finished renders already on disk are one click
- * away — re-rendering a prompt you rendered yesterday is pure waste.
+ * hidden behind a spinner, and the renders a terminal run left on disk are one
+ * click away — re-rendering a prompt you rendered yesterday is pure waste.
  *
  * Present only under `vite dev`: there is no endpoint in a static build, and the
  * panel removes itself rather than offering a button that cannot work.
@@ -128,8 +132,9 @@ export function StableAudio({ prompt, onRendered }: StableAudioProps): React.JSX
           } else if (event.type === 'start') {
             setLog((lines) => [...lines, `run.py ${event.argv.join(' ')}`].slice(-LOG_LINES));
           } else if (event.type === 'done') {
+            const kb = (event.bytes / 1024).toFixed(0);
             setLog((lines) =>
-              [...lines, `${event.file} in ${(event.ms / 1000).toFixed(1)}s`].slice(-LOG_LINES),
+              [...lines, `${event.name} · ${kb} KB in ${(event.ms / 1000).toFixed(1)}s`].slice(-LOG_LINES),
             );
           }
         },
@@ -137,10 +142,12 @@ export function StableAudio({ prompt, onRendered }: StableAudioProps): React.JSX
     )
       .then((file) => {
         if (controller.signal.aborted) return;
-        setPicked(file);
+        /* Nothing was written to `out/`, so the dropdown has nothing to point at —
+           leaving a stale selection there would claim otherwise. */
+        setPicked('');
         /* Loading it is the point of having asked. */
-        load(file);
-        void refresh();
+        setError(null);
+        onRendered(file);
       })
       .catch((failure: unknown) => {
         if (controller.signal.aborted) return;
@@ -150,7 +157,7 @@ export function StableAudio({ prompt, onRendered }: StableAudioProps): React.JSX
         if (abort.current === controller) abort.current = null;
         setRunning(false);
       });
-  }, [load, prompt, refresh, repo, seconds, seed]);
+  }, [onRendered, prompt, repo, seconds, seed]);
 
   const cancel = useCallback(() => {
     abort.current?.abort();
@@ -231,7 +238,8 @@ export function StableAudio({ prompt, onRendered }: StableAudioProps): React.JSX
         <select
           name="sa-render"
           value={picked}
-          aria-label="renders already on disk"
+          aria-label="renders left in out/ by a terminal run"
+          title="renders a terminal run.py left in out/ — a render started here is streamed and not saved"
           disabled={renders.length === 0}
           onChange={(event) => {
             setPicked(event.target.value);
@@ -254,7 +262,7 @@ export function StableAudio({ prompt, onRendered }: StableAudioProps): React.JSX
           ? status.reason
           : prompt.trim() === ''
             ? 'type a prompt above — the same text goes to both engines, which is the whole point of the comparison'
-            : 'runs test/stable-audio/run.py on this machine · ~10–60 s on CPU · the render becomes the reference below'}
+            : 'runs test/stable-audio/run.py on this machine · ~10–60 s on CPU · the render is streamed straight into the reference below, not saved'}
       </div>
       {/* The failure this saves you from is seven seconds long and says nothing
           about your prompt: the default checkpoint is gated, and the token has to

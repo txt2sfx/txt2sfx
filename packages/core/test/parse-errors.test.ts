@@ -79,7 +79,7 @@ describe('layer structure errors', () => {
   it('rejects an unknown primitive', () => {
     const error = firstError(doc('  thud: boom 480Hz | gain 1 decay 20ms'));
     expect(error.code).toBe('primitive.unknown');
-    expect(error.message).toMatch(/expected one of tone\|noise\|chirp\|pluck\|modal\|fm\|sub\|click/);
+    expect(error.message).toMatch(/expected one of tone\|noise\|chirp\|pluck\|modal\|plate\|fm\|sub\|click/);
   });
 
   it('rejects an unknown effect and suggests the closest one', () => {

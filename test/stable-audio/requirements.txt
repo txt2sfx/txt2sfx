@@ -14,3 +14,6 @@ pytorch_lightning==2.5.5
 # PyWavelets 1.4.1 (pinned by stable-audio-tools) is built against the numpy 1.x ABI;
 # with numpy 2.x installed, importing stable_audio_tools dies in pywt.
 numpy<2
+# MP3 output. libmp3lame in a ~300 KB wheel with no system library to find — torchaudio's own
+# MP3 path needs ffmpeg's shared libraries, which its wheels do not carry.
+lameenc==1.8.4

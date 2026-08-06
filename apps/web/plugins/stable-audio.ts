@@ -15,6 +15,17 @@
  * core, and nothing here is in the shipped bundle. `apply: 'serve'` keeps it out
  * of a build, and the model runs on the developer's own machine.
  *
+ * ## The render never touches the disk
+ *
+ * `run.py --stdout` hands the encoded audio back on stdout and writes nothing, so a
+ * session of clicking the button leaves no pile of files behind. A render here is a
+ * *target*: it is consumed once, by the reference slot, and a spent one is litter.
+ * The bytes travel as base64 in the stream's last NDJSON line, which is ~130 KB for
+ * a three-second MP3 — cheaper than the WAV it replaces was to write down.
+ *
+ * `out/` still exists and is still listed, because a `run.py` run from a terminal
+ * does keep its renders and those are worth reloading without re-rendering.
+ *
  * ## Deliberately narrow
  *
  * The endpoint drives an installation that is *already provisioned* and refuses to
@@ -23,10 +34,11 @@
  * start that — it would hold a connection for many minutes and hide a licence gate
  * behind a spinner. Run it once from a terminal, then the button works.
  *
- * Everything reachable is bounded: one render at a time (torch takes every core),
- * a wall-clock ceiling, an argv built from validated numbers, and reads limited to
- * `out/*.wav` by a name pattern. The prompt is passed as a single argv element to a
- * `shell: false` spawn, so it is text to Python and never to a shell.
+ * Everything reachable is bounded: one render at a time (torch takes every core), a
+ * wall-clock ceiling, a cap on how much stdout is buffered, an argv built from
+ * validated numbers, and reads limited to `out/` by a name pattern. The prompt is
+ * passed as a single argv element to a `shell: false` spawn, so it is text to Python
+ * and never to a shell.
  *
  * @packageDocumentation
  */
@@ -38,7 +50,7 @@ import { join, resolve, sep } from 'node:path';
 import type { Plugin } from 'vite';
 
 /** Files we are willing to serve out of `out/`. Written by `run.py`'s slugify. */
-const WAV_NAME_RE = /^[a-z0-9][a-z0-9-]{0,95}\.wav$/;
+const RENDER_NAME_RE = /^[a-z0-9][a-z0-9-]{0,95}\.(mp3|wav)$/;
 
 /** Longest prompt we hand to the model. Longer is a paste accident, not a prompt. */
 const MAX_PROMPT = 400;
@@ -48,6 +60,19 @@ const TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Largest request body. The body is a prompt and four numbers. */
 const MAX_BODY = 8 * 1024;
+
+/**
+ * Most audio we will hold from the child, in bytes.
+ *
+ * The model's ceiling is 11 s of 44.1 kHz stereo: ~2 MB of WAV, ~450 KB of MP3. 16 MB
+ * is far above anything `run.py` can produce and still bounded, so a child that turns
+ * out to be writing something else to stdout is a killed process rather than a dev
+ * server eating memory until it dies.
+ */
+const MAX_AUDIO = 16 * 1024 * 1024;
+
+/** The line `run.py --stdout` writes to stderr to name what it just wrote to stdout. */
+const RESULT_PREFIX = 'txt2sfx-result ';
 
 /** What the browser may ask for. Everything is optional but the prompt. */
 export interface RenderRequest {
@@ -59,11 +84,18 @@ export interface RenderRequest {
   readonly repo?: unknown;
 }
 
-/** A render sitting in `test/stable-audio/out/`. */
+/** A render sitting in `test/stable-audio/out/`, left there by a terminal run. */
 export interface RenderFile {
   readonly file: string;
   readonly bytes: number;
   readonly modifiedMs: number;
+}
+
+/** What `run.py --stdout` says about the bytes it wrote. */
+export interface RenderResult {
+  readonly name: string;
+  readonly mime: string;
+  readonly bytes: number;
 }
 
 /** What `GET /__stable-audio` answers. */
@@ -74,7 +106,11 @@ export interface StableAudioStatus {
   readonly reason?: string;
   /** True while a render is in flight; a second one is refused. */
   readonly busy: boolean;
-  /** Renders already on disk, newest first. Loading one costs nothing. */
+  /**
+   * Renders left in `out/` by a terminal run, newest first. Loading one costs nothing.
+   *
+   * Nothing the playground renders appears here: those are streamed and never written.
+   */
   readonly renders: readonly RenderFile[];
   /** Defaults the UI shows, taken from `run.py`'s own preset. */
   readonly defaults: { readonly seconds: number; readonly steps: number; readonly repo: string };
@@ -89,11 +125,27 @@ export interface StableAudioStatus {
   readonly hasToken: boolean;
 }
 
-/** One line of the render's progress, or its outcome. */
+/**
+ * One line of the render's progress, or its outcome.
+ *
+ * `done` carries the audio itself, base64 in JSON, because the render was never written
+ * anywhere to be fetched from. The alternative — a temp file and a second request — is a
+ * file to clean up and a window in which it can be read by anything on the machine, in
+ * exchange for saving a third of ~130 KB.
+ */
 export type RenderEvent =
   | { readonly type: 'start'; readonly argv: readonly string[] }
   | { readonly type: 'log'; readonly line: string }
-  | { readonly type: 'done'; readonly file: string; readonly ms: number }
+  | {
+      readonly type: 'done';
+      /** `<slug>-<seed>.mp3` — named by `run.py`, so the naming rule has one home. */
+      readonly name: string;
+      readonly mime: string;
+      readonly bytes: number;
+      readonly ms: number;
+      /** The encoded audio, base64. */
+      readonly audio: string;
+    }
   | { readonly type: 'error'; readonly message: string };
 
 /** The presets `run.py` accepts, so a typo is a 400 rather than a Python traceback. */
@@ -132,7 +184,10 @@ export function renderArgs(body: RenderRequest): string[] {
      the echoed log line. Neither is worth allowing for a sentence of English. */
   if (hasControlChars(prompt)) throw new Error('prompt contains control characters');
 
-  const argv = [prompt];
+  /* `--stdout` is not a knob: a render started from the page is streamed to it and
+     leaves nothing in `out/`. The encoding is left to run.py's own default so there is
+     one place that decides it, and the `done` event repeats whatever it chose. */
+  const argv = [prompt, '--stdout'];
 
   const number = (value: unknown, name: string, min: number, max: number): number => {
     const n = typeof value === 'number' ? value : Number(value);
@@ -186,32 +241,30 @@ export function splitLines(chunk: string, carry: string): { lines: string[]; car
 }
 
 /**
- * Which file the run produced.
+ * Read the `txt2sfx-result {…}` line, or null for any other line.
  *
- * By listing rather than by parsing the printed path: the filename is
- * `slug(prompt)-seed.wav`, and reimplementing Python's slugify in TypeScript would
- * be a second definition of the same rule, silently wrong the first time either
- * side changes. A re-run with the same prompt *and* the same seed overwrites its
- * own file and adds nothing, which is why `startedMs` is the fallback.
+ * What the endpoint needs from it is the name and the media type, and both are decided
+ * in `run.py`: the filename rule is its `slugify` and the encoding is its `--format`
+ * default. Deriving either here would be a second definition of the same thing, wrong
+ * the first time one side moves. Anything malformed is treated as ordinary output — a
+ * line the child wrote is worth showing, never worth crashing on.
  */
-export function pickRender(
-  before: ReadonlySet<string>,
-  after: readonly RenderFile[],
-  startedMs: number,
-): string | null {
-  const newest = (files: readonly RenderFile[]): string | null =>
-    files.length === 0
-      ? null
-      : [...files].sort((a, b) => b.modifiedMs - a.modifiedMs)[0]?.file ?? null;
-
-  const added = after.filter((entry) => !before.has(entry.file));
-  return newest(added) ?? newest(after.filter((entry) => entry.modifiedMs >= startedMs - 1000));
+export function parseResult(line: string): RenderResult | null {
+  if (!line.startsWith(RESULT_PREFIX)) return null;
+  try {
+    const value = JSON.parse(line.slice(RESULT_PREFIX.length)) as Partial<RenderResult>;
+    if (typeof value.name !== 'string' || !RENDER_NAME_RE.test(value.name)) return null;
+    if (typeof value.mime !== 'string' || !/^audio\/[\w.+-]{1,32}$/.test(value.mime)) return null;
+    return { name: value.name, mime: value.mime, bytes: Number(value.bytes) || 0 };
+  } catch {
+    return null;
+  }
 }
 
 /** The renders on disk, newest first. */
 async function listRenders(outDir: string): Promise<RenderFile[]> {
   if (!existsSync(outDir)) return [];
-  const names = (await readdir(outDir)).filter((name) => WAV_NAME_RE.test(name));
+  const names = (await readdir(outDir)).filter((name) => RENDER_NAME_RE.test(name));
   const files = await Promise.all(
     names.map(async (file) => {
       const info = await stat(join(outDir, file));
@@ -306,19 +359,19 @@ export function stableAudio(stableAudioDir: string): Plugin {
         if (req.method === 'GET' && path.startsWith('/out/')) {
           void (async () => {
             const name = decodeURIComponent(path.slice('/out/'.length));
-            if (!WAV_NAME_RE.test(name)) {
+            if (!RENDER_NAME_RE.test(name)) {
               send(400, { error: `not a render name: ${name}` });
               return;
             }
             const target = join(outDir, name);
-            // Belt and braces: WAV_NAME_RE already excludes separators and dots.
+            // Belt and braces: RENDER_NAME_RE already excludes separators and dots.
             if (!target.startsWith(outDir + sep)) {
               send(400, { error: 'refusing to read outside out/' });
               return;
             }
             const bytes = await readFile(target);
             res.statusCode = 200;
-            res.setHeader('content-type', 'audio/wav');
+            res.setHeader('content-type', name.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg');
             res.setHeader('content-length', String(bytes.byteLength));
             /* The file is named after its seed and never rewritten with different
                audio, so the browser may keep it for the session. */
@@ -368,7 +421,6 @@ export function stableAudio(stableAudioDir: string): Plugin {
               res.write(`${JSON.stringify(event)}\n`);
             };
 
-            const before = new Set((await listRenders(outDir)).map((entry) => entry.file));
             const startedMs = Date.now();
 
             const child = spawn(venvPython, [script, ...argv], {
@@ -380,14 +432,35 @@ export function stableAudio(stableAudioDir: string): Plugin {
             emit({ type: 'start', argv });
             server.config.logger.info(`  stable-audio: ${argv.join(' ')}`);
 
-            let carry = { out: '', err: '' };
-            const forward = (which: 'out' | 'err') => (chunk: Buffer) => {
-              const split = splitLines(chunk.toString('utf8'), carry[which]);
-              carry = { ...carry, [which]: split.carry };
-              for (const line of split.lines) emit({ type: 'log', line });
-            };
-            child.stdout.on('data', forward('out'));
-            child.stderr.on('data', forward('err'));
+            /* stdout is the audio and stderr is everything a human reads — that split is
+               what `--stdout` buys, and it is why the two handlers are not the same. */
+            const chunks: Buffer[] = [];
+            let audioBytes = 0;
+            let overflowed = false;
+            child.stdout.on('data', (chunk: Buffer) => {
+              audioBytes += chunk.byteLength;
+              if (audioBytes > MAX_AUDIO) {
+                if (!overflowed) {
+                  overflowed = true;
+                  emit({ type: 'error', message: `run.py wrote more than ${String(MAX_AUDIO)} bytes of audio — killed` });
+                  child.kill();
+                }
+                return;
+              }
+              chunks.push(chunk);
+            });
+
+            let result: RenderResult | null = null;
+            let carry = '';
+            child.stderr.on('data', (chunk: Buffer) => {
+              const split = splitLines(chunk.toString('utf8'), carry);
+              carry = split.carry;
+              for (const line of split.lines) {
+                const parsed = parseResult(line);
+                if (parsed === null) emit({ type: 'log', line });
+                else result = parsed;
+              }
+            });
 
             const timer = setTimeout(() => {
               emit({ type: 'error', message: `no result after ${String(TIMEOUT_MS / 60000)} minutes — killed` });
@@ -409,29 +482,34 @@ export function stableAudio(stableAudioDir: string): Plugin {
               clearTimeout(timer);
               res.off('close', onClose);
               running = null;
-              void (async () => {
-                if (code !== 0) {
-                  emit({
-                    type: 'error',
-                    message:
-                      signal === null
-                        ? `run.py exited with ${String(code)} — see the lines above`
-                        : `run.py was stopped (${signal})`,
-                  });
-                  res.end();
-                  return;
-                }
-                const file = pickRender(before, await listRenders(outDir), startedMs);
-                if (file === null) {
-                  emit({ type: 'error', message: 'run.py finished but wrote no WAV into out/' });
-                } else {
-                  emit({ type: 'done', file, ms: Date.now() - startedMs });
-                }
-                res.end();
-              })().catch((error: unknown) => {
-                emit({ type: 'error', message: String(error) });
-                res.end();
-              });
+              if (carry !== '') {
+                const parsed = parseResult(carry);
+                if (parsed === null) emit({ type: 'log', line: carry });
+                else result = parsed;
+              }
+
+              if (code !== 0) {
+                emit({
+                  type: 'error',
+                  message:
+                    signal === null
+                      ? `run.py exited with ${String(code)} — see the lines above`
+                      : `run.py was stopped (${signal})`,
+                });
+              } else if (result === null || chunks.length === 0) {
+                emit({ type: 'error', message: 'run.py finished without writing audio to stdout' });
+              } else {
+                const audio = Buffer.concat(chunks);
+                emit({
+                  type: 'done',
+                  name: result.name,
+                  mime: result.mime,
+                  bytes: audio.byteLength,
+                  ms: Date.now() - startedMs,
+                  audio: audio.toString('base64'),
+                });
+              }
+              res.end();
             });
           })().catch((error: unknown) => send(500, { error: String(error) }));
           return;

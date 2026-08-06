@@ -3,25 +3,33 @@
  *
  * What is worth testing here is the boundary, not the model: an argv built from an
  * untrusted body (the endpoint spawns a process with it), the line splitter that
- * has to cope with tqdm's carriage returns, and the rule for deciding which file a
- * finished run produced. Everything else is a 1.7 GB download and twenty seconds
- * of CPU, which is not a unit test.
+ * has to cope with tqdm's carriage returns, and the one line by which the child
+ * names the bytes it just streamed. Everything else is a 1.7 GB download and twenty
+ * seconds of CPU, which is not a unit test.
  */
 
 import { describe, expect, it } from 'vitest';
-import { pickRender, renderArgs, splitLines, type RenderFile } from '../plugins/stable-audio.js';
+import { parseResult, renderArgs, splitLines } from '../plugins/stable-audio.js';
 import { parseEvent } from '../src/lib/stable-audio.js';
 
-const file = (name: string, modifiedMs: number): RenderFile => ({ file: name, bytes: 1024, modifiedMs });
-
 describe('renderArgs', () => {
-  it('passes the prompt as one argument and nothing else by default', () => {
-    expect(renderArgs({ prompt: '  glass bottle shattering  ' })).toEqual(['glass bottle shattering']);
+  it('passes the prompt as one argument and streams the result', () => {
+    expect(renderArgs({ prompt: '  glass bottle shattering  ' })).toEqual([
+      'glass bottle shattering',
+      '--stdout',
+    ]);
+  });
+
+  /* `--stdout` is the whole reason a click leaves nothing in out/. Losing it would
+     not fail loudly — it would quietly go back to filling a directory. */
+  it('always asks for the audio on stdout', () => {
+    expect(renderArgs({ prompt: 'thud', seconds: 2 })).toContain('--stdout');
   });
 
   it('forwards the knobs the panel offers', () => {
     expect(renderArgs({ prompt: 'coin pickup', seconds: 2.5, steps: 16, seed: 42 })).toEqual([
       'coin pickup',
+      '--stdout',
       '--seconds',
       '2.5',
       '--steps',
@@ -33,7 +41,10 @@ describe('renderArgs', () => {
 
   /* An empty field in the form is "leave it to run.py", not "zero". */
   it('treats empty and absent values as the preset default', () => {
-    expect(renderArgs({ prompt: 'thud', seconds: '', steps: null, seed: undefined })).toEqual(['thud']);
+    expect(renderArgs({ prompt: 'thud', seconds: '', steps: null, seed: undefined })).toEqual([
+      'thud',
+      '--stdout',
+    ]);
   });
 
   it('refuses a run it cannot describe', () => {
@@ -63,6 +74,7 @@ describe('renderArgs', () => {
   it('accepts a repo id and nothing shaped like a path or a flag', () => {
     expect(renderArgs({ prompt: 'x', repo: 'joeriben/stable-audio-open-small' })).toEqual([
       'x',
+      '--stdout',
       '--repo',
       'joeriben/stable-audio-open-small',
     ]);
@@ -87,37 +99,38 @@ describe('splitLines', () => {
   });
 });
 
-describe('pickRender', () => {
-  it('takes the file the run added', () => {
-    const before = new Set(['old.wav']);
-    const after = [file('old.wav', 1000), file('new-42.wav', 5000)];
-    expect(pickRender(before, after, 4000)).toBe('new-42.wav');
+describe('parseResult', () => {
+  it('reads the name and media type run.py reports for its stdout', () => {
+    expect(
+      parseResult('txt2sfx-result {"name":"thud-42.mp3","mime":"audio/mpeg","bytes":131072,"seed":42}'),
+    ).toEqual({ name: 'thud-42.mp3', mime: 'audio/mpeg', bytes: 131072 });
   });
 
-  it('takes the newest when a run adds more than one', () => {
-    const after = [file('a-1.wav', 5000), file('a-2.wav', 6000)];
-    expect(pickRender(new Set(), after, 4000)).toBe('a-2.wav');
+  it('leaves every other line alone', () => {
+    expect(parseResult('loaded in 10.1s on cpu')).toBeNull();
+    expect(parseResult('txt2sfx-result not json')).toBeNull();
   });
 
-  /* Same prompt and same seed overwrite the same filename, so nothing is "added" —
-     but the run did produce audio, and refusing to find it would be a lie. */
-  it('falls back to a file the run rewrote in place', () => {
-    const before = new Set(['thud-7.wav']);
-    expect(pickRender(before, [file('thud-7.wav', 9000)], 8000)).toBe('thud-7.wav');
-  });
-
-  it('reports nothing when the run wrote nothing', () => {
-    const before = new Set(['thud-7.wav']);
-    expect(pickRender(before, [file('thud-7.wav', 1000)], 8000)).toBeNull();
+  /* The name becomes a File name and the mime goes to `decodeAudioData`. Neither is
+     attacker-controlled here, but both come off a pipe, and a plausible-looking line
+     is exactly what would make a bad one hard to spot. */
+  it('refuses a name or a type it would not have written itself', () => {
+    expect(parseResult('txt2sfx-result {"name":"../x.mp3","mime":"audio/mpeg"}')).toBeNull();
+    expect(parseResult('txt2sfx-result {"name":"x.exe","mime":"audio/mpeg"}')).toBeNull();
+    expect(parseResult('txt2sfx-result {"name":"x.mp3","mime":"text/html"}')).toBeNull();
+    expect(parseResult('txt2sfx-result {"mime":"audio/mpeg"}')).toBeNull();
   });
 });
 
 describe('parseEvent', () => {
   it('reads the events the endpoint emits', () => {
-    expect(parseEvent('{"type":"done","file":"a-1.wav","ms":12000}')).toEqual({
+    expect(parseEvent('{"type":"done","name":"a-1.mp3","mime":"audio/mpeg","bytes":9,"ms":12000,"audio":"AAA="}')).toEqual({
       type: 'done',
-      file: 'a-1.wav',
+      name: 'a-1.mp3',
+      mime: 'audio/mpeg',
+      bytes: 9,
       ms: 12000,
+      audio: 'AAA=',
     });
     expect(parseEvent('  ')).toBeNull();
   });

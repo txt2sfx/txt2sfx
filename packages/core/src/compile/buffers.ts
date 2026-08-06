@@ -228,6 +228,99 @@ const EMIT_MODAL =
   'v+=Math.sin(2*Math.PI*g*t)*Math.exp(-Math.PI*g*t/q)/r}a[i]=v/m}return b}';
 
 /* ------------------------------------------------------------------------- *
+ * plate — dense mode bank, decay decoupled from frequency
+ * ------------------------------------------------------------------------- */
+
+/**
+ * A struck plate: many stretched modes, each with its own decay time.
+ *
+ * What separates this from {@link fillModal} is that **decay does not come from
+ * `Q`**. A resonator of quality `Q` has `tau = Q / (pi * f)`, so with `Q` capped at
+ * 400 the longest ring available at 3.6 kHz is 35 ms — and the layer envelope
+ * *multiplies* with it rather than extending it, so no combination of the two
+ * reaches the second of decay a diffusion render of steel on steel measures. Here
+ * `decay` is the time the lowest mode takes to fall 60 dB and it means the same
+ * thing at 300 Hz as at 8 kHz. `tilt` puts the physics back: real metal loses its
+ * top end first, so `tau(k) = tau(1) * k ** -tilt`.
+ *
+ * That decoupling is what the measurements credit. Against that reference, fitting
+ * a recipe built from `modal` + `pluck` + noise stalls at a distance of 0.252 with
+ * the render dying at 741 ms and sitting 12 dB quiet; the same three jobs written
+ * with `plate` and a flat (`hold`) envelope fit to 0.179 — 949 ms and 0.9 dB. Both
+ * numbers moved for the same reason: a ring whose length is not tied to its pitch
+ * can be held near its own level instead of being cut by an exponential.
+ *
+ * **`slope` places the spectrum, `modes` does not.** Measured on a 600 Hz bank of
+ * 16 modes, the mean centroid runs 832 Hz at `slope 2` to 2942 Hz at `slope 0` —
+ * flattening the amplitude law moves the energy up into the stretched modes, which
+ * is the one thing a band-pass on the layer could not do (a 12 dB/octave skirt
+ * leaves the fundamental dominant). What `modes` does *not* buy is a lower crest
+ * factor: with `1/k` amplitudes the lowest mode dominates the peak, so 3 modes
+ * measure 21.7 dB of crest and 12 measure 23.4. Density here is spectral, not
+ * dynamic.
+ *
+ * Phases are seeded rather than aligned. A physical strike does start every mode
+ * together — that is what a transient *is* — but that peak belongs to the strike
+ * layer a recipe already has, and stacking a second one there would spend the
+ * headroom the `peak <= 0.95` invariant is protecting. Dividing by the sum of
+ * amplitudes keeps the buffer provably inside unit peak, exactly as `modal` does.
+ */
+function fillPlate(
+  freq: number,
+  modes: number,
+  stretch: number,
+  slope: number,
+  decay: number,
+  tilt: number,
+  seed: number,
+  sec: number,
+  sampleRate: number,
+): Float32Array {
+  const a = alloc(sec, sampleRate);
+  const n = a.length;
+  const count = Math.max(1, Math.round(modes));
+  // decay is t60: ln(1000) = 6.907755278982137 time constants.
+  const tau = decay / 6.907755278982137;
+  const nyquist = sampleRate / 2;
+  let m = 0;
+  let s = seed;
+  for (let k = 1; k <= count; k++) {
+    /* The draw happens before the Nyquist test so the phase sequence is a property
+       of the seed alone: a buffer generated at 48 kHz must not be a different sound
+       from the same recipe at 44.1, only a differently band-limited one. */
+    s = (s * LCG_MUL) % LCG_MOD;
+    const phase = (2 * Math.PI * s) / LCG_MOD;
+    const f = freq * k ** stretch;
+    /* A mode above Nyquist does not ring, it *aliases* — and it aliases somewhere
+       arbitrary, so it would be heard as a wrong partial rather than as a missing
+       one. Measured: `plate 3600Hz modes 12 stretch 1.4` puts mode 4 at 113 kHz and
+       fitted to a centroid of 4.6 kHz against a 3.1 kHz target, entirely on folded
+       energy. Skipped modes are left out of the normalizer too, so dropping them
+       costs no level. */
+    if (f >= nyquist) continue;
+    const d = tau * k ** -tilt;
+    const amp = k ** -slope;
+    m += amp;
+    /* Written to match `EMIT_PLATE` operation for operation — float multiplication
+       is not associative, and the parity test compares samples, not shapes. */
+    for (let i = 0; i < n; i++) {
+      const t = i / sampleRate;
+      a[i] = (a[i] ?? 0) + amp * Math.sin(2 * Math.PI * f * t + phase) * Math.exp(-t / d);
+    }
+  }
+  if (m > 0) for (let i = 0; i < n; i++) a[i] = (a[i] ?? 0) / m;
+  return a;
+}
+
+const EMIT_PLATE =
+  'W=(s_,f,md,st,sl,dc,tl,d_)=>{const b=A(s_),a=b.getChannelData(0),n=a.length,' +
+  'ct=Math.max(1,Math.round(md)),tu=dc/6.907755278982137;let m=0,s=d_;' +
+  `for(let k=1;k<=ct;k++){${NOISE_STEP}const ph=2*Math.PI*s/2147483647,g=f*k**st;` +
+  'if(g>=R/2)continue;const d=tu*k**-tl,am=k**-sl;m+=am;' +
+  'for(let i=0;i<n;i++){const t=i/R;a[i]+=am*Math.sin(2*Math.PI*g*t+ph)*Math.exp(-t/d)}}' +
+  'if(m>0)for(let i=0;i<n;i++)a[i]/=m;return b}';
+
+/* ------------------------------------------------------------------------- *
  * pluck — Karplus-Strong
  * ------------------------------------------------------------------------- */
 
@@ -455,6 +548,18 @@ export function fillBuffer(spec: IRBufferSpec, sampleRate: number): Float32Array
       return fillBurst(spec.seed, spec.sec, sampleRate);
     case 'modal':
       return fillModal(spec.freq, spec.ratios, spec.q, spec.sec, sampleRate);
+    case 'plate':
+      return fillPlate(
+        spec.freq,
+        spec.modes,
+        spec.stretch,
+        spec.slope,
+        spec.decay,
+        spec.tilt,
+        spec.seed,
+        spec.sec,
+        sampleRate,
+      );
     case 'pluck':
       return fillPluck(spec.freq, spec.damp, spec.bright, spec.seed, spec.sec, sampleRate);
     case 'grains':
@@ -501,6 +606,7 @@ export function bufferEmitter(specs: readonly IRBufferSpec[], needsCurve: boolea
   if (kinds.has('noise')) helpers.push(emitNoise(colors));
   if (kinds.has('burst')) helpers.push(EMIT_BURST);
   if (kinds.has('modal')) helpers.push(EMIT_MODAL);
+  if (kinds.has('plate')) helpers.push(EMIT_PLATE);
   if (kinds.has('pluck')) helpers.push(EMIT_PLUCK);
   if (kinds.has('grains')) helpers.push(EMIT_GRAINS);
   if (kinds.has('verb')) helpers.push(EMIT_VERB);
@@ -518,6 +624,8 @@ export function bufferEmitter(specs: readonly IRBufferSpec[], needsCurve: boolea
           return `U(${num(spec.sec)},${num(spec.seed)})`;
         case 'modal':
           return `M(${num(spec.sec)},${num(spec.freq)},${numList(spec.ratios)},${num(spec.q)})`;
+        case 'plate':
+          return `W(${num(spec.sec)},${num(spec.freq)},${num(spec.modes)},${num(spec.stretch)},${num(spec.slope)},${num(spec.decay)},${num(spec.tilt)},${num(spec.seed)})`;
         case 'pluck':
           return `P(${num(spec.sec)},${num(spec.freq)},${num(spec.damp)},${num(spec.bright)},${num(spec.seed)})`;
         case 'grains':

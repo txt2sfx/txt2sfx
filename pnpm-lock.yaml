@@ -48,9 +48,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@txt2sfx/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@txt2sfx/analyzer':
+        specifier: workspace:*
+        version: link:../../packages/analyzer
       '@txt2sfx/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@txt2sfx/optimizer':
+        specifier: workspace:*
+        version: link:../../packages/optimizer
       '@txt2sfx/shared':
         specifier: workspace:*
         version: link:../../packages/shared

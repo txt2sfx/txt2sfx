@@ -53,7 +53,7 @@ import { bankEntries, exampleEntries, mergeCatalog, type Entry } from './lib/cat
 import { bundledRecipes, canSave, fetchRecipes, saveRecipe } from './lib/examples.js';
 import { playBuffer, playLive, type Playback } from './lib/engine.js';
 import { render } from './lib/engine.js';
-import { fetchRender, renderTarget } from './lib/stable-audio.js';
+import { renderTarget } from './lib/stable-audio.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
 
 /** How long to wait after the last edit before re-rendering offline. */
@@ -620,8 +620,8 @@ export function App(): React.JSX.Element {
         opts: { seconds?: number; seed?: number } = {},
       ): Promise<string> => {
         const file = await renderTarget({ prompt: text, ...opts });
-        loadReference(await fetchRender(file));
-        return file;
+        loadReference(file);
+        return file.name;
       },
 
       clearReference,

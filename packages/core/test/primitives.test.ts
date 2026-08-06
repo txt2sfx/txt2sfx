@@ -40,10 +40,12 @@ describe('registry', () => {
     expect(registryGaps()).toEqual({ missing: [], extra: [] });
   });
 
-  it('covers the nine primitives and six effects of v0', () => {
+  it('covers the ten primitives and six effects of v0', () => {
     /* Nine since `grains`: `noise` is stationary and `chirp` is one sweep, so a
-       dense field of short events had no expression at all. */
-    expect(PRIMITIVE_NAMES).toHaveLength(9);
+       dense field of short events had no expression at all. Ten since `plate`:
+       `modal` inherits `tau = Q / (pi * f)` from its resonators, so a ring that is
+       both bright and a second long had no expression either. */
+    expect(PRIMITIVE_NAMES).toHaveLength(10);
     expect(EFFECT_NAMES).toHaveLength(6);
   });
 });
@@ -59,6 +61,7 @@ const PRIMITIVE_LAYERS: Readonly<Record<string, string>> = {
   chirp: 'chirp saw 1800Hz -> 220Hz in 120ms | gain 1 decay 200ms',
   pluck: 'pluck 440Hz | gain 1 decay 200ms',
   modal: 'modal metal 800Hz | gain 1 decay 200ms',
+  plate: 'plate 800Hz modes 8 decay 400ms | gain 1 hold 300ms decay 200ms',
   fm: 'fm 600Hz | gain 1 decay 200ms',
   sub: 'sub 60Hz | gain 1 decay 200ms',
   click: 'click 2ms | gain 1 decay 30ms',

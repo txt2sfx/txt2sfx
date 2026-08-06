@@ -1,6 +1,6 @@
 # Primitives and effects
 
-Nine sources, six effects, one envelope. The **authoritative parameter tables** —
+Ten sources, six effects, one envelope. The **authoritative parameter tables** —
 units, ranges, defaults, which parameters accept trajectories — are generated from the
 signature table the parser itself uses and served at `GET /api/llms.txt`, or produced
 in-process by `llmsText()` from `@txt2sfx/agent`. Reading them there means never
@@ -18,6 +18,7 @@ implementation deliberately departs from the obvious approach.
 | `chirp` | A fast frequency sweep as a source in its own right — zaps, whooshes, risers. |
 | `pluck` | Plucked string: a short excitation into a damped resonance. |
 | `modal` | A struck object's partials (metal, wood, glass, membrane) — bells, clashes, hits. |
+| `plate` | The same idea with its decay written in milliseconds instead of a `Q`: long bright rings, plates, bars, tanks. |
 | `fm` | Two-operator FM: bells, mallets, sci-fi timbres that additive layers cannot reach. |
 | `sub` | The part you feel: a low sine, usually swept downwards. Explosions, impacts. |
 | `click` | Pure transient with no pitch of its own. The edge on a pop, a UI tick. |
@@ -74,6 +75,56 @@ Three properties are worth knowing before using it:
   parameter that bent twice as far as it claimed would be worse than none.
 - **It costs bytes.** A one-layer `grains` recipe exports at about 980 B, most of it the
   generator. That is the same trade every buffer source makes — see *Export size* below.
+
+### Why `plate` exists
+
+`modal` already sums decaying partials, so a second additive bank needs a reason. The
+reason is one line of physics: a resonator of quality `Q` has `tau = Q / (pi * f)`, so
+with `Q` capped at 400 the longest ring available at 3.6 kHz is `tau` 35 ms — 60 dB
+down inside 250 ms. Worse, the layer envelope **multiplies** with that rather than
+extending it: two exponentials of time constants `a` and `b` reach -60 dB at
+`6.9 * ab / (a + b)`, which is always shorter than either. Inside the `impact`
+category, where the envelope decay is capped at 1200 ms, nothing built from `modal`
+can hold a bright ring for a second. `plate` writes the decay as a time — the t60 of
+its lowest mode, frequency-independent — and `tilt` puts the physics back by making
+high modes die first, which is what real metal does.
+
+It was measured, not argued. The target is a Stable Audio render of *"steel on steel:
+a noise strike transient plus two metallic modal rings"* (`test/stable-audio/`), fitted
+headless with the same differential evolution the playground runs:
+
+| recipe | layers | export | distance | duration | attack | dominant | loudness |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| reference | — | — | — | 1002 ms | 14 ms | 3605 Hz | -17.2 LUFS |
+| `modal` + `pluck` + noise | 5 | 1894 B | 0.252 | 741 ms | 30 ms | 3287 Hz | -29.0 LUFS |
+| `plate` x2 + noise | 3 | 1505 B | **0.179** | 949 ms | 14 ms | 3644 Hz | -18.1 LUFS |
+
+The 11 dB of loudness and the 200 ms of decay came from the same change, and it is not
+the one that was expected: a ring whose length is not tied to its pitch can be held
+near its own level with `hold` instead of being cut by an exponential. **Write the
+length in the primitive's `decay` and keep the envelope flat over it** — an exponential
+envelope on top multiplies with the bank and neither number is then what you hear.
+
+Two more things the measurements settled:
+
+- **`slope` places the spectrum; `modes` does not.** With the default `1/k` amplitude
+  law the lowest mode dominates, so the fitted dominant partial sat an octave below the
+  reference no matter what a band-pass on the layer did — a 12 dB/octave skirt cannot
+  outvote a 6 dB amplitude advantage. Flattening the law moves the energy up into the
+  stretched modes: on a 600 Hz bank of 16 modes the mean centroid runs 832 Hz at
+  `slope 2` to 2942 Hz at `slope 0`.
+- **Density here is spectral, not dynamic.** The hypothesis was that many modes would
+  lower the crest factor towards the reference's 15 dB. Measured false: 3 modes give
+  21.7 dB and 12 give 23.4, because `1/k` leaves mode one owning the peak. The claim
+  is recorded here because it was wrong — the crest gap to a diffusion render is still
+  open, and the next attempt should not re-run this one.
+
+Modes landing above the Nyquist rate are **dropped, not rendered**. An aliased mode
+folds to an arbitrary frequency, so it is heard as a wrong partial rather than a
+missing one, and the first version of this primitive fitted to a centroid of 4.6 kHz
+against a 3.1 kHz target entirely on folded energy. `freq`, `stretch` and the sample
+rate therefore decide together how many of the `modes` are audible: at 3.6 kHz with
+`stretch 1.4`, three of them are.
 
 ## Deviations from the obvious implementation
 
