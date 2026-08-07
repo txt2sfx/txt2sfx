@@ -1,0 +1,223 @@
+name: Publish bridge
+
+# `txt2sfx-bridge` is the one package in this repository that ships to a
+# registry, and the thing it ships is a single bundled file — everything the
+# workspace packages contribute is inlined by esbuild, because those packages
+# are `private: true` and unpublishable. That makes the release interesting in
+# exactly one way: the tarball is not the repository, so the only honest test
+# is to install the tarball somewhere that has never seen this repository and
+# run the binary. This workflow does that before it publishes anything.
+#
+# There is no npm token. Publishing authenticates with trusted publishing: npm
+# exchanges GitHub's short-lived OIDC token for a one-off credential, and the
+# trust is configured on the package's npm settings page against this
+# repository AND this file's name. Renaming this file, or calling `npm publish`
+# from a different workflow, breaks the release until the npm side is updated
+# to match — the filename is part of the credential, not a detail.
+
+on:
+  push:
+    tags: ['bridge-v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and smoke-test the tarball, but do not publish'
+        type: boolean
+        default: true
+
+# A tag is published once. Two runs racing for the same version would have one
+# of them fail against the registry rather than do damage, but the failure
+# would be confusing, so serialise instead.
+concurrency:
+  group: publish-bridge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    # If the trusted publisher on npm is configured with a deployment
+    # environment, uncomment this and make the names match exactly — npm
+    # compares the environment as part of the credential, and a mismatch reads
+    # as an authentication failure rather than a configuration one.
+    # environment: npm
+
+    permissions:
+      # The whole authentication story. `id-token: write` is what lets the
+      # runner mint the OIDC token npm exchanges for publish rights, and it is
+      # also what makes provenance possible — the signed link from these bytes
+      # back to this commit and this workflow run.
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # The lower bound of the supported range, on purpose: the bundle is built
+      # for node22 and the smoke test below is the only place we find out
+      # whether it actually runs there. Trusted publishing needs >= 22.14, so
+      # this bound cannot drop further without changing how releases are made.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16'
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Two things setup-node cannot do for us yet.
+      #
+      # It writes `_authToken=${NODE_AUTH_TOKEN}` into .npmrc whenever
+      # `registry-url` is set. With no token in the environment that expands to
+      # an empty string, npm reads it as "auth is already configured", never
+      # starts the OIDC exchange, and fails with ENEEDAUTH. Deleting the line
+      # is the documented workaround; it is a no-op once setup-node learns to
+      # skip it. (actions/setup-node#1551)
+      #
+      # And the npm bundled with Node 22.16 is 10.x, which predates trusted
+      # publishing entirely — it needs 11.5.1 or later to know the flow exists.
+      - name: Make npm capable of trusted publishing
+        run: |
+          set -euo pipefail
+          npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          if [ -f "$npmrc" ]; then sed -i '/_authToken/d' "$npmrc"; fi
+          npm install -g npm@latest
+          npm --version
+
+      - run: pnpm install --frozen-lockfile
+
+      # The tag names the version; package.json is the version. When they
+      # disagree it is always a mistake, and catching it here costs a second
+      # instead of an unpublishable 0.1.0 sitting on the registry forever.
+      - name: The tag and the manifest must agree
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          tagged="${GITHUB_REF_NAME#bridge-v}"
+          manifest="$(node -p "require('./packages/bridge/package.json').version")"
+          if [ "$tagged" != "$manifest" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} claims ${tagged}, packages/bridge/package.json says ${manifest}"
+            exit 1
+          fi
+          echo "version=${manifest}" >> "$GITHUB_ENV"
+
+      - name: Resolve the version for a manual run
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: echo "version=$(node -p "require('./packages/bridge/package.json').version")" >> "$GITHUB_ENV"
+
+      # npm answers a re-publish with a 403 whose text is about permissions, not
+      # about the version already existing. Ask the question directly.
+      - name: The version must not already be on the registry
+        run: |
+          set -euo pipefail
+          if npm view "txt2sfx-bridge@${version}" version --json > /dev/null 2>&1; then
+            echo "::error::txt2sfx-bridge@${version} is already published; versions are immutable, bump it"
+            exit 1
+          fi
+          echo "txt2sfx-bridge@${version} is free"
+
+      - name: Typecheck sources, tests and the playground
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      # `pnpm pack` and not `npm pack`: it runs `prepack` (so the bundle is
+      # rebuilt from this commit rather than trusted from disk), rewrites the
+      # `workspace:*` ranges the private packages are pinned with into plain
+      # versions, and strips the lifecycle scripts from the published manifest.
+      - name: Build the tarball
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          pnpm --filter txt2sfx-bridge pack --pack-destination "$PWD/release"
+          echo "tarball=$PWD/release/txt2sfx-bridge-${version}.tgz" >> "$GITHUB_ENV"
+
+      # What ships should be four files. Anything else means `files` drifted and
+      # the tarball is carrying source maps, or worse, the unbundled modules
+      # that import the private packages and throw on first import.
+      - name: Inspect what is inside it
+        run: |
+          set -euo pipefail
+          tar -tzf "$tarball" | LC_ALL=C sort | tee /tmp/contents
+          diff -u - /tmp/contents <<'EOF'
+          package/LICENSE
+          package/README.md
+          package/dist/txt2sfx-bridge.mjs
+          package/package.json
+          EOF
+
+      # The real test. A directory with no relationship to this checkout, an
+      # install from the tarball alone, and the binary asked to describe itself.
+      - name: Install it like a stranger would, and run it
+        run: |
+          set -euo pipefail
+          stranger="$(mktemp -d)"
+          cd "$stranger"
+          npm init -y > /dev/null
+          npm install "$tarball"
+          output="$(./node_modules/.bin/txt2sfx-bridge doctor)"
+          echo "$output"
+          echo "$output" | grep -qF "txt2sfx-bridge ${version}" \
+            || { echo "::error::doctor did not report version ${version}"; exit 1; }
+          # The package advertises no library entry on purpose — the unbundled
+          # one cannot resolve `@txt2sfx/*` for anyone outside this repository.
+          # Assert the failure is that clean absence and not a broken promise.
+          node -e "import('txt2sfx-bridge').then(
+            () => { console.error('a library entry resolved; the manifest promises one it should not'); process.exit(1) },
+            (error) => { console.log('no library entry, as intended:', error.code) },
+          )"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: txt2sfx-bridge-${{ env.version }}
+          path: ${{ env.tarball }}
+
+      # Publishing the tarball rather than the directory: the bytes that were
+      # just smoke-tested are the bytes that go to npm, with no second pack in
+      # between that could produce something subtly different.
+      #
+      # No `env:` — the absence of a token is the point. npm sees the OIDC
+      # variables the runner exports, exchanges them for publish rights, and
+      # `--provenance` is redundant with trusted publishing but kept anyway:
+      # provenance is generated before the upload, so asking for it explicitly
+      # turns "it silently did not happen" into a release that fails without
+      # publishing anything.
+      - name: Publish
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: npm publish "$tarball" --provenance --access public
+
+      # The registry is the only authority on whether provenance actually
+      # landed, and `--provenance` covers the generating side, not the storing
+      # side. This cannot undo a publish; it exists so a release that quietly
+      # lost its attestation is visible in the run rather than discovered
+      # months later by someone verifying the supply chain.
+      - name: Confirm the attestation is on the registry
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if [ -n "$(npm view "txt2sfx-bridge@${version}" dist.attestations.url 2>/dev/null)" ]; then
+              echo "attested: $(npm view "txt2sfx-bridge@${version}" dist.attestations.url)"
+              exit 0
+            fi
+            echo "no attestation yet (attempt ${attempt}); the registry may still be catching up"
+            sleep 10
+          done
+          echo "::error::txt2sfx-bridge@${version} published without a provenance attestation"
+          exit 1
+
+      - name: Say where it went
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: |
+          {
+            echo "### txt2sfx-bridge@${version} published"
+            echo
+            echo '```'
+            echo "npx -y txt2sfx-bridge@${version} doctor"
+            echo '```'
+            echo
+            echo "<https://www.npmjs.com/package/txt2sfx-bridge/v/${version}>"
+          } >> "$GITHUB_STEP_SUMMARY"

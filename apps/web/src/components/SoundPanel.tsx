@@ -1,0 +1,203 @@
+/**
+ * The sound itself: one master strip, one lane per layer, and the transport.
+ *
+ * ## Why the lanes are the centrepiece
+ *
+ * A soundline is a stack of layers and the master waveform is their sum, which means
+ * the master is exactly the picture in which a layer's contribution is invisible. Tune
+ * `crack`'s decay in a four-layer explosion and the master barely moves — the layer is
+ * 8 dB down and 90 ms long inside a 1.2 second envelope — so the one thing being edited
+ * is the one thing not shown. The lanes fix that, and they cost four extra offline
+ * renders per recipe (see `lib/layers.ts`, which explains why they are *renders* and not
+ * envelopes drawn from the arguments).
+ *
+ * Each lane is labelled with what was **measured**, not with what the recipe declared:
+ * where the layer's onset actually landed and how long it actually rang. Those two
+ * numbers are the ones that disagree with the text when something is wrong — a `verb`
+ * tail outliving its decay, a `delay` with feedback that never dies — and printing the
+ * declared values instead would hide precisely the discrepancy worth seeing.
+ *
+ * ## Why Share sits with Play
+ *
+ * A recipe worth sharing is one you have just heard and liked, and that moment is in
+ * this row. Putting the share action three panels down would mean the thought and the
+ * button are never on screen together.
+ *
+ * @packageDocumentation
+ */
+
+import { useEffect, useState } from 'react';
+import type { RenderResult } from '@txt2sfx/core';
+import type { SoundAST } from '@txt2sfx/shared';
+import { Bars } from './Bars.js';
+import { FormatMenu } from './FormatMenu.js';
+import { metricsOf, onsetIndex, signalOf } from '../lib/analysis.js';
+import { layerColor } from '../lib/design.js';
+import { ms } from '../lib/format.js';
+import { bars, ghostBars, renderLayers } from '../lib/layers.js';
+import type { Format } from '../lib/download.js';
+
+/** Bars in the master strip. Wide enough for a 2.4 second cycle to show its period. */
+const MASTER_BARS = 96;
+
+/** Bars in a lane. Half the master's, at a quarter of the height. */
+const LANE_BARS = 72;
+
+/** One layer, measured. */
+interface Lane {
+  readonly name: string;
+  readonly values: Float32Array;
+  readonly onsetMs: number;
+  readonly durationMs: number;
+}
+
+export interface SoundPanelProps {
+  /** Only used to seed the placeholder bars, so a card mid-render is not empty. */
+  readonly name: string;
+  readonly ast: SoundAST | null;
+  readonly rendered: RenderResult | null;
+  readonly seed: number;
+  readonly playing: boolean;
+  readonly formatId: string;
+  readonly onFormat: (id: string) => void;
+  readonly onDownload: (format: Format) => Promise<unknown> | void;
+  readonly onPlay: () => void;
+  readonly onLoop: () => void;
+  readonly onTrash: () => void;
+  readonly onShare: () => void;
+}
+
+export function SoundPanel({
+  name,
+  ast,
+  rendered,
+  seed,
+  playing,
+  formatId,
+  onFormat,
+  onDownload,
+  onPlay,
+  onLoop,
+  onTrash,
+  onShare,
+}: SoundPanelProps): React.JSX.Element {
+  const master =
+    rendered === null ? ghostBars(name, MASTER_BARS) : bars(rendered.buffer, MASTER_BARS);
+  const lanes = useLanes(ast, seed);
+  /* Two different durations, and mixing them up is how a 55 ms pop comes to be labelled
+     105 ms. `totalMs` is the width of the *picture* — the rendered buffer, trailing pad
+     and all, which is what the bars and the playhead span. `measuredMs` is how long the
+     sound is actually audible for, down to −60 dB, which is what the label means. */
+  const totalMs = rendered?.durationMs ?? 0;
+  const measuredMs = rendered === null ? 0 : metricsOf(signalOf(rendered.buffer)).durationMs;
+
+  return (
+    <>
+      <div className="strip">
+        <span className="mono strip-label">master</span>
+        <Bars
+          values={master}
+          muted={rendered === null}
+          playing={playing}
+          durationMs={totalMs}
+          className="bars-master"
+          color={rendered === null ? undefined : layerColor(0, 0.74, 0.12)}
+        />
+        <span className="mono strip-meta">{ms(measuredMs)}</span>
+      </div>
+
+      {lanes.length < 2 ? null : (
+        <div className="lanes">
+          {lanes.map((lane, index) => (
+            <div className="strip strip-lane" key={lane.name}>
+              <span className="mono strip-label" style={{ color: layerColor(index) }}>
+                {lane.name}
+              </span>
+              <Bars
+                values={lane.values}
+                playing={playing}
+                durationMs={totalMs}
+                className="bars-lane"
+                color={layerColor(index)}
+              />
+              <span className="mono strip-meta">
+                {lane.onsetMs >= 1 ? `+${String(Math.round(lane.onsetMs))} ms · ` : ''}
+                {ms(lane.durationMs)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="transport">
+        <button type="button" className="primary big" onClick={onPlay} disabled={ast === null}>
+          {playing ? '❚❚' : '▶'} Play
+        </button>
+        <button type="button" onClick={onLoop} disabled={rendered === null} title="loop the offline render">
+          ↻ Loop
+        </button>
+        <FormatMenu
+          formatId={formatId}
+          onFormat={onFormat}
+          onDownload={onDownload}
+          disabled={ast === null && rendered === null}
+        />
+        <button type="button" className="danger" onClick={onTrash} title="hide it from the gallery">
+          Trash
+        </button>
+        <div className="spacer" />
+        <button type="button" className="violet" onClick={onShare} disabled={ast === null}>
+          Share
+        </button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Render every layer of `ast` alone and measure it.
+ *
+ * Cancelled on change rather than awaited: an editor produces a new AST per keystroke
+ * and a stale lane arriving after a newer one would make the picture flicker between
+ * two versions of the recipe. The cache in `lib/layers.ts` means an unchanged layer
+ * costs nothing on the way through.
+ */
+function useLanes(ast: SoundAST | null, seed: number): readonly Lane[] {
+  const [lanes, setLanes] = useState<readonly Lane[]>([]);
+
+  useEffect(() => {
+    if (ast === null || ast.layers.length < 2) {
+      setLanes([]);
+      return;
+    }
+    let cancelled = false;
+    void renderLayers(ast, seed).then((results) => {
+      if (cancelled) return;
+      setLanes(
+        results.flatMap((result, index) => {
+          const layer = ast.layers[index];
+          if (layer === undefined) return [];
+          if (result === null) {
+            return [{ name: layer.name, values: ghostBars(layer.name, LANE_BARS), onsetMs: 0, durationMs: 0 }];
+          }
+          const signal = signalOf(result.buffer);
+          const onset = onsetIndex(signal);
+          const metrics = metricsOf(signal, onset);
+          return [
+            {
+              name: layer.name,
+              values: bars(result.buffer, LANE_BARS),
+              onsetMs: (onset / signal.sampleRate) * 1000,
+              durationMs: metrics.durationMs,
+            },
+          ];
+        }),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ast, seed]);
+
+  return lanes;
+}

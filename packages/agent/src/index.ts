@@ -62,5 +62,8 @@ export type { SearchQueryOptions } from './query.js';
 export { extractSoundline, initialMessage, repairMessage, systemPrompt } from './prompts.js';
 export type { Failure, InitialMessageOptions, SystemPromptOptions } from './prompts.js';
 
+export { bridgeOnboardingPrompt } from './onboarding.js';
+export type { BridgeOnboardingOptions } from './onboarding.js';
+
 export { generateSound } from './loop.js';
 export type { AgentEvent, Attempt, GenerateOptions, GenerateResult, Outcome } from './loop.js';

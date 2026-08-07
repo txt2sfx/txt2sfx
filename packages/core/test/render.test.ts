@@ -154,4 +154,63 @@ describe('wav', () => {
       expect(view.getInt16(44 + i * 2, true) / 32767).toBeCloseTo(source[i] ?? 0, 4);
     }
   });
+
+  /* 24-bit is what a game audio pipeline asks for by name. `DataView` has no
+     `setInt24`, so the three bytes are assembled by hand and this is the test that
+     the assembly is little-endian two's complement rather than something that only
+     looks right for positive samples. */
+  it('writes 24-bit integer PCM when asked, three bytes per sample', async () => {
+    const buffer = await render();
+    const bytes = encodeWav(buffer, { bitDepth: 24 });
+    const view = new DataView(bytes.buffer);
+    expect(view.getUint16(20, true)).toBe(1);
+    expect(view.getUint16(34, true)).toBe(24);
+    expect(view.getUint16(32, true)).toBe(3);
+    expect(view.getUint32(28, true)).toBe(buffer.sampleRate * 3);
+    expect(bytes.length).toBe(44 + buffer.length * 3);
+    expect(view.getUint32(4, true)).toBe(bytes.length - 8);
+    expect(view.getUint32(40, true)).toBe(buffer.length * 3);
+  });
+
+  it('round-trips both signs through 24 bits, more precisely than 16 does', async () => {
+    const buffer = await render();
+    const bytes = encodeWav(buffer, { bitDepth: 24 });
+    const source = buffer.getChannelData(0);
+
+    /* Read the sample back the way a decoder would: three little-endian bytes, then
+       sign-extend from bit 23. */
+    const read = (index: number): number => {
+      const at = 44 + index * 3;
+      const raw = (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8) | ((bytes[at + 2] ?? 0) << 16);
+      return ((raw << 8) >> 8) / 8388607;
+    };
+
+    let sawNegative = false;
+    let sawPositive = false;
+    for (let i = 0; i < 400; i++) {
+      const expected = source[i] ?? 0;
+      if (expected < -0.01) sawNegative = true;
+      if (expected > 0.01) sawPositive = true;
+      expect(read(i)).toBeCloseTo(expected, 6);
+    }
+    /* A 440 Hz sine over 400 samples crosses zero several times; if it did not, the
+       test above would pass on an encoder that mangles negatives. */
+    expect(sawNegative && sawPositive).toBe(true);
+  });
+
+  it('clamps past full scale instead of wrapping to the opposite sign', async () => {
+    const context = offlineContext({ numberOfChannels: 1, length: 4, sampleRate: 44100 });
+    const loud = context.createBuffer(1, 4, 44100);
+    loud.getChannelData(0).set([1.5, -1.5, 1, -1]);
+    const bytes = encodeWav(loud, { bitDepth: 24 });
+    const read = (index: number): number => {
+      const at = 44 + index * 3;
+      const raw = (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8) | ((bytes[at + 2] ?? 0) << 16);
+      return (raw << 8) >> 8;
+    };
+    expect(read(0)).toBe(8388607);
+    expect(read(1)).toBe(-8388607);
+    expect(read(2)).toBe(8388607);
+    expect(read(3)).toBe(-8388607);
+  });
 });

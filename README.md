@@ -6,8 +6,8 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-616-brightgreen.svg">
-  <img alt="Runtime dependencies" src="https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-804-brightgreen.svg">
+  <img alt="Library runtime dependencies" src="https://img.shields.io/badge/library%20runtime%20deps-0-brightgreen.svg">
 </p>
 
 ---
@@ -25,10 +25,12 @@ number the model was unsure about. The model designs structure; scripts decide e
 that can be decided by measurement.
 
 Nothing is proxied through a service. The LLM is yours — paste a Gemini key into the
-playground, or point the loop at Anthropic, or run it with no key at all against the recipe
-bank. An outside agent can use the whole thing without installing it: one request to
-`GET /api/llms.txt` returns the complete grammar, the parameter tables and working
-examples.
+playground, point the loop at Anthropic, run it with no key at all against the recipe
+bank, or hand the whole job to the coding agent you already have open: `npx txt2sfx-bridge`
+puts Claude Code, Codex or Cursor on the other end of an MCP connection, in both
+directions and without a credential anywhere in the path. An outside agent can also use
+the pipeline without installing anything: one request to `GET /api/llms.txt` returns the
+complete grammar, the parameter tables and working examples.
 
 ## The killer example
 
@@ -99,17 +101,73 @@ flowchart LR
 ```powershell
 npm install -g pnpm@10        # corepack is gone from Node 25
 pnpm install
-pnpm test                     # 632 tests
+pnpm test                     # 804 tests
 pnpm dev                      # playground on http://localhost:5173
 ```
 
-In the playground: type what you want to hear, pick a model, paste your key. The key lives
-in that tab's memory and is sent to that vendor and nowhere else — no proxy, no server of
-ours in the path. Ticking **remember** encrypts it with a non-extractable key in IndexedDB
-rather than storing it in `localStorage`; what that does and does not protect against is
-spelled out in `apps/web/src/lib/keystore.ts`, and **forget** undoes it. With **mock** selected there is no key and no network
-at all: the answer comes from the recipes already on the page, and the rest of the loop —
-validator, render, optimizer, export — runs exactly as it does with a real model.
+The playground is two screens and a share view. **Sounds** is the catalog — everything in
+`examples/`, everything a running bank holds, everything generated this session — with a
+prompt box at the top, because the first thing on screen should be the claim rather than
+an editor for a language nobody has heard of yet. **Studio** is one sound: the recipe,
+editable, with its waveform above it and a lane per layer under that, the `~slot` knobs,
+the export budget, and three views over the same recipe — `Soundline`, `Model` (the same
+prompt answered by a local diffusion model, as a *target*) and `Compare A / B`.
+
+Compare draws two spectrograms on one aligned, peak-normalized time base, and the colour
+of the picture is a control rather than decoration: `Tracks` colours every pixel by which
+*layer* owns it, `HSV` adds tonal-versus-noisy as saturation, `Channels` puts noisiness,
+level and frequency height on three fixed axes, `Diff` subtracts. The layer attribution
+comes from rendering each layer alone, so a `verb` tail and a `delay` that moves energy
+70 ms to the right land where they actually are. B can be a model render, a file, or the
+same recipe at a different seed — that last one answers a question specific to procedural
+audio: *how much of this sound is the design and how much is one draw from a noise
+generator?*
+
+Every sound downloads as **WAV** (16- or 24-bit), **MP3** or **M4A** — really encoded,
+never a renamed WAV — alongside the two that matter more: the JavaScript and the
+soundline. The audio is for handing a sound to a person; the code is for shipping it.
+
+Pick a model, paste your key. The key lives in that tab's memory and is sent to that
+vendor and nowhere else — no proxy, no server of ours in the path. Ticking **remember**
+encrypts it with a non-extractable key in IndexedDB rather than storing it in
+`localStorage`; what that does and does not protect against is spelled out in
+`apps/web/src/lib/keystore.ts`, and **forget** undoes it. With **mock** selected there is
+no key and no network at all: the answer comes from the recipes already on the page, and
+the rest of the loop — validator, render, optimizer, export — runs exactly as it does with
+a real model.
+
+## Your agent, with an ear
+
+```powershell
+npx txt2sfx-bridge            # a daemon on 127.0.0.1:4455
+```
+
+then point an MCP client at it:
+
+```json
+{ "mcpServers": { "txt2sfx": { "command": "npx", "args": ["-y", "txt2sfx-bridge", "--stdio"] } } }
+```
+
+Or skip all of that: **Copy agent prompt** in the playground's bridge dialog — and
+`npx txt2sfx-bridge doctor` — gives you a paragraph to paste straight into Claude Code or
+Codex. The agent registers the server itself, and where it cannot restart to pick the
+config up, it drives the same twelve tools over loopback HTTP (`POST /tools/<name>`) in
+the turn you asked.
+
+The badge in the playground header turns green and an agent can now design sounds here.
+**No API key is involved anywhere in that path** — that is the point rather than a
+convenience. A coding agent already holds a language model; what it lacked was a grammar,
+a validator, a renderer and a human's ears, and all four are one `npx` away. It calls
+`sfx_contract` once for the whole language, writes soundline, gets back measurements from
+`sfx_render`, and makes your speakers produce the result with `sfx_audition`.
+
+It runs the other way too. Choose **agent** in the playground's model picker and Generate
+parks the request — full contract, conversation, few-shot examples — for the agent to pick
+up with `sfx_next_request` and answer with `sfx_answer`; the validator, the render, the
+optimizer and the repair loop are untouched.
+
+Loopback only, a token on the socket, and an honest account of what that does and does not
+protect against, in [docs/BRIDGE.md](docs/BRIDGE.md).
 
 Under `pnpm dev` the Compare panel can also produce its own reference: **⤓ Render target**
 sends the same prompt to Stable Audio Open Small running locally, and loads the result as
@@ -224,6 +282,7 @@ generated from the parser's own tables and served at `/api/llms.txt`.
 | [PRIMITIVES.md](docs/PRIMITIVES.md) | what each primitive is for, deviations, measured peaks and sizes |
 | [ACOUSTIC_PROFILE.md](docs/ACOUSTIC_PROFILE.md) | what is measured, the metric, and the numbers to compare against |
 | [AGENT_LOOP.md](docs/AGENT_LOOP.md) | providers, the repair loop, and when the model may change structure |
+| [BRIDGE.md](docs/BRIDGE.md) | the MCP bridge: the twelve tools, the wire protocol, and the threat model |
 | [API.md](docs/API.md) | the recipe bank's REST surface |
 | [bench/README.md](bench/README.md) | SFX-Bench v0, and how to add a target |
 | [ROADMAP.md](ROADMAP.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | where this is going, and how to help |
@@ -237,7 +296,8 @@ generated from the parser's own tables and served at `/api/llms.txt`.
 | `packages/analyzer` | FFT, acoustic profiles, distance metrics, human-readable diffs. Zero deps. |
 | `packages/optimizer` | Differential evolution over a recipe's `~value[min..max]` slots. Zero deps. |
 | `packages/agent` | LLM providers, the contract document, the generate-and-repair loop. Zero deps. |
-| `apps/web` | Vite + React playground: prompt, generate, edit, hear, measure, compare, export, publish. |
+| `packages/bridge` | `txt2sfx-bridge` on npm: the loopback daemon and MCP server that connect a coding agent to the playground, both ways. Zero runtime deps. |
+| `apps/web` | Vite + React playground: catalog, studio, compare, share. |
 | `apps/server` | Recipe bank: SQLite + FTS5 behind a small REST API, plus `/api/llms.txt`. |
 | `bench` | SFX-Bench v0: reference targets and the scoring run. |
 | `examples/` | Ten reference recipes, also used to seed the recipe bank. |

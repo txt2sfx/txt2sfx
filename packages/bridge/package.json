@@ -1,0 +1,38 @@
+{
+  "name": "txt2sfx-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local daemon that puts an MCP coding agent in the same room as the txt2sfx playground: validate, render, measure and audition soundline without hosting anything.",
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "sfx", "sound-effects", "web-audio", "procedural-audio", "soundline", "txt2sfx"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/txt2sfx/txt2sfx.git",
+    "directory": "packages/bridge"
+  },
+  "homepage": "https://github.com/txt2sfx/txt2sfx/tree/main/packages/bridge#readme",
+  "bugs": "https://github.com/txt2sfx/txt2sfx/issues",
+  "bin": {
+    "txt2sfx-bridge": "dist/txt2sfx-bridge.mjs"
+  },
+  "files": ["dist/txt2sfx-bridge.mjs", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "bundle": "tsc -b && esbuild src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/txt2sfx-bridge.mjs --external:node-web-audio-api \"--banner:js=#!/usr/bin/env node\"",
+    "prepack": "npm run bundle"
+  },
+  "devDependencies": {
+    "@txt2sfx/agent": "workspace:*",
+    "@txt2sfx/analyzer": "workspace:*",
+    "@txt2sfx/core": "workspace:*",
+    "@txt2sfx/optimizer": "workspace:*",
+    "@txt2sfx/shared": "workspace:*",
+    "esbuild": "^0.24.2"
+  },
+  "optionalDependencies": {
+    "node-web-audio-api": "^2.1.0"
+  }
+}

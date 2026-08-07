@@ -39,8 +39,17 @@ import {
 } from '@txt2sfx/agent';
 import { render } from './engine.js';
 
-/** Which model the prompt bar talks to. */
-export type ProviderKind = 'mock' | 'gemini' | 'anthropic' | 'bridge';
+/**
+ * Which model the prompt row talks to.
+ *
+ * `agent` and `bridge` are the same idea at two different distances. `bridge` parks
+ * the request on `window.txt2sfx` for whoever is holding devtools — a debugging
+ * instrument, dev-only. `agent` sends it over the local bridge daemon to a coding
+ * agent attached over MCP, which is a *feature*: that agent already holds a language
+ * model, so it needs no key, and what it was missing is the validator, the renderer
+ * and the ear this page provides. See `lib/bridge-client.ts` and `docs/BRIDGE.md`.
+ */
+export type ProviderKind = 'mock' | 'gemini' | 'anthropic' | 'agent' | 'bridge';
 
 /** The picker's contents, in the order they are offered. */
 export const ALL_PROVIDER_OPTIONS: readonly {
@@ -62,6 +71,11 @@ export const ALL_PROVIDER_OPTIONS: readonly {
   readonly devOnly?: boolean;
 }[] = [
   { kind: 'mock', label: 'mock — no key', needsKey: false },
+  {
+    kind: 'agent',
+    label: 'agent — your coding agent over MCP',
+    needsKey: false,
+  },
   {
     kind: 'bridge',
     label: 'bridge — answered in devtools',

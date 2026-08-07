@@ -71,8 +71,13 @@ export function diffColor(t: number): readonly [number, number, number] {
  *
  * Precomputed per repaint because the inner loop runs once per pixel and the
  * `exp` would otherwise dominate the frame.
+ *
+ * Exported because `lib/spectro.ts` paints the same axis in four different colour
+ * schemes. The axis is not one of the things a colour mode gets to have an opinion
+ * about: two spectrograms whose rows mean different frequencies cannot be compared,
+ * and that comparison is the entire purpose of the panel.
  */
-function binRanges(height: number, spec: Spectrogram, sampleRate: number): { lo: Int32Array; hi: Int32Array } {
+export function binRanges(height: number, spec: Spectrogram, sampleRate: number): { lo: Int32Array; hi: Int32Array } {
   const fMax = fMaxFor(sampleRate);
   const decades = Math.log(fMax / F_MIN);
   const lo = new Int32Array(height);
@@ -87,14 +92,14 @@ function binRanges(height: number, spec: Spectrogram, sampleRate: number): { lo:
 }
 
 /** Column range of the spectrogram that maps to canvas column `x`. */
-function frameRange(x: number, width: number, frames: number): readonly [number, number] {
+export function frameRange(x: number, width: number, frames: number): readonly [number, number] {
   const lo = Math.min(frames - 1, Math.floor((x * frames) / width));
   const hi = Math.min(frames - 1, Math.max(lo, Math.floor(((x + 1) * frames) / width) - 1));
   return [lo, hi];
 }
 
 /** Loudest value in the (frames × bins) rectangle a pixel covers. */
-function cellMax(spec: Spectrogram, frameLo: number, frameHi: number, binLo: number, binHi: number): number {
+export function cellMax(spec: Spectrogram, frameLo: number, frameHi: number, binLo: number, binHi: number): number {
   let db = spec.floorDb;
   for (let frame = frameLo; frame <= frameHi; frame++) {
     const base = frame * spec.bins;

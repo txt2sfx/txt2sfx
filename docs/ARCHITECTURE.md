@@ -25,16 +25,37 @@ packages/core        the language: lexer, parser, serializer, validator, compile
 packages/analyzer    FFT, acoustic profile, distance metrics, human-readable diff
 packages/optimizer   differential evolution over `~value[min..max]` slots
 packages/agent       LLM providers, the contract document, the generate → repair loop
+packages/bridge      txt2sfx-bridge: a loopback daemon and an MCP server, relaying
+                     between a browser tab and a coding agent — in both directions
 apps/server          recipe bank: SQLite + FTS5 behind a small REST API
-apps/web             the playground: editor, sliders, visualizer, compare, export
+apps/web             the playground: catalog, studio, compare A/B, share
 bench                SFX-Bench v0: run the pipeline against reference targets
 examples/            ten reference recipes, in canonical form
 ```
 
-`shared`, `core`, `analyzer`, `optimizer` and `agent` have **zero runtime
+`packages/bridge` is the one package published under its own name, and the only place
+where three processes have to agree about anything. Its wire protocol, its twelve MCP
+tools and its threat model are specified in [BRIDGE.md](BRIDGE.md); the short version is
+that a page cannot be dialled and a stdio server cannot be reached by a page, so a daemon
+sits between them. It keeps the zero-dependency rule the hard way — the RFC 6455 server
+and the JSON-RPC transport are written out rather than installed, and the workspace
+packages it uses are bundled at publish time because they are private.
+
+`shared`, `core`, `analyzer`, `optimizer`, `agent` and `bridge` have **zero runtime
 dependencies** — the FFT, the WAV encoder, the differential evolution and the HTTP
-providers are all local. Dependencies live in `apps/` (Fastify, React, Vite) and in
-devDependencies (`node-web-audio-api`, vitest, TypeScript). The audio stack is
+providers are all local. Dependencies live in `apps/` (Fastify, React, Vite,
+`mediabunny`) and in devDependencies (`node-web-audio-api`, vitest, TypeScript).
+
+`mediabunny` and its two encoder extensions are the newest of those and the only ones
+added for a *file format*: the playground offers MP3 and M4A downloads, no browser can
+encode MP3 at all, and Firefox cannot encode AAC. The alternative was a button labelled
+`MP3` that hands over a renamed WAV, which this project does not get to do — see
+`apps/web/src/lib/encode.ts`. The extensions are dynamically imported on the first
+compressed export and only when the engine cannot do the job itself, so a Chrome session
+that never exports an M4A never downloads an AAC encoder. WAV is unaffected: it is
+thirty lines in `core` and always will be.
+
+The audio stack is
 *injected*: `core` takes a factory for `OfflineAudioContext`, and both the optimizer
 and the agent take a render function. Nothing below `apps/` constructs an audio
 context, which is why the same code runs in Node, in a browser tab and in a test.

@@ -43,11 +43,22 @@ const RECIPES = [
 ];
 
 describe('provider picker', () => {
-  it('offers exactly the three the plan asked for, with mock first', () => {
-    expect(providerOptions(false).map((option) => option.kind)).toEqual(['mock', 'gemini', 'anthropic']);
+  /* Mock first, then the two that need no key, then the two that do. The order is the
+     cost of asking, ascending, which is the order someone deciding should meet them in. */
+  it('offers the keyless options first, with mock at the head', () => {
+    expect(providerOptions(false).map((option) => option.kind)).toEqual(['mock', 'agent', 'gemini', 'anthropic']);
     expect(needsKey('mock')).toBe(false);
     expect(needsKey('gemini')).toBe(true);
     expect(needsKey('anthropic')).toBe(true);
+  });
+
+  /* The point of the `agent` provider: the coding agent on the other end of the bridge
+     already holds a language model, so there is no credential in that path at all. A
+     regression that made it ask for a key would break the claim, not just the UI. */
+  it('ships the bridged agent in a static build and never asks it for a key', () => {
+    expect(providerOptions(false).map((option) => option.kind)).toContain('agent');
+    expect(needsKey('agent')).toBe(false);
+    expect(ALL_PROVIDER_OPTIONS.find((option) => option.kind === 'agent')?.devOnly).toBeUndefined();
   });
 
   /* The bridge answers a live model loop from a debugger. Useful in dev, no business

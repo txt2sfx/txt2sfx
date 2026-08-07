@@ -14,16 +14,18 @@
  */
 
 /** Sample formats the writer supports. */
-export type WavBitDepth = 16 | 32;
+export type WavBitDepth = 16 | 24 | 32;
 
 /** Options of {@link encodeWav}. */
 export interface WavOptions {
   /**
-   * 16 for signed integer PCM, 32 for IEEE float.
+   * 16 or 24 for signed integer PCM, 32 for IEEE float.
    *
-   * 16-bit is the safe default: every tool reads it. 32-bit float is lossless and
-   * keeps samples that overshoot full scale, which is what you want when the
-   * point of exporting is to *see* that the mix clipped.
+   * 16-bit is the safe default: every tool reads it. 24-bit is what a game audio
+   * pipeline usually wants for an intermediate — 48 dB more headroom below the
+   * noise floor than 16, at three quarters the size of float. 32-bit float is
+   * lossless and keeps samples that overshoot full scale, which is what you want
+   * when the point of exporting is to *see* that the mix clipped.
    */
   readonly bitDepth?: WavBitDepth;
 }
@@ -32,6 +34,21 @@ export interface WavOptions {
 function toInt16(sample: number): number {
   const clamped = sample < -1 ? -1 : sample > 1 ? 1 : sample;
   return Math.round(clamped * 32767);
+}
+
+/**
+ * Clamp and convert one float sample to signed 24-bit.
+ *
+ * `DataView` has no `setInt24`, so the three bytes are written by hand, little-endian
+ * and two's complement — which is why the value is masked into 24 bits first rather
+ * than shifted out of a negative number.
+ */
+function writeInt24(bytes: Uint8Array, offset: number, sample: number): void {
+  const clamped = sample < -1 ? -1 : sample > 1 ? 1 : sample;
+  const value = Math.round(clamped * 8388607) & 0xffffff;
+  bytes[offset] = value & 0xff;
+  bytes[offset + 1] = (value >> 8) & 0xff;
+  bytes[offset + 2] = (value >> 16) & 0xff;
 }
 
 /**
@@ -77,6 +94,7 @@ export function encodeWav(buffer: AudioBuffer, options: WavOptions = {}): Uint8A
     for (let channel = 0; channel < channels; channel++) {
       const sample = data[channel]?.[frame] ?? 0;
       if (bitDepth === 32) view.setFloat32(offset, sample, true);
+      else if (bitDepth === 24) writeInt24(bytes, offset, sample);
       else view.setInt16(offset, toInt16(sample), true);
       offset += bytesPerSample;
     }
