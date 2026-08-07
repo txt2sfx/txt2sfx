@@ -108,6 +108,24 @@ export type IRBufferSpec =
       readonly seed: number;
       readonly sec: number;
     }
+  /** Dense bank of stretched modes with frequency-independent decay — `plate`. */
+  | {
+      readonly kind: 'plate';
+      /** Frequency of the lowest mode. */
+      readonly freq: number;
+      /** How many modes. */
+      readonly modes: number;
+      /** Exponent of the mode series: mode k sits at `freq * k ** stretch`. */
+      readonly stretch: number;
+      /** Amplitude law: mode k is `k ** -slope` of the lowest. */
+      readonly slope: number;
+      /** Time the lowest mode takes to fall 60 dB, in seconds. */
+      readonly decay: number;
+      /** How much faster high modes die: `tau(k) = tau(1) * k ** -tilt`. */
+      readonly tilt: number;
+      readonly seed: number;
+      readonly sec: number;
+    }
   /** Scatter of short damped pings — the `grains` primitive. */
   | {
       readonly kind: 'grains';

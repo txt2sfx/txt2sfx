@@ -69,7 +69,7 @@ import { renderLayers } from './lib/layers.js';
 import { loadLibrary, saveLibrary, type Library } from './lib/library.js';
 import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
-import { fetchRender, renderTarget, stableAudioStatus, stableAudioSupported } from './lib/stable-audio.js';
+import { renderTarget, stableAudioStatus, stableAudioSupported } from './lib/stable-audio.js';
 import { DEFAULT_PROVIDER, useGenerate, type ProviderSettings } from './lib/useGenerate.js';
 
 /** How long to wait after the last edit before re-rendering offline. */
@@ -881,10 +881,12 @@ export function App(): React.JSX.Element {
         return name;
       },
       target: async (text: string, opts: { seconds?: number; seed?: number } = {}): Promise<string> => {
+        /* The render arrives in the response and is never written to `out/`, so there is
+           nothing to fetch afterwards — only a name to report back. */
         const file = await renderTarget({ prompt: text, ...opts });
-        actions.current.loadReference(await fetchRender(file));
+        actions.current.loadReference(file);
         setBKind('model');
-        return file;
+        return file.name;
       },
       bridge: () => bridgeClient.current(),
     };

@@ -171,8 +171,9 @@ protect against, in [docs/BRIDGE.md](docs/BRIDGE.md).
 
 Under `pnpm dev` the Compare panel can also produce its own reference: **⤓ Render target**
 sends the same prompt to Stable Audio Open Small running locally, and loads the result as
-the reference to A/B against, fit sliders to, and tick **match reference** for. That is a
-diffusion render used as the *target*, not as the output — the shipped artifact is still a
+the reference to A/B against, fit sliders to, and tick **match reference** for. The render
+arrives inside the response and is never written to disk — a target is consumed once. That is
+a diffusion render used as the *target*, not as the output — the shipped artifact is still a
 recipe. It needs the one-time provisioning in [test/stable-audio/README.md](test/stable-audio/README.md),
 and nothing about it exists in a static build.
 

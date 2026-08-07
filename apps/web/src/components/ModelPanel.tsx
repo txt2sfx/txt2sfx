@@ -4,17 +4,19 @@
  * ## Why a competitor is in the building
  *
  * Because the honest comparison is the useful one, and because this is not actually a
- * competitor — it is a **target**. Stable Audio returns one to two megabytes of WAV for
- * a sound this project ships as eight hundred bytes of JavaScript, so as a deliverable
- * the two are not in the same category. As a *reference* it is the single most valuable
- * thing on the machine: finding a recording of "a rusty gate opening slowly, then a
- * heavy latch" by hand is the slow step in every session, and here it is one click and
- * thirty seconds of CPU.
+ * competitor — it is a **target**. Stable Audio returns a few hundred kilobytes of MP3
+ * for a sound this project ships as eight hundred bytes of JavaScript, so as a
+ * deliverable the two are not in the same category. As a *reference* it is the single
+ * most valuable thing on the machine: finding a recording of "a rusty gate opening
+ * slowly, then a heavy latch" by hand is the slow step in every session, and here it is
+ * one click and thirty seconds of CPU.
  *
  * The view therefore says out loud what it is: rendered audio from the same prompt, no
  * recipe, nothing to tune, nothing to export into a game. Everything it produces flows
  * into the same place a dropped file does — the B side of Compare — and from there the
- * existing machinery applies unchanged.
+ * existing machinery applies unchanged. The render arrives *in* the response and is
+ * never written down: a target is used once, and a session of clicking this button
+ * should not leave a directory of files to sweep up.
  *
  * ## Why the model list is one item long
  *
@@ -41,7 +43,6 @@ import { bars, ghostBars } from '../lib/layers.js';
 import { ms } from '../lib/format.js';
 import { playBuffer, type Playback } from '../lib/engine.js';
 import {
-  fetchRender,
   renderTarget,
   stableAudioStatus,
   stableAudioSupported,
@@ -128,13 +129,20 @@ export function ModelPanel({
         onEvent: (event: RenderEvent) => {
           if (event.type === 'log') setLines((current) => [...current.slice(-40), event.line]);
           if (event.type === 'start') setLines((current) => [...current, `$ ${event.argv.join(' ')}`]);
-          if (event.type === 'done') setLines((current) => [...current, `done in ${ms(event.ms)}`]);
+          if (event.type === 'done')
+            setLines((current) => [
+              ...current,
+              `${event.name} · ${(event.bytes / 1024).toFixed(0)} KB in ${ms(event.ms)}`,
+            ]);
           if (event.type === 'error') setError(event.message);
         },
       },
     )
-      .then(async (file) => {
-        onRendered(await fetchRender(file));
+      .then((file) => {
+        /* The render came down in the response body and was never written to `out/`, so
+           there is nothing to fetch — a target is used once and should not leave a
+           directory to sweep up. */
+        onRendered(file);
       })
       .catch((failure: unknown) => {
         if (controller.signal.aborted) return;

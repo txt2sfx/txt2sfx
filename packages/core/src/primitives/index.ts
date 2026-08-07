@@ -17,6 +17,7 @@ import { fm } from './fm.js';
 import { grains } from './grains.js';
 import { modal } from './modal.js';
 import { noise } from './noise.js';
+import { plate } from './plate.js';
 import { pluck } from './pluck.js';
 import { sub } from './sub.js';
 import { tone } from './tone.js';
@@ -35,6 +36,7 @@ export const PRIMITIVE_DEFS: Readonly<Record<string, PrimitiveDef>> = {
   chirp,
   pluck,
   modal,
+  plate,
   fm,
   sub,
   click,
