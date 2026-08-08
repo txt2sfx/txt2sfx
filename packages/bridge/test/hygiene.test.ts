@@ -49,13 +49,32 @@ describe('the package manifest', () => {
     // `test/stable-audio/`, and `src/stable-audio.ts` looks for them beside the
     // bundle before falling back to a checkout. Drop them and the Model tab's
     // install button has nothing to run.
+    //
+    // `render-child.mjs` is a second bundle rather than part of the first
+    // because a process cannot fork itself into a different entry point: it is
+    // the module the render subprocess runs, and `render.ts` finds it beside
+    // the bundle the same way. Drop it and the bridge silently falls back to
+    // rendering in-process, which works and leaks — see `render-child.ts`.
     expect(manifest['files']).toEqual([
       'dist/txt2sfx-bridge.mjs',
+      'dist/render-child.mjs',
       'dist/stable-audio/run.py',
       'dist/stable-audio/requirements.txt',
       'README.md',
       'LICENSE',
     ]);
+  });
+
+  it('bundles the render subprocess as its own entry point', () => {
+    // Same rule as the Python assets one line up: a `files` entry that no build
+    // step produces ships as an absence, not as a failure. And the native module
+    // must stay external in both bundles — bundling it would defeat the optional
+    // dependency and break every platform without a prebuilt binary.
+    const scripts = manifest['scripts'] as Record<string, string> | undefined;
+    const bundle = scripts?.['bundle'] ?? '';
+    expect(bundle).toContain('src/render-child.ts');
+    expect(bundle).toContain('--outfile=dist/render-child.mjs');
+    expect(bundle.match(/--external:node-web-audio-api/g)).toHaveLength(2);
   });
 
   it('packs those scripts as part of the bundle step, not by hand', () => {

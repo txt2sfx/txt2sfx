@@ -149,9 +149,43 @@ resolutions, tried in order and reported by `/health` as `renderer`:
    the number the agent is told and the number on screen cannot disagree.
 2. **`native`** — `node-web-audio-api` is installed (an **optional** dependency, because
    it is a native module and a `npx` that fails to install on a platform with no prebuilt
-   binary would be worse than one that renders a little less).
+   binary would be worse than one that renders a little less). Long-lived processes render
+   in a subprocess — see below.
 3. **`none`** — `sfx_validate`, `sfx_contract` and the bank tools still work. Anything
    that needs samples fails with one sentence saying which of the two to fix.
+
+### Why the native tier renders in a subprocess
+
+`node-web-audio-api@2.1.0` never frees an `OfflineAudioContext`. Its facade registers a
+state-change callback on the napi object (`js/OfflineAudioContext.js:83`), which roots the
+native context in a threadsafe function, and the offline context has no `close()` to
+release it — the library exposes one only on the online `AudioContext`. Measured: ~95 KB
+per construction and ~68 KB per render, invisible to V8 (`heapUsed` and `external` stay
+flat while RSS climbs) and untouched by a forced `global.gc()`. Two equal batches of a
+thousand cost +95.7 MB and +95.0 MB, which is what rules out allocator retention. Deleting
+that one registration in a decoupled copy drops it to ~4 bytes per context, so **the
+durable fix is upstream**; the subprocess is what the published bridge can do meanwhile,
+because the module is resolved by the user's own npm and left external to the bundle.
+
+It matters because renders are not rare: `sfx_fit` is a population per generation. The
+bridge's tool caps a search at 16 × 30, so ~480 renders and ~33 MB; a measured fit of
+`examples/laser` did 382 renders in 3.8 s and left 25.5 MB behind.
+
+A worker thread cannot substitute for a process — threads share the address space, and a
+parent measured at 52.5 MB went to 78.0 MB and *stayed* there after `terminate()`. A child
+returns everything (+0.6 MB, noise) at ~155 ms cold start.
+
+So `createChildRenderer` (`packages/bridge/src/render.ts`) forks `render-child.mjs`,
+sends canonical soundline text, and gets samples back over structured clone — 0.30 ms per
+round trip against 3.16 ms for JSON, on a ~10 ms render. It recycles the child every 400
+renders and releases an idle one after 60 s; both numbers are derived where they are
+defined. Measured end to end: a daemon rendering continuously sawtooths between ~81 and
+~120 MB instead of climbing without bound, and settles to ~29 MB when idle — below what it
+used to cost at rest, because the parent never loads the native module at all.
+
+`doctor` and the tests keep using the in-process renderer: one probe, no renders, nothing
+to tear down. If `render-child.mjs` is not found beside the bundle the bridge renders
+in-process and says so on startup — degraded and honest beats losing the tier.
 
 ## Wire protocol v1
 

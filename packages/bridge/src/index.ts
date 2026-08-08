@@ -114,13 +114,25 @@ export type { McpServer, McpServerOptions } from './mcp.js';
 export { TOOLS, TOOL_NAMES, runTool } from './tools.js';
 export type { ToolContext, ToolDefinition, ToolResult } from './tools.js';
 
-export { createNativeRenderer, resolveRenderer } from './render.js';
+export {
+  RENDER_BUDGET,
+  childEntryPath,
+  createChildRenderer,
+  createNativeRenderer,
+  resolveRenderer,
+} from './render.js';
 export type {
+  ChildRenderer,
+  ChildRendererOptions,
   NativeImporter,
   NativeRenderer,
   NativeRenderResult,
   RendererResolution,
 } from './render.js';
+
+export { serveRenders } from './render-child.js';
+export { RENDER_CHILD_ARG } from './render-protocol.js';
+export type { ChildRenderResult, ChildReply, ChildRequest } from './render-protocol.js';
 
 export {
   describeMode,

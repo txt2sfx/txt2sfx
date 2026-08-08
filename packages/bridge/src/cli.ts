@@ -46,7 +46,14 @@ import { PLAYGROUND_ORIGIN, createBridgeServer, remoteToolHub } from './http.js'
 import { log } from './log.js';
 import { createMcpServer } from './mcp.js';
 import { PROTOCOL_VERSION, looksLikeBridge, type HealthPayload } from './protocol.js';
-import { createNativeRenderer, resolveRenderer } from './render.js';
+import {
+  childEntryPath,
+  createChildRenderer,
+  createNativeRenderer,
+  resolveRenderer,
+  type ChildRenderer,
+  type NativeRenderer,
+} from './render.js';
 import { StableAudio, formatBytes } from './stable-audio.js';
 import { describeMode, ensureState, loadState, saveState, stateFilePath } from './state.js';
 import { TOOL_NAMES, type ToolContext } from './tools.js';
@@ -189,9 +196,32 @@ interface RunningBridge {
   close(): Promise<void>;
 }
 
+/**
+ * The renderer a long-lived process should use.
+ *
+ * A daemon renders thousands of times — `sfx_fit` alone is a population per
+ * generation — and `node-web-audio-api` never frees an `OfflineAudioContext`,
+ * so in-process rendering costs a daemon roughly 100 MB per search that it
+ * never gives back (`render-child.ts` has the measurements). The subprocess
+ * gives that memory back on every recycle.
+ *
+ * When the child's entry point is not on disk the bridge keeps rendering
+ * in-process and *says so*, rather than losing tier 2 altogether. That is the
+ * same judgement `renderSound` makes about clipping: an unusual install should
+ * degrade to something that works and reports what it cost, not to silence.
+ */
+function daemonRenderer(): { native: NativeRenderer; child: ChildRenderer | undefined } {
+  if (childEntryPath() === undefined) {
+    log('render subprocess not found next to the bridge — rendering in-process, so memory grows with each render.');
+    return { native: createNativeRenderer(), child: undefined };
+  }
+  const child = createChildRenderer({ log });
+  return { native: child, child };
+}
+
 /** Bind the daemon. Rejects with the listen error (EADDRINUSE included). */
 function startBridge(options: CliOptions, token: string): Promise<RunningBridge> {
-  const native = createNativeRenderer();
+  const { native, child } = daemonRenderer();
   /* One instance for the process: the lock inside it is what stops two renders from
      each taking twice as long, and torch takes every core a machine has. */
   const hub = new Hub({ version: VERSION, native, log, model: new StableAudio({ log }) });
@@ -218,6 +248,9 @@ function startBridge(options: CliOptions, token: string): Promise<RunningBridge>
         ctx,
         close: () =>
           new Promise<void>((resolveClose) => {
+            /* The render subprocess is not a child of the socket — nothing else
+               would ever reap it. */
+            child?.close();
             server.close(() => resolveClose());
             /* Keep-alive sockets would hold the close for minutes. */
             server.closeAllConnections();
@@ -227,7 +260,7 @@ function startBridge(options: CliOptions, token: string): Promise<RunningBridge>
   });
 }
 
-function toolContext(options: CliOptions, hub: ToolHub, native = createNativeRenderer()): ToolContext {
+function toolContext(options: CliOptions, hub: ToolHub, native: NativeRenderer): ToolContext {
   return {
     hub,
     native,
@@ -294,14 +327,20 @@ async function stdio(options: CliOptions): Promise<number> {
     }
     const hub = remoteToolHub(`http://127.0.0.1:${String(options.port)}`, state.token);
     log(`mcp: using the daemon on 127.0.0.1:${String(options.port)} (sampling needs an in-process hub and is off)`);
+    /* The daemon owns the tabs and the parked jobs, but the tools still *run*
+       here — `sfx_fit` against a `reference` renders in this process, not in the
+       daemon. So this session needs the recycling renderer just as much; an
+       agent that fits a few recipes over an afternoon is exactly the case. */
+    const { native, child } = daemonRenderer();
     const server = createMcpServer({
       input: process.stdin,
       output: process.stdout,
-      ctx: toolContext(options, hub),
+      ctx: toolContext(options, hub, native),
       version: VERSION,
       log,
     });
     await server.done;
+    child?.close();
     return 0;
   }
 

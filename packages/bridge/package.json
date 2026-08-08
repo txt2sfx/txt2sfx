@@ -17,6 +17,7 @@
   },
   "files": [
     "dist/txt2sfx-bridge.mjs",
+    "dist/render-child.mjs",
     "dist/stable-audio/run.py",
     "dist/stable-audio/requirements.txt",
     "README.md",
@@ -27,7 +28,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "bundle": "tsc -b && esbuild src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/txt2sfx-bridge.mjs --external:node-web-audio-api \"--banner:js=#!/usr/bin/env node\" && node scripts/pack-assets.mjs",
+    "bundle": "tsc -b && esbuild src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/txt2sfx-bridge.mjs --external:node-web-audio-api \"--banner:js=#!/usr/bin/env node\" && esbuild src/render-child.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/render-child.mjs --external:node-web-audio-api && node scripts/pack-assets.mjs",
     "prepack": "npm run bundle"
   },
   "devDependencies": {
