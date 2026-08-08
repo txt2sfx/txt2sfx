@@ -377,9 +377,7 @@ export const en = {
     'Sign in with your own freesound.org account. Their API answers for accounts, not for keys — and with yours connected the download button hands over the original file, not a preview. Read more at',
   'search.connected': 'freesound.org connected',
   'search.disconnect': 'disconnect',
-  'search.remember': 'stay connected',
-  'search.rememberTitle':
-    'Keeps the connection encrypted in this browser under a key that cannot be exported — never in localStorage. Off, it lasts as long as this tab.',
+  'search.connectedNote': 'kept in this browser until you disconnect',
   'search.noBank':
     'This bank has no freesound.org application configured, so it cannot connect an account. A bank set up for it offers the button here.',
   'search.needsConnection': 'Connect a freesound.org account above, then describe the sound and press Make sound.',

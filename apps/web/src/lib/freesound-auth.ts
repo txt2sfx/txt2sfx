@@ -14,18 +14,22 @@
  * is signed with a client secret that cannot ship to a browser. It stores nothing —
  * see `apps/server/src/routes/freesound.ts`, where the absence is a test.
  *
- * ## Where the tokens live
+ * ## Where the tokens live, and why keeping them is the default
  *
- * Here, in the tab, under the same rule as the model keys: React state while the tab is
- * open, and — only if the user ticks *remember* — encrypted under a non-extractable
- * `CryptoKey` in IndexedDB (`lib/keystore.ts` documents exactly what that does and does
- * not protect against). Never `localStorage`, which is the project's standing rule for
- * anything that is a secret.
+ * In this tab, and — unlike a pasted model key — **kept without being asked**, encrypted
+ * under a non-extractable `CryptoKey` in IndexedDB (`lib/keystore.ts` documents exactly
+ * what that does and does not protect against). Never `localStorage`, which is the
+ * project's standing rule for anything that is a secret.
  *
- * Remembering matters more here than it does for a model key, and that is worth saying
- * out loud rather than treating as a convenience: without it every reload costs a round
- * trip through freesound.org, and an access token only lives 24 hours anyway, so what is
- * really being kept is the refresh token.
+ * The difference from the model keys is not carelessness, it is that the two credentials
+ * are not alike. A vendor key is a bearer secret with a bill attached, pasted once, with
+ * no way to revoke it from inside this page — so keeping it is the user's call, made with
+ * a tick. This is an OAuth grant for the user's own Freesound account, created by a round
+ * trip they walked through themselves, scoped to that account, and revocable from two
+ * places: **Disconnect** here, which erases it, and their Freesound settings, which kills
+ * it everywhere. A connection that had to be re-established on every reload would not be
+ * a connection; it would be a ceremony. And what is actually being kept is the refresh
+ * token — the access token expires in 24 hours no matter what.
  *
  * ## The hand-off, and why the fragment is scrubbed
  *
@@ -69,8 +73,6 @@ export interface FreesoundConnection {
   readonly state: ConnectionState;
   /** Set when the last attempt failed: the bank's or the library's code, verbatim. */
   readonly error: string | null;
-  readonly remember: boolean;
-  readonly setRemember: (remember: boolean) => void;
   /** Send the browser to freesound.org to ask for permission. */
   readonly connect: () => void;
   /** Forget the tokens here and in the keystore. Freesound is not told; it cannot be. */
@@ -138,7 +140,6 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
   const { bankUrl } = options;
   const [state, setState] = useState<ConnectionState>('unknown');
   const [error, setError] = useState<string | null>(null);
-  const [remember, setRemember] = useState(false);
 
   /** The tokens, behind a ref: a token read must never be one render out of date. */
   const tokens = useRef<FreesoundTokens | null>(null);
@@ -154,16 +155,14 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
    */
   const call = useRef<typeof fetch>(options.fetchImpl ?? fetch.bind(globalThis));
 
-  const store = useCallback(
-    (next: FreesoundTokens | null, keep: boolean): void => {
-      tokens.current = next;
-      setState(next === null ? 'off' : 'on');
-      if (!canRemember) return;
-      if (next !== null && keep) void keystore.save(STORED_UNDER, JSON.stringify(next));
-      if (next === null || !keep) void keystore.forget(STORED_UNDER);
-    },
-    [],
-  );
+  /** Hold a connection, or drop one — in the tab and on disk, together. */
+  const store = useCallback((next: FreesoundTokens | null): void => {
+    tokens.current = next;
+    setState(next === null ? 'off' : 'on');
+    if (!canRemember) return;
+    if (next === null) void keystore.forget(STORED_UNDER);
+    else void keystore.save(STORED_UNDER, JSON.stringify(next));
+  }, []);
 
   /* Does this bank offer the connection, and is there one remembered? Both answers are
      needed before the panel can draw anything honest, and neither costs a round trip
@@ -181,8 +180,12 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
            connect anybody, and saying so is the honest state. */
       }
       if (cancelled) return;
+      /* Never downgrade what the return trip has already established. Both effects run
+         at mount and this one awaits a round trip, so a plain `setState` here lands
+         *after* a completed exchange and puts a connected tab back on the button — seen
+         the first time the whole flow was walked end to end. */
       if (!enabled) {
-        setState('unavailable');
+        setState((current) => (current === 'on' ? current : 'unavailable'));
         return;
       }
 
@@ -194,7 +197,6 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
             const parsed = JSON.parse(stored) as FreesoundTokens;
             if (typeof parsed.refreshToken === 'string' && parsed.refreshToken !== '') {
               tokens.current = parsed;
-              setRemember(true);
               setState('on');
               return;
             }
@@ -203,7 +205,7 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
           }
         }
       }
-      setState('off');
+      setState((current) => (current === 'unknown' ? 'off' : current));
     };
 
     void boot();
@@ -244,10 +246,7 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
           return;
         }
         setError(null);
-        /* Remembering is read out of the keystore's own state on the way back: the tick
-           the user made before leaving the page did not survive the round trip, and the
-           honest default for a credential is not to keep it. */
-        store(next, false);
+        store(next);
       } catch (failure: unknown) {
         setError(failure instanceof Error ? failure.message : String(failure));
         setState('off');
@@ -271,11 +270,11 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
         if (next === null) {
           /* A refresh token freesound no longer honours is a connection that is over.
              Saying so and showing the button beats retrying forever. */
-          store(null, false);
+          store(null);
           setError('expired');
           return null;
         }
-        store(next, remember);
+        store(next);
         return next.accessToken;
       } catch (failure: unknown) {
         setError(failure instanceof Error ? failure.message : String(failure));
@@ -287,7 +286,7 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
 
     refreshing.current = run;
     return run;
-  }, [bankUrl, remember, store]);
+  }, [bankUrl, store]);
 
   const token = useCallback(async (): Promise<string | null> => {
     const current = tokens.current;
@@ -303,26 +302,22 @@ export function useFreesoundAuth(options: FreesoundAuthOptions): FreesoundConnec
     window.location.href = `${bankUrl}/api/freesound/start?return=${encodeURIComponent(back)}`;
   }, [bankUrl]);
 
+  /**
+   * Forget the connection here, completely.
+   *
+   * Freesound is not told, because there is nothing to tell it: OAuth2 has no "revoke"
+   * in this flow, so the honest scope of this button is *this browser*. The tokens go
+   * from the tab and from the keystore in one call, and the panel says where the other
+   * half of the revocation lives.
+   */
   const disconnect = useCallback(() => {
-    store(null, false);
+    store(null);
     setError(null);
   }, [store]);
-
-  /* Ticking *remember* has to act on what is already connected, not only on the next
-     connection — otherwise the box is a promise about a future the user is not in. */
-  const rememberChanged = useCallback(
-    (next: boolean): void => {
-      setRemember(next);
-      if (tokens.current !== null) store(tokens.current, next);
-    },
-    [store],
-  );
 
   return {
     state,
     error,
-    remember,
-    setRemember: rememberChanged,
     connect,
     disconnect,
     token,

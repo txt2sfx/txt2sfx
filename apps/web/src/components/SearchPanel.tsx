@@ -570,15 +570,11 @@ function Connection({ connection }: { readonly connection: LibrarySearch['connec
       {state === 'on' ? (
         <>
           <span className="mono ok">● {t('search.connected')}</span>
-          <label className="toggle" title={t('search.rememberTitle')}>
-            <input
-              type="checkbox"
-              name="remember-freesound"
-              checked={connection.remember}
-              onChange={(event) => connection.setRemember(event.target.checked)}
-            />
-            {t('search.remember')}
-          </label>
+          {/* No tick to keep it: the connection is kept, and this line says so. What the
+              user gets instead of a checkbox is the sentence and the button that undoes
+              it — a promise about what is stored is worth more than a control that has
+              to be found and understood before the first search. */}
+          <span className="caption">{t('search.connectedNote')}</span>
           <div className="spacer" />
           <button type="button" className="link" onClick={connection.disconnect}>
             {t('search.disconnect')}
