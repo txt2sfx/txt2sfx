@@ -17,7 +17,9 @@
     /* Tests import workspace packages by name and must resolve to sources, exactly
        as the vitest aliases do. Resolving to `dist` instead would check the tests
        against the last build rather than the current code. */
-    "baseUrl": ".",
+    /* No `baseUrl`: TypeScript 7 removed it, and these paths never needed it —
+       since 5.0 a `paths` entry is resolved against the directory of the config
+       that declares it, which is this one. */
     "paths": {
       "@txt2sfx/shared": ["./packages/shared/src/index.ts"],
       "@txt2sfx/core": ["./packages/core/src/index.ts"],

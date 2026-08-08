@@ -15,7 +15,9 @@
     /* The app resolves the workspace packages to their sources, exactly like
        `vite.config.ts` and `vitest.config.ts` do: a change in `core` is visible
        here without a build step, and there is no stale `dist/` to explain. */
-    "baseUrl": ".",
+    /* No `baseUrl`: TypeScript 7 removed it, and these paths never needed it —
+       since 5.0 a `paths` entry is resolved against the directory of the config
+       that declares it, which is this one. */
     "paths": {
       "@txt2sfx/shared": ["../../packages/shared/src/index.ts"],
       "@txt2sfx/core": ["../../packages/core/src/index.ts"],
