@@ -9,22 +9,22 @@ importers:
   .:
     devDependencies:
       '@types/node':
-        specifier: ^22.10.2
+        specifier: ^22.20.1
         version: 22.20.1
       node-web-audio-api:
         specifier: ^2.1.0
         version: 2.1.0
       typescript:
-        specifier: ^5.7.2
+        specifier: ^5.9.3
         version: 5.9.3
       vitest:
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.20.1)
 
   apps/server:
     dependencies:
       '@fastify/cors':
-        specifier: ^10.0.1
+        specifier: ^10.1.0
         version: 10.1.0
       '@txt2sfx/agent':
         specifier: workspace:*
@@ -39,8 +39,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       fastify:
-        specifier: ^5.2.0
-        version: 5.11.2
+        specifier: ^5.11.3
+        version: 5.11.3
       node-web-audio-api:
         specifier: ^2.1.0
         version: 2.1.0
@@ -48,11 +48,11 @@ importers:
   apps/web:
     dependencies:
       '@mediabunny/aac-encoder':
-        specifier: ^1.52.3
-        version: 1.52.3(mediabunny@1.52.3)
+        specifier: ^1.53.0
+        version: 1.53.0(mediabunny@1.53.0)
       '@mediabunny/mp3-encoder':
-        specifier: ^1.52.3
-        version: 1.52.3(mediabunny@1.52.3)
+        specifier: ^1.53.0
+        version: 1.53.0(mediabunny@1.53.0)
       '@txt2sfx/agent':
         specifier: workspace:*
         version: link:../../packages/agent
@@ -69,26 +69,26 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       mediabunny:
-        specifier: ^1.52.3
-        version: 1.52.3
+        specifier: ^1.53.0
+        version: 1.53.0
       react:
-        specifier: ^19.0.0
+        specifier: ^19.2.8
         version: 19.2.8
       react-dom:
-        specifier: ^19.0.0
+        specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
     devDependencies:
       '@types/react':
-        specifier: ^19.0.2
+        specifier: ^19.2.18
         version: 19.2.18
       '@types/react-dom':
-        specifier: ^19.0.2
+        specifier: ^19.2.4
         version: 19.2.4(@types/react@19.2.18)
       '@vitejs/plugin-react':
-        specifier: ^4.3.4
+        specifier: ^4.7.0
         version: 4.7.0(vite@5.4.21(@types/node@22.20.1))
       vite:
-        specifier: ^5.4.11
+        specifier: ^5.4.21
         version: 5.4.21(@types/node@22.20.1)
 
   bench:
@@ -552,8 +552,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fastify/ajv-compiler@4.0.5':
-    resolution: {integrity: sha512-KoWKW+MhvfTRWL4qrhUwAAZoaChluo0m0vbiJlGMt2GXvL4LVPQEjt8kSpHI3IBq5Rez8fg+XeH3cneztq+C7A==}
+  '@fastify/ajv-compiler@4.0.6':
+    resolution: {integrity: sha512-NtuzM0SfaMJbGlnjr9LWQUN5LzgSrbB8tf/wRZNas+4E1O/Nmzl53e7ruT61HDZyRCJGC6FxIogmNZO1c5ETBA==}
 
   '@fastify/cors@10.1.0':
     resolution: {integrity: sha512-MZyBCBJtII60CU9Xme/iE4aEy8G7QpzGR8zkdXZkDFt7ElEMachbE61tfhAG/bvSaULlqlf0huMT12T7iqEmdQ==}
@@ -589,13 +589,13 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@mediabunny/aac-encoder@1.52.3':
-    resolution: {integrity: sha512-XzKZGssgu4I2zP24VjphYnIZcG9uw0Vrdjzuf46OVBh9Z9IsSpdWCNt5WiyghT6sJ0tUOgQgql75oQcYy5OVzQ==}
+  '@mediabunny/aac-encoder@1.53.0':
+    resolution: {integrity: sha512-y32WtF8RwCT3fdBAV9NaW2FqeZmKVZqt7uP9MxHQWLafleT4JRHdZ1qa3AbWROoy55a4STlT3M44YbsVzhe45w==}
     peerDependencies:
       mediabunny: ^1.0.0
 
-  '@mediabunny/mp3-encoder@1.52.3':
-    resolution: {integrity: sha512-UHPWuxRo8i1UPcdUPN5g4eI0CAozJ3uUgYWQYEkiUdt+4c2UAMIzN4c0hevqr83hXf6GAXx4egmPOikMj2NGzw==}
+  '@mediabunny/mp3-encoder@1.53.0':
+    resolution: {integrity: sha512-kACSIhMBORDLLYwNMwumAzFUEL9sa+2lkoHukTeIqN7PjceuM97SqHMeWJwOTOQ3cjTEJRrP04MSSnKIm0Rsrw==}
     peerDependencies:
       mediabunny: ^1.0.0
 
@@ -828,13 +828,13 @@ packages:
   avvio@9.3.0:
     resolution: {integrity: sha512-g2tQ7LE7oOSqDfwEm3M+ZCMTJc7KiZCdJ4UwyZJb5ckTKyYu50OYmvv0mCFXPuYXoM4zkSt8zM9XQ9KCvxA74A==}
 
-  baseline-browser-mapping@2.11.12:
-    resolution: {integrity: sha512-r7WnVImvVCeFpf2DOXfy41aPWzeNg3H/A2X4dKmy1QL0MSyyk/e7z8ihJ3N6Nn2PsdhkVlqnEfnUE4a05P2aTA==}
+  baseline-browser-mapping@2.11.13:
+    resolution: {integrity: sha512-k9HNuUVMlqVjQ9UHzfPjIqiDbWw7WqT1AoT7GL8VwvF3r0ZfArtgiSPAlmupyNquNgOJHTuH4CKYf8ttMTWBTQ==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  browserslist@4.28.7:
-    resolution: {integrity: sha512-JxV13hNrFxqjOc8alRbq9dK1MM79NEXYpma2B2J4wAtpWS5zIEIKqWPGCl7N4o7Uc7B7itylh7SuDujATRyyTw==}
+  browserslist@4.28.8:
+    resolution: {integrity: sha512-V2NpofLblG64mfOtSgDhOJESZEGogzDMBv/q+W6oc4LXWP/q75eOXoOaaOu1EOadB9U4Bwx/e0yzbvwKH8zalA==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
 
@@ -845,8 +845,8 @@ packages:
   caller@1.1.0:
     resolution: {integrity: sha512-n+21IZC3j06YpCWaxmUy5AnVqhmCIM2bQtqQyy00HJlmStRt6kwDX5F9Z97pqwAB+G/tgSz6q/kUBbNyQzIubw==}
 
-  caniuse-lite@1.0.30001806:
-    resolution: {integrity: sha512-72Cuvd95zbSYPKq6Fhg8eDJRlzgWDf7/mtoZv6Qe/DYNCEBdNxoA3+rZAU2ZhGCpZlns3EssFavaZomckT5Uuw==}
+  caniuse-lite@1.0.30001809:
+    resolution: {integrity: sha512-xxWVywk6a6Arlk+hymeycyn/VgqEfLDxupvhH/xiY5SJ/18kmi9o6MiO320DCUzypORHLtvh0I4i04tUhCNHNQ==}
 
   chai@5.3.3:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
@@ -887,8 +887,8 @@ packages:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
     engines: {node: '>=6'}
 
-  electron-to-chromium@1.5.400:
-    resolution: {integrity: sha512-96EWDNjM59SYflgeV5Ylsf4EMiq1a25YjCnJH7cxn/AF2H3pILRweaUnoLax0yKHWdpOzY6JKEu45e8irqZIHA==}
+  electron-to-chromium@1.5.402:
+    resolution: {integrity: sha512-/oOpMaPT6Yg+6/1XQhyIPlzgj7Ye9zf+nNM2Uh6OcE2G2oNptWazFa+qB2Pdqqbsc9KnIDzgAntoYN0dbwOXwA==}
 
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
@@ -935,8 +935,8 @@ packages:
   fastify-plugin@5.1.0:
     resolution: {integrity: sha512-FAIDA8eovSt5qcDgcBvDuX/v0Cjz0ohGhENZ/wpc3y+oZCY2afZ9Baqql3g/lC+OHRnciQol4ww7tuthOb9idw==}
 
-  fastify@5.11.2:
-    resolution: {integrity: sha512-i/eJG7nXR9OkbFgoX4jFiPOHoRq0rXqDACVAXELh5Fdg6BFBErIVZ8MyibGCwup9Go1pYrxZJ0ogIub8vVdEcQ==}
+  fastify@5.11.3:
+    resolution: {integrity: sha512-W6hzDP8s0iSeL7LGwY6Oc/ZxuXWOvFEMs6p2L0Si415YRo27W5pBKdOTXxhemBDeSTAcpYf5evRA9onF2OYhPA==}
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
@@ -997,8 +997,8 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
-  mediabunny@1.52.3:
-    resolution: {integrity: sha512-rMGwH5fykDCSA55LG9aWkE433wwHrycq3J5mRf+djBnHBZzmJGvIwg6Qfcfr4rRkzkmrdmewxQozLkOM1H1C6Q==}
+  mediabunny@1.53.0:
+    resolution: {integrity: sha512-RjWe9yJr9MPvb6kX4gSu54fZD2w1yf6RyCS0Jmgaml+fFSqEr7+XuASXoRxSqJxgc+wIe+7TujXWcyj3evJ3Bg==}
 
   mnemonist@0.40.0:
     resolution: {integrity: sha512-kdd8AFNig2AD5Rkih7EPCXhu/iMvwevQFX/uEiGhZyPZi7fHqOoF4V4kHLpCfysxXMgQ4B52kdPMCwARshKvEg==}
@@ -1006,8 +1006,8 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  nanoid@3.3.17:
-    resolution: {integrity: sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g==}
+  nanoid@3.3.18:
+    resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -1020,8 +1020,8 @@ packages:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
-  node-releases@2.0.52:
-    resolution: {integrity: sha512-MRlTqhAfoMx/4mhEbPo3Hi02g9LJZaJkka69V6h67Cb1gjrAG0jsTE4CZX1eptNx+VCAwJmfpnDIF4P0Nh1A7A==}
+  node-releases@2.0.53:
+    resolution: {integrity: sha512-D9UOmYG3UH1V+ENW56t5QXBwJw1YEY18ruVeus89Rw+SyIgjPkCO84bRzO3uNIYosJbNwiabWVn48o3uJLjxFQ==}
     engines: {node: '>=18'}
 
   node-web-audio-api@2.1.0:
@@ -1055,8 +1055,8 @@ packages:
     resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
     hasBin: true
 
-  postcss@8.5.25:
-    resolution: {integrity: sha512-DTPx3RWSSnWyzLxQnlH0rJP+EW5ekl16ZU4/psbIhA0e53kJfdgaN5vKM+xP7yJtXVu+nfdVFmlgFDEKAe4Pyw==}
+  postcss@8.5.26:
+    resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
 
   process-warning@4.0.1:
@@ -1188,8 +1188,8 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  update-browserslist-db@1.2.3:
-    resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
+  update-browserslist-db@1.3.0:
+    resolution: {integrity: sha512-x/M6q3w4Ybp91CNaS4S69UnliqR3BzRpOT6LWbksjth0S/+jhfaPJsWjt/TewpT8j9eLIojUf5jr29WextHroA==}
     hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
@@ -1313,7 +1313,7 @@ snapshots:
     dependencies:
       '@babel/compat-data': 7.29.7
       '@babel/helper-validator-option': 7.29.7
-      browserslist: 4.28.7
+      browserslist: 4.28.8
       lru-cache: 5.1.1
       semver: 6.3.1
 
@@ -1529,11 +1529,11 @@ snapshots:
   '@esbuild/win32-x64@0.24.2':
     optional: true
 
-  '@fastify/ajv-compiler@4.0.5':
+  '@fastify/ajv-compiler@4.0.6':
     dependencies:
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
-      fast-uri: 3.1.5
+      fast-uri: 4.1.2
 
   '@fastify/cors@10.1.0':
     dependencies:
@@ -1576,13 +1576,13 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@mediabunny/aac-encoder@1.52.3(mediabunny@1.52.3)':
+  '@mediabunny/aac-encoder@1.53.0(mediabunny@1.53.0)':
     dependencies:
-      mediabunny: 1.52.3
+      mediabunny: 1.53.0
 
-  '@mediabunny/mp3-encoder@1.52.3(mediabunny@1.52.3)':
+  '@mediabunny/mp3-encoder@1.53.0(mediabunny@1.53.0)':
     dependencies:
-      mediabunny: 1.52.3
+      mediabunny: 1.53.0
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
@@ -1781,21 +1781,21 @@ snapshots:
       '@fastify/error': 4.2.0
       fastq: 1.20.1
 
-  baseline-browser-mapping@2.11.12: {}
+  baseline-browser-mapping@2.11.13: {}
 
-  browserslist@4.28.7:
+  browserslist@4.28.8:
     dependencies:
-      baseline-browser-mapping: 2.11.12
-      caniuse-lite: 1.0.30001806
-      electron-to-chromium: 1.5.400
-      node-releases: 2.0.52
-      update-browserslist-db: 1.2.3(browserslist@4.28.7)
+      baseline-browser-mapping: 2.11.13
+      caniuse-lite: 1.0.30001809
+      electron-to-chromium: 1.5.402
+      node-releases: 2.0.53
+      update-browserslist-db: 1.3.0(browserslist@4.28.8)
 
   cac@6.7.14: {}
 
   caller@1.1.0: {}
 
-  caniuse-lite@1.0.30001806: {}
+  caniuse-lite@1.0.30001809: {}
 
   chai@5.3.3:
     dependencies:
@@ -1823,7 +1823,7 @@ snapshots:
 
   dequal@2.0.3: {}
 
-  electron-to-chromium@1.5.400: {}
+  electron-to-chromium@1.5.402: {}
 
   es-module-lexer@1.7.0: {}
 
@@ -1912,9 +1912,9 @@ snapshots:
 
   fastify-plugin@5.1.0: {}
 
-  fastify@5.11.2:
+  fastify@5.11.3:
     dependencies:
-      '@fastify/ajv-compiler': 4.0.5
+      '@fastify/ajv-compiler': 4.0.6
       '@fastify/error': 4.2.0
       '@fastify/fast-json-stringify-compiler': 5.1.0
       '@fastify/proxy-addr': 5.1.0
@@ -1984,7 +1984,7 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  mediabunny@1.52.3:
+  mediabunny@1.53.0:
     dependencies:
       '@types/dom-mediacapture-transform': 0.1.12
       '@types/dom-webcodecs': 0.1.13
@@ -1995,7 +1995,7 @@ snapshots:
 
   ms@2.1.3: {}
 
-  nanoid@3.3.17: {}
+  nanoid@3.3.18: {}
 
   node-domexception@1.0.0: {}
 
@@ -2005,7 +2005,7 @@ snapshots:
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
 
-  node-releases@2.0.52: {}
+  node-releases@2.0.53: {}
 
   node-web-audio-api@2.1.0:
     dependencies:
@@ -2043,9 +2043,9 @@ snapshots:
       sonic-boom: 4.2.1
       thread-stream: 4.2.0
 
-  postcss@8.5.25:
+  postcss@8.5.26:
     dependencies:
-      nanoid: 3.3.17
+      nanoid: 3.3.18
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -2158,9 +2158,9 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  update-browserslist-db@1.2.3(browserslist@4.28.7):
+  update-browserslist-db@1.3.0(browserslist@4.28.8):
     dependencies:
-      browserslist: 4.28.7
+      browserslist: 4.28.8
       escalade: 3.2.0
       picocolors: 1.1.1
 
@@ -2185,7 +2185,7 @@ snapshots:
   vite@5.4.21(@types/node@22.20.1):
     dependencies:
       esbuild: 0.21.5
-      postcss: 8.5.25
+      postcss: 8.5.26
       rollup: 4.62.4
     optionalDependencies:
       '@types/node': 22.20.1

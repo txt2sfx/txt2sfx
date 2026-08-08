@@ -12,21 +12,21 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json"
   },
   "dependencies": {
-    "@mediabunny/aac-encoder": "^1.52.3",
-    "@mediabunny/mp3-encoder": "^1.52.3",
+    "@mediabunny/aac-encoder": "^1.53.0",
+    "@mediabunny/mp3-encoder": "^1.53.0",
     "@txt2sfx/agent": "workspace:*",
     "@txt2sfx/analyzer": "workspace:*",
     "@txt2sfx/core": "workspace:*",
     "@txt2sfx/optimizer": "workspace:*",
     "@txt2sfx/shared": "workspace:*",
-    "mediabunny": "^1.52.3",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "mediabunny": "^1.53.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^5.4.11"
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^5.4.21"
   }
 }
