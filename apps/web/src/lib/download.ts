@@ -153,6 +153,29 @@ export const LOOP_FORMATS: readonly Format[] = [
 ];
 
 /**
+ * What the Search tab offers next to somebody else's recording.
+ *
+ * A fourth list rather than a filter, for the same reason the loop has one: the entry
+ * that matters most here does not exist anywhere else. **Original** hands over the file
+ * as the uploader made it — their WAV, their FLAC, at their sample rate — and it is
+ * first because it is the honest default for a reference: every other entry is this
+ * project decoding somebody's work and re-encoding it, which is a loss taken for
+ * convenience and should read as a choice rather than as the only option.
+ *
+ * `js` and `soundline` are absent for the reason they are absent from the model's menu:
+ * there is no recipe behind a recording, and offering them would export the *editor's*
+ * under a stranger's file name.
+ *
+ * The extension is empty because only the caller knows it — it comes from the library's
+ * own `type` field, per sound. Nothing in {@link download} handles this id; the Search
+ * panel saves the bytes it fetched, untouched.
+ */
+export const LIBRARY_FORMATS: readonly Format[] = [
+  { id: 'original', label: 'Original · as uploaded', short: 'original', extension: '', mime: '', kind: 'audio' },
+  ...AUDIO_FORMATS,
+];
+
+/**
  * What is preselected before anyone has chosen, and the fallback for anything unreadable.
  *
  * Present in both lists on purpose — a default that only one of the two menus can offer
@@ -182,19 +205,21 @@ export function formatById(id: string, from: readonly Format[] = FORMATS): Forma
  * ------------------------------------------------------------------------- */
 
 /** Which menu is asking. No two share a preference — see the header. */
-export type FormatScope = 'sound' | 'model' | 'loop';
+export type FormatScope = 'sound' | 'model' | 'loop' | 'library';
 
 /** Versioned, so a change to the list of ids is a fresh start rather than a stuck menu. */
 const STORAGE_KEY: Readonly<Record<FormatScope, string>> = {
   sound: 'txt2sfx.format.v1',
   model: 'txt2sfx.format.model.v1',
   loop: 'txt2sfx.format.loop.v1',
+  library: 'txt2sfx.format.library.v1',
 };
 
 /** The list each scope's menu offers, which is also what its stored id is checked against. */
 export function formatsFor(scope: FormatScope): readonly Format[] {
   if (scope === 'model') return AUDIO_FORMATS;
   if (scope === 'loop') return LOOP_FORMATS;
+  if (scope === 'library') return LIBRARY_FORMATS;
   return FORMATS;
 }
 
@@ -212,8 +237,23 @@ export function loadFormat(scope: FormatScope): string {
   } catch {
     /* Nothing to do and nothing worth saying. */
   }
-  return DEFAULT_FORMAT_ID;
+  return DEFAULT_BY_SCOPE[scope];
 }
+
+/**
+ * What each menu starts on.
+ *
+ * MP3 everywhere the bytes are ours to make — the first press of a download button is
+ * nearly always "send this to someone". The library is the exception: those bytes are
+ * somebody else's, and re-encoding a stranger's recording before anyone asked is a
+ * quality loss taken on their behalf. So it starts on the file they uploaded.
+ */
+const DEFAULT_BY_SCOPE: Readonly<Record<FormatScope, string>> = {
+  sound: DEFAULT_FORMAT_ID,
+  model: DEFAULT_FORMAT_ID,
+  loop: DEFAULT_FORMAT_ID,
+  library: 'original',
+};
 
 /** Remember this choice for next time. Silent on failure, for the same reason. */
 export function saveFormat(scope: FormatScope, id: string): void {

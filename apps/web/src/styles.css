@@ -1411,6 +1411,32 @@ input[type='range'] {
 .split.amber .split-toggle:hover:not(:disabled) {
   background: oklch(0.26 0.022 var(--amber));
 }
+.split.green .split-format {
+  color: oklch(0.84 0.11 var(--green));
+}
+.split.green .split-main:hover:not(:disabled),
+.split.green .split-toggle:hover:not(:disabled) {
+  background: oklch(0.26 0.022 var(--green));
+}
+/* One per result row, so it has to be a control rather than a piece of furniture:
+   shorter, tighter, and with the menu opening from the right edge because a row's
+   copy sits against it. */
+.split.compact .split-body {
+  height: 28px;
+}
+.split.compact .split-main {
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+.split.compact .split-format {
+  font-size: 10px;
+}
+.split.compact .menu {
+  top: 33px;
+  left: auto;
+  right: 0;
+}
 
 .menu {
   position: absolute;
@@ -2126,6 +2152,21 @@ input[type='range'] {
 .library-play.playing {
   border-color: oklch(0.44 0.08 var(--green));
   background: oklch(0.26 0.045 var(--green));
+}
+/* Fixed width, so thirty envelopes are read against each other rather than each
+   against its own row. Small enough that a 47-second bed and a 300 ms hit are still
+   distinguishable at a glance, which is the whole job. */
+.library-wave {
+  flex: none;
+  width: 96px;
+  height: 26px;
+  gap: 1px;
+}
+/* The head is cyan everywhere else because everywhere else it sweeps our own render.
+   Here it sweeps somebody's recording, and the row is green. */
+.library-wave .bars-head {
+  background: oklch(0.94 0.09 var(--green));
+  box-shadow: 0 0 12px oklch(0.85 0.14 var(--green));
 }
 .library-main {
   flex: 1 1 auto;

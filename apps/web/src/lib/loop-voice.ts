@@ -91,14 +91,14 @@ function kit(note: LoopNote, context: VoiceContext): string {
     case DRUM.kick:
       return [
         `sound "kick" 260ms`,
-        `  body: sub 92Hz -> 44Hz in 80ms | gain ${n(note.gain * 0.95)} decay 210ms`,
+        `  body: sub 92Hz -> 44Hz in 80ms | gain ${n(note.gain * 0.88)} decay 210ms`,
         `  snap: click 3ms | gain ${n(note.gain * 0.22)} decay 16ms`,
       ].join('\n');
     case DRUM.snare:
       return [
         `sound "snare" 240ms`,
-        `  crack: noise white >> hp ${cutoff(1500, context, 400, 6000)} | gain ${n(note.gain * 0.5)} decay 130ms`,
-        `  body: tone tri 190Hz | gain ${n(note.gain * 0.24)} decay 85ms`,
+        `  crack: noise white >> hp ${cutoff(1500, context, 400, 6000)} | gain ${n(note.gain * 0.68)} decay 130ms`,
+        `  body: tone tri 190Hz | gain ${n(note.gain * 0.26)} decay 85ms`,
       ].join('\n');
     case DRUM.clap:
       return [
@@ -108,17 +108,17 @@ function kit(note: LoopNote, context: VoiceContext): string {
     case DRUM.hatClosed:
       return [
         `sound "hat" 90ms`,
-        `  ts: noise white >> hp ${cutoff(7000, context, 2000, 16000)} | gain ${n(note.gain * 0.55)} decay 42ms`,
+        `  ts: noise white >> hp ${cutoff(7000, context, 2000, 16000)} | gain ${n(note.gain * 0.85)} decay 42ms`,
       ].join('\n');
     case DRUM.hatOpen:
       return [
         `sound "hat-open" 340ms`,
-        `  ts: noise white >> hp ${cutoff(6000, context, 2000, 16000)} | gain ${n(note.gain * 0.42)} decay 300ms`,
+        `  ts: noise white >> hp ${cutoff(6000, context, 2000, 16000)} | gain ${n(note.gain * 0.7)} decay 300ms`,
       ].join('\n');
     default:
       return [
         `sound "tick" 130ms`,
-        `  knock: modal wood ${cutoff(900, context, 200, 5000)} Q60 | gain ${n(note.gain * 0.7)} decay 95ms`,
+        `  knock: modal wood ${cutoff(900, context, 200, 5000)} Q60 | gain ${n(note.gain * 0.95)} decay 95ms`,
       ].join('\n');
   }
 }
@@ -132,7 +132,7 @@ function bass(note: LoopNote, context: VoiceContext): string {
   const freq = midiToHz(note.midi);
   return [
     `sound "bass" ${String(ms)}ms`,
-    `  body: tone saw ${hz(freq, 20, 4000)} >> lp ${cutoff(freq * 7, context, 120, 6000)} | gain ${n(note.gain * 0.6)} attack 4ms decay ${String(ms)}ms`,
+    `  body: tone saw ${hz(freq, 20, 4000)} >> lp ${cutoff(freq * 7, context, 120, 6000)} | gain ${n(note.gain * 0.85)} attack 4ms decay ${String(ms)}ms`,
   ].join('\n');
 }
 
@@ -142,7 +142,7 @@ function pluck(note: LoopNote, context: VoiceContext): string {
      line to tune. Notes that low belong to the bass lane and never reach here. */
   return [
     `sound "pluck" ${String(ms)}ms`,
-    `  string: pluck ${hz(midiToHz(note.midi), 40, 8000)} damp ${n(0.45 - context.brightness * 0.2)} bright ${n(0.55 + context.brightness * 0.25)} | gain ${n(note.gain * 0.55)} decay ${String(ms)}ms`,
+    `  string: pluck ${hz(midiToHz(note.midi), 40, 8000)} damp ${n(0.45 - context.brightness * 0.2)} bright ${n(0.55 + context.brightness * 0.25)} | gain ${n(note.gain * 0.85)} decay ${String(ms)}ms`,
   ].join('\n');
 }
 
@@ -150,7 +150,7 @@ function bell(note: LoopNote, context: VoiceContext): string {
   const ms = voiceMs(note, context, 2.2);
   return [
     `sound "bell" ${String(ms)}ms`,
-    `  ring: fm ${hz(midiToHz(note.midi), 20, 8000)} ratio 3.5 index ${n(3.5 + context.brightness * 2)} | gain ${n(note.gain * 0.42)} decay ${String(ms)}ms`,
+    `  ring: fm ${hz(midiToHz(note.midi), 20, 8000)} ratio 3.5 index ${n(3.5 + context.brightness * 2)} | gain ${n(note.gain * 0.75)} decay ${String(ms)}ms`,
   ].join('\n');
 }
 
@@ -159,7 +159,7 @@ function lead(note: LoopNote, context: VoiceContext): string {
   const freq = midiToHz(note.midi);
   return [
     `sound "lead" ${String(ms)}ms`,
-    `  body: tone square ${hz(freq, 20, 8000)} >> lp ${cutoff(freq * 4, context, 300, 16000)} | gain ${n(note.gain * 0.42)} attack 6ms decay ${String(ms)}ms`,
+    `  body: tone square ${hz(freq, 20, 8000)} >> lp ${cutoff(freq * 4, context, 300, 16000)} | gain ${n(note.gain * 0.7)} attack 6ms decay ${String(ms)}ms`,
   ].join('\n');
 }
 
@@ -170,8 +170,8 @@ function pad(note: LoopNote, context: VoiceContext): string {
      a buzzer, and the beating between them is what the ear reads as width. */
   return [
     `sound "pad" ${String(ms)}ms`,
-    `  a: tone saw ${hz(freq, 20, 6000)} >> lp ${cutoff(freq * 5, context, 200, 12000)} | gain ${n(note.gain * 0.34)} attack ${String(Math.round(ms * 0.28))}ms decay ${String(ms)}ms`,
-    `  b: tone saw ${hz(freq * 1.006, 20, 6000)} >> lp ${cutoff(freq * 4, context, 200, 12000)} | gain ${n(note.gain * 0.28)} attack ${String(Math.round(ms * 0.34))}ms decay ${String(ms)}ms`,
+    `  a: tone saw ${hz(freq, 20, 6000)} >> lp ${cutoff(freq * 5, context, 200, 12000)} | gain ${n(note.gain * 0.6)} attack ${String(Math.round(ms * 0.28))}ms decay ${String(ms)}ms`,
+    `  b: tone saw ${hz(freq * 1.006, 20, 6000)} >> lp ${cutoff(freq * 4, context, 200, 12000)} | gain ${n(note.gain * 0.5)} attack ${String(Math.round(ms * 0.34))}ms decay ${String(ms)}ms`,
   ].join('\n');
 }
 
@@ -179,7 +179,7 @@ function air(note: LoopNote, context: VoiceContext): string {
   const ms = voiceMs(note, context, 1);
   return [
     `sound "air" ${String(ms)}ms`,
-    `  wash: noise pink >> bp ${cutoff(midiToHz(note.midi), context, 200, 12000)} Q1.5 | gain ${n(note.gain * 0.4)} attack ${String(Math.round(ms * 0.35))}ms decay ${String(ms)}ms`,
+    `  wash: noise pink >> bp ${cutoff(midiToHz(note.midi), context, 200, 12000)} Q1.5 | gain ${n(note.gain * 0.75)} attack ${String(Math.round(ms * 0.35))}ms decay ${String(ms)}ms`,
   ].join('\n');
 }
 
@@ -194,27 +194,40 @@ function air(note: LoopNote, context: VoiceContext): string {
  * lets `lib/loop-render.ts` cache renders by the text itself and what lets the export
  * deduplicate voices without a second identity scheme.
  *
+ * ## Where the balance between lanes is applied
+ *
+ * Here, once, from `LaneSpec.level` — and nowhere else. The note carries the *musical*
+ * velocity, which is what the MIDI export writes and what a listener would call an
+ * accent; the lane's level is a *mix* decision, which is why a shaker at full velocity
+ * still sits under a kick at the same one. Keeping them apart is what stops a mix
+ * adjustment from silently rewriting the exported MIDI.
+ *
+ * The multipliers inside each template stay where they are: those are ratios *within*
+ * one voice — a kick's click against its body — and they are part of what the instrument
+ * is, not of how loud it is in this arrangement.
+ *
  * An unknown lane returns the pluck template rather than throwing. A missing lane is a
  * table gap, and a soundtrack with one lane playing the wrong instrument is a bug you
  * can hear and fix; an exception in the middle of composing is a blank screen.
  */
 export function voiceFor(laneName: string, note: LoopNote, context: VoiceContext): string {
-  const family = LANES[laneName]?.family ?? 'pluck';
-  switch (family) {
+  const spec = LANES[laneName];
+  const mixed: LoopNote = { ...note, gain: Math.max(0.01, Math.min(1, note.gain * (spec?.level ?? 0.5))) };
+  switch (spec?.family ?? 'pluck') {
     case 'kit':
-      return kit(note, context);
+      return kit(mixed, context);
     case 'bass':
-      return bass(note, context);
+      return bass(mixed, context);
     case 'bell':
-      return bell(note, context);
+      return bell(mixed, context);
     case 'lead':
-      return lead(note, context);
+      return lead(mixed, context);
     case 'pad':
-      return pad(note, context);
+      return pad(mixed, context);
     case 'air':
-      return air(note, context);
+      return air(mixed, context);
     case 'pluck':
     default:
-      return pluck(note, context);
+      return pluck(mixed, context);
   }
 }

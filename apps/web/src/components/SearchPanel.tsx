@@ -19,7 +19,7 @@
  * forbid answering for people who are not logged in to Freesound themselves, and what
  * their settings hand out is an *application*, not a per-person key. So the panel asks
  * the user to connect their own account, and the payoff is not only compliance: the
- * download button can then hand over the **original** file, which a pasted key never
+ * download menu can then hand over the **original** file, which a pasted key never
  * could — that endpoint is OAuth2-only.
  *
  * ## What each control is for
@@ -40,6 +40,23 @@
  * Changing either re-runs the search and spends no model call: the words and the
  * ranking notes are kept and reapplied by id. See `lib/useSearch.ts`.
  *
+ * ## Why every row draws a waveform, and how it affords to
+ *
+ * Because the list is answering *which of these is the sound*, and thirty names in a
+ * column answer that badly: `door_slam_heavy.wav` and `door ambience` differ in one
+ * respect that matters — one is a hit and the other is a bed — and that difference is
+ * visible in a hundred pixels of envelope before anything is played. It is the same
+ * argument the gallery card makes, so it uses the same renderer.
+ *
+ * The affording is the interesting half. Drawing means decoding, decoding means
+ * fetching the whole preview, and thirty of those at once on a search is megabytes
+ * nobody asked for. So a row asks for its waveform only when it is **on screen**
+ * (`IntersectionObserver`), at most {@link DECODE_LIMIT} at a time, once per sound and
+ * never again — a failed decode is remembered as a failure rather than retried
+ * forever. Until then the row shows a `ghostBars` placeholder, which is a shape and not
+ * a claim: it is derived from the id, so it is stable, and it is dimmed, so it does not
+ * read as a measurement.
+ *
  * ## Why play is an `<audio>` element and B is not
  *
  * Auditioning wants the first hundred milliseconds now, and a streaming element gives
@@ -48,21 +65,43 @@
  * Both roads are open because `cdn.freesound.org` sends `Access-Control-Allow-Origin`,
  * which is measured in `lib/freesound.ts` rather than assumed.
  *
+ * ## Why the format menu keeps its own choice here
+ *
+ * The panel owns the whole download — fetch, decode, encode, name — so unlike the
+ * recipe's and the model's menus there is nothing for the screen above to hold. The
+ * choice still outlives the tab, because it lives in `lib/download.ts`'s per-scope
+ * memory, and it starts on **Original**: re-encoding a stranger's recording before
+ * anybody asked is a quality loss taken on their behalf.
+ *
  * @packageDocumentation
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { copy, save } from '../lib/download.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bars } from './Bars.js';
+import { FormatMenu } from './FormatMenu.js';
+import { decodeAudioFile } from '../lib/analysis.js';
+import {
+  LIBRARY_FORMATS,
+  copy,
+  download,
+  loadFormat,
+  save,
+  saveFormat,
+  type Format,
+} from '../lib/download.js';
 import {
   attributionFor,
   fetchOriginal,
+  fetchPreview,
   licenceOf,
   needsAttribution,
+  safeName,
   type FreesoundSound,
   type Licence,
 } from '../lib/freesound.js';
 import { ms, size } from '../lib/format.js';
 import { useI18n, type Key } from '../lib/i18n.js';
+import { bars, ghostBars } from '../lib/layers.js';
 import type { LibrarySearch } from '../lib/useSearch.js';
 
 /** Where somebody reads what they just agreed to connect to. */
@@ -94,6 +133,15 @@ const FAILURE: Readonly<Record<string, Key>> = {
   http: 'search.errHttp',
 };
 
+/** Bars in a row's waveform. Enough to tell a hit from a bed at 96 pixels wide. */
+const BAR_COUNT = 44;
+
+/** How many previews may be decoding at once. Two keeps a scroll responsive. */
+const DECODE_LIMIT = 2;
+
+/** The green the rest of the tab is drawn in — `HUE.library`, as a canvas needs it. */
+const WAVE_COLOR = 'oklch(0.78 0.11 150)';
+
 export interface SearchPanelProps {
   readonly search: LibrarySearch;
   /** Fetch this preview, decode it and make it the B side. Rejects like any fetch. */
@@ -106,7 +154,9 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
   const { t } = useI18n();
   const [playing, setPlaying] = useState<number | null>(null);
   const [pending, setPending] = useState<number | null>(null);
+  const [formatId, setFormatId] = useState(() => loadFormat('library'));
   const audio = useRef<HTMLAudioElement | null>(null);
+  const waves = useWaveforms();
 
   /* One element, reused. A tab full of `Audio` objects that were never stopped keeps
      every one of them buffering. */
@@ -142,25 +192,48 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
   };
 
   /**
-   * Download the original, with the connected account's token.
+   * Save a recording in the chosen format.
    *
-   * The token is asked for at the moment of the click rather than held here, because
+   * Always from the **original**, never from the preview: the preview is a 128 kbps
+   * MP3 made for auditioning, and transcoding it to WAV would produce a large file
+   * with a small file's information in it. `Original` therefore costs one fetch and
+   * nothing else; every other entry costs a decode and an encode on top.
+   *
+   * The token is asked for at the moment of the click rather than held, because
    * `connection.token()` is what knows whether the 24-hour access token is still good
-   * and refreshes it if it is not. A button that holds a copy is a button that breaks
-   * the day after a session started.
+   * and refreshes it if it is not.
    */
-  const downloadOriginal = (sound: FreesoundSound): void => {
+  const saveSound = async (sound: FreesoundSound, format: Format): Promise<void> => {
     setPending(sound.id);
-    void search.connection
-      .token()
-      .then(async (token) => {
-        if (token === null) throw new Error(t('search.errToken'));
-        const file = await fetchOriginal(sound, token);
-        save(file, file.name);
-        onStatus(t('search.saved', { file: file.name, size: size(file.size) }));
-      })
-      .catch((error: unknown) => onStatus(String(error instanceof Error ? error.message : error)))
-      .finally(() => setPending(null));
+    try {
+      const token = await search.connection.token();
+      if (token === null) throw new Error(t('search.errToken'));
+      const original = await fetchOriginal(sound, token);
+
+      if (format.id === 'original') {
+        save(original, original.name);
+        onStatus(t('search.saved', { file: original.name, size: size(original.size) }));
+        return;
+      }
+
+      let buffer: AudioBuffer;
+      try {
+        buffer = await decodeAudioFile(original);
+      } catch {
+        /* The browser could not read the uploader's format — an obscure AIFF variant,
+           a 32-bit float WAV. Handing over the bytes we do have beats failing, and
+           saying which file arrived beats a silent substitution. */
+        save(original, original.name);
+        onStatus(t('search.savedOriginalInstead', { file: original.name }));
+        return;
+      }
+
+      onStatus(await download({ name: safeName(sound.name), source: '', code: null, buffer }, format));
+    } catch (error: unknown) {
+      onStatus(String(error instanceof Error ? error.message : error));
+    } finally {
+      setPending(null);
+    }
   };
 
   return (
@@ -224,9 +297,6 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
       <div className="library-list">
         {search.running && search.hits.length === 0 ? <p className="library-empty">{t('search.searching')}</p> : null}
 
-        {/* Nothing under a refusal. The red box above already says what happened and
-            what to do; "describe the sound and press Make sound" underneath it reads as
-            advice to do the thing that just failed. */}
         {/* Nothing at all when the bank cannot connect anybody: the block above has
             already said so, and the same sentence twice on one screen reads as a
             rendering bug rather than as emphasis. */}
@@ -243,87 +313,243 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
           </p>
         ) : null}
 
-        {search.hits.map(({ sound, note }) => {
-          const licence = licenceOf(sound.license);
-          return (
-            <div className="library-row" key={sound.id}>
-              <button
-                type="button"
-                className={`library-play${playing === sound.id ? ' playing' : ''}`}
-                title={playing === sound.id ? t('search.stop') : t('search.play')}
-                onClick={() => play(sound)}
-              >
-                {playing === sound.id ? '❚❚' : '▶'}
-              </button>
-
-              <div className="library-main">
-                <div className="library-head">
-                  <span className="library-name">{sound.name}</span>
-                  <a
-                    className={`lic lic-${licence === 'cc0' ? 'free' : 'bound'}`}
-                    href={sound.license === '' ? sound.url : sound.license}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    title={t(needsAttribution(sound) ? 'search.licenceBound' : 'search.licenceFree')}
-                  >
-                    {LICENCE_LABEL[licence]}
-                  </a>
-                </div>
-                <div className="library-meta mono faint">
-                  {ms(sound.seconds * 1000)} · {sound.username}
-                  {sound.sampleRate > 0 ? ` · ${String(Math.round(sound.sampleRate / 1000))} kHz` : ''}
-                  {sound.channels > 0 ? ` · ${sound.channels === 1 ? 'mono' : 'stereo'}` : ''}
-                  {sound.downloads > 0 ? ` · ${t('search.downloads', { count: sound.downloads })}` : ''}
-                  {note === '' ? '' : ` · ${note}`}
-                </div>
-              </div>
-
-              <div className="library-acts">
-                <button
-                  type="button"
-                  className="chip chip-amber"
-                  disabled={pending === sound.id}
-                  title={t('search.useTitle')}
-                  onClick={() => use(sound)}
-                >
-                  → B
-                </button>
-                <button
-                  type="button"
-                  className="chip"
-                  disabled={pending === sound.id}
-                  title={t('search.downloadTitle')}
-                  onClick={() => downloadOriginal(sound)}
-                >
-                  ⤓
-                </button>
-                <button
-                  type="button"
-                  className="chip"
-                  title={t('search.creditTitle')}
-                  onClick={() => void copy(attributionFor(sound), t('search.credit')).then(onStatus)}
-                >
-                  ©
-                </button>
-                <a
-                  className="chip"
-                  href={sound.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  title={t('search.pageTitle')}
-                >
-                  ↗
-                </a>
-              </div>
-            </div>
-          );
-        })}
+        {search.hits.map(({ sound, note }) => (
+          <Row
+            key={sound.id}
+            sound={sound}
+            note={note}
+            wave={waves.of(sound.id)}
+            onVisible={waves.request}
+            playing={playing === sound.id}
+            busy={pending === sound.id}
+            formatId={formatId}
+            onFormat={(id) => {
+              setFormatId(id);
+              saveFormat('library', id);
+            }}
+            onPlay={() => play(sound)}
+            onUse={() => use(sound)}
+            onSave={(format) => saveSound(sound, format)}
+            onCredit={() => void copy(attributionFor(sound), t('search.credit')).then(onStatus)}
+          />
+        ))}
       </div>
 
       <p className="caption">{t('search.caption')}</p>
     </div>
   );
 }
+
+/* ------------------------------------------------------------------------- *
+ * One result
+ * ------------------------------------------------------------------------- */
+
+interface RowProps {
+  readonly sound: FreesoundSound;
+  readonly note: string;
+  /** Measured heights, or null while nothing has been decoded for this sound yet. */
+  readonly wave: Float32Array | null;
+  readonly onVisible: (sound: FreesoundSound) => void;
+  readonly playing: boolean;
+  readonly busy: boolean;
+  readonly formatId: string;
+  readonly onFormat: (id: string) => void;
+  readonly onPlay: () => void;
+  readonly onUse: () => void;
+  readonly onSave: (format: Format) => Promise<void>;
+  readonly onCredit: () => void;
+}
+
+function Row(props: RowProps): React.JSX.Element {
+  const { t } = useI18n();
+  const { sound, wave } = props;
+  const host = useRef<HTMLDivElement | null>(null);
+  const licence = licenceOf(sound.license);
+
+  /* Ask for the waveform the first time this row is on screen, and stop watching. The
+     alternative — decoding the whole page up front — is several megabytes fetched for
+     rows nobody scrolled to. */
+  useEffect(() => {
+    const element = host.current;
+    if (element === null || wave !== null) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      props.onVisible(sound);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          props.onVisible(sound);
+          observer.disconnect();
+        }
+      },
+      /* A little ahead of the scroll, so a row is drawn by the time it arrives rather
+         than filling in under the eye. */
+      { rootMargin: '200px' },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+    /* `onVisible` is stable and `sound` is identified by its id; re-running this on
+       every render would build an observer per frame. */
+  }, [sound.id, wave === null]);
+
+  return (
+    <div className="library-row" ref={host}>
+      <button
+        type="button"
+        className={`library-play${props.playing ? ' playing' : ''}`}
+        title={props.playing ? t('search.stop') : t('search.play')}
+        onClick={props.onPlay}
+      >
+        {props.playing ? '❚❚' : '▶'}
+      </button>
+
+      <Bars
+        values={wave ?? ghostBars(String(sound.id), BAR_COUNT)}
+        muted={wave === null}
+        playing={props.playing}
+        durationMs={sound.seconds * 1000}
+        className="library-wave"
+        color={WAVE_COLOR}
+      />
+
+      <div className="library-main">
+        <div className="library-head">
+          <span className="library-name">{sound.name}</span>
+          <a
+            className={`lic lic-${licence === 'cc0' ? 'free' : 'bound'}`}
+            href={sound.license === '' ? sound.url : sound.license}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={t(needsAttribution(sound) ? 'search.licenceBound' : 'search.licenceFree')}
+          >
+            {LICENCE_LABEL[licence]}
+          </a>
+        </div>
+        <div className="library-meta mono faint">
+          {ms(sound.seconds * 1000)} · {sound.username}
+          {sound.format === '' ? '' : ` · ${sound.format}`}
+          {sound.sampleRate > 0 ? ` · ${String(Math.round(sound.sampleRate / 1000))} kHz` : ''}
+          {sound.channels > 0 ? ` · ${sound.channels === 1 ? 'mono' : 'stereo'}` : ''}
+          {note(props.note)}
+        </div>
+      </div>
+
+      <div className="library-acts">
+        <button
+          type="button"
+          className="chip chip-amber"
+          disabled={props.busy}
+          title={t('search.useTitle')}
+          onClick={props.onUse}
+        >
+          → B
+        </button>
+        <FormatMenu
+          formatId={props.formatId}
+          onFormat={props.onFormat}
+          onDownload={props.onSave}
+          disabled={props.busy}
+          className="green compact"
+          formats={LIBRARY_FORMATS}
+        />
+        <button type="button" className="chip" title={t('search.creditTitle')} onClick={props.onCredit}>
+          ©
+        </button>
+        <a
+          className="chip"
+          href={sound.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={t('search.pageTitle')}
+        >
+          ↗
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/** The ranking model's reason, when it had one. */
+function note(text: string): string {
+  return text === '' ? '' : ` · ${text}`;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Waveforms
+ * ------------------------------------------------------------------------- */
+
+/** Heights per sound, decoded on demand and kept for the life of the panel. */
+interface Waveforms {
+  of: (id: number) => Float32Array | null;
+  request: (sound: FreesoundSound) => void;
+}
+
+/**
+ * Decode previews into bar heights, a couple at a time, once each.
+ *
+ * The queue is the whole point. A search returns thirty rows; a naive effect per row
+ * would open thirty connections and decode thirty MP3s the moment the list rendered,
+ * which is both slower and ruder than doing two at a time as they scroll into view.
+ * Failures are recorded rather than retried: a preview that will not decode will not
+ * decode on the fourth attempt either, and the ghost placeholder is a perfectly good
+ * answer for the row.
+ */
+function useWaveforms(): Waveforms {
+  const [ready, setReady] = useState<ReadonlyMap<number, Float32Array>>(() => new Map());
+  const seen = useRef(new Set<number>());
+  const queue = useRef<FreesoundSound[]>([]);
+  const active = useRef(0);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const pump = useCallback((): void => {
+    while (active.current < DECODE_LIMIT) {
+      const next = queue.current.shift();
+      if (next === undefined) return;
+      active.current += 1;
+      void fetchPreview(next)
+        .then(decodeAudioFile)
+        .then((buffer) => {
+          if (!alive.current) return;
+          const values = bars(buffer, BAR_COUNT);
+          setReady((current) => new Map(current).set(next.id, values));
+        })
+        .catch(() => {
+          /* Left out of `ready`, so the row keeps its placeholder. `seen` already holds
+             the id, so nothing asks again. */
+        })
+        .finally(() => {
+          active.current -= 1;
+          if (alive.current) pump();
+        });
+    }
+  }, []);
+
+  const request = useCallback(
+    (sound: FreesoundSound): void => {
+      if (seen.current.has(sound.id)) return;
+      seen.current.add(sound.id);
+      queue.current.push(sound);
+      pump();
+    },
+    [pump],
+  );
+
+  const of = useCallback((id: number): Float32Array | null => ready.get(id) ?? null, [ready]);
+
+  return { of, request };
+}
+
+/* ------------------------------------------------------------------------- *
+ * The account
+ * ------------------------------------------------------------------------- */
 
 /**
  * The account this tab is acting as, in four states.
@@ -360,12 +586,7 @@ function Connection({ connection }: { readonly connection: LibrarySearch['connec
         </>
       ) : (
         <>
-          <button
-            type="button"
-            className="hue-button"
-            disabled={state !== 'off'}
-            onClick={connection.connect}
-          >
+          <button type="button" className="hue-button" disabled={state !== 'off'} onClick={connection.connect}>
             {state === 'connecting' ? <span className="spinner" aria-hidden="true" /> : null}
             {t('search.connect')}
           </button>

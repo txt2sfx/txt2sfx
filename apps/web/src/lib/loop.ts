@@ -180,7 +180,14 @@ export interface LaneSpec {
   readonly pattern: 'kit' | 'bass' | 'chord' | 'arp' | 'pad' | 'accent';
   /** Octave the lane sits in. Degrees are counted from the key's root in it. */
   readonly octave: number;
-  /** Lane level, before the mix's headroom scaling. */
+  /**
+   * Where this lane sits in the mix, 0…1.
+   *
+   * Separate from a note's velocity on purpose, and applied in exactly one place —
+   * `voiceFor` in `lib/loop-voice.ts`. Velocity is musical and goes into the MIDI;
+   * this is the balance decision, and folding it into velocity would mean turning a
+   * shaker down also rewrote the exported score.
+   */
   readonly level: number;
   /** Whether the lane is percussion — decides the MIDI channel and the voice map. */
   readonly drum?: true;

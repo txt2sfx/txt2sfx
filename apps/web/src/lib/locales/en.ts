@@ -401,12 +401,12 @@ export const en = {
   'search.stop': 'stop',
   'search.playFail': 'the preview for {name} would not play',
   'search.useTitle': 'load it as the B side and compare',
-  'search.downloadTitle': 'download the original file',
   'search.creditTitle': 'copy the credit line',
   'search.credit': 'the credit line',
   'search.pageTitle': 'open its page on freesound.org',
   'search.saved': 'saved {file} · {size}',
-  'search.downloads': '{count} downloads',
+  'search.savedOriginalInstead':
+    'This browser cannot decode that file, so {file} was saved as uploaded instead of converted.',
   'search.licenceFree': 'public domain — no obligation',
   'search.licenceBound': 'must be credited wherever this ends up — the © button copies the line',
   'search.errToken':

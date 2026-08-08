@@ -353,10 +353,13 @@ export function Studio(props: StudioProps): React.JSX.Element {
             ) : null}
           </section>
 
-          {/* The recipe and its numbers stay below every view except the model's, which
-              has no recipe by definition — showing an editor under it would suggest the
-              diffusion render could be tuned, and it cannot. */}
-          {props.view === 'model' ? null : (
+          {/* The recipe and its numbers stay below the views that are *about* the recipe,
+              and disappear under the two that are not. A diffusion render and a stranger's
+              recording both have no recipe by definition: an editor, a slider rack and an
+              Export card under either of them would suggest that what is on screen can be
+              tuned and exported as ours, and neither can. What is under them instead is
+              the thing itself, which is all there is to say about it. */}
+          {props.view === 'model' || props.view === 'search' ? null : (
             <>
               <SoundlineCard
                 source={props.source}

@@ -30,17 +30,17 @@
  */
 
 import { useState } from 'react';
+import { encodeWav } from '@txt2sfx/core';
 import { FormatMenu } from '../components/FormatMenu.js';
 import { LoopTimeline } from '../components/LoopTimeline.js';
 import { HUE } from '../lib/design.js';
 import { LOOP_FORMATS, save, type Format } from '../lib/download.js';
 import { ms } from '../lib/format.js';
 import { useI18n, type Key } from '../lib/i18n.js';
-import { LOOP_PRESETS, loopSeconds, proposals, stepCount } from '../lib/loop.js';
+import { LANE_HUES, LOOP_PRESETS, loopSeconds, proposals, stepCount } from '../lib/loop.js';
 import { downloadLoop } from '../lib/loop-export.js';
 import { renderStems } from '../lib/loop-render.js';
 import type { LoopState } from '../lib/useLoop.js';
-import { encodeWav } from '@txt2sfx/core';
 
 export interface LoopProps {
   readonly state: LoopState;
@@ -210,7 +210,10 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                 type="button"
                 key={preset.id}
                 className={`chip cat-chip${state.preset === preset.id ? ' selected' : ''}`}
-                style={{ ['--hue' as string]: String([195, 150, 300, 80, 340, 120][index] ?? 195) }}
+                /* The lane palette, reused: a preset is a set of lanes, so colouring the
+                   chips from the same table means the first lane of `boss-fight` is the
+                   colour its chip was. */
+                style={{ ['--hue' as string]: String(LANE_HUES[index % LANE_HUES.length] ?? 195) }}
                 onClick={() => state.pickPreset(preset.id)}
               >
                 {preset.id}
@@ -246,13 +249,11 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                 </button>
                 <span className="mono faint">{t('loop.seamless')}</span>
                 <div className="spacer" />
-                <FormatMenu
-                  formatId={formatId}
-                  onFormat={onFormat}
-                  formats={LOOP_FORMATS}
-                  disabled={state.render === null && formatId !== 'midi'}
-                  onDownload={exportLoop}
-                />
+                {/* Never disabled. Three of the five entries need no mixdown at all, and
+                    the two that do already answer "there is nothing rendered to export"
+                    in a sentence — which is more use than a button that cannot be
+                    pressed and does not say why. */}
+                <FormatMenu formatId={formatId} onFormat={onFormat} formats={LOOP_FORMATS} onDownload={exportLoop} />
                 <button type="button" onClick={() => void stems()} disabled={stemming || state.render === null}>
                   {stemming ? <span className="spinner" /> : null}
                   {t('loop.stems', { count: track.lanes.length })}
