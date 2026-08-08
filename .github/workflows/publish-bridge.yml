@@ -143,7 +143,7 @@ jobs:
           pnpm --filter txt2sfx-bridge pack --pack-destination "$PWD/release"
           echo "tarball=$PWD/release/txt2sfx-bridge-${version}.tgz" >> "$GITHUB_ENV"
 
-      # What ships should be exactly these six. Anything else means `files`
+      # What ships should be exactly these seven. Anything else means `files`
       # drifted and the tarball is carrying source maps, or worse, the unbundled
       # modules that import the private packages and throw on first import.
       #
@@ -152,6 +152,15 @@ jobs:
       # txt2sfx-bridge` can install the model for somebody who has never cloned
       # this repository, so their *absence* is as much a broken release as an
       # extra file would be — hence an exact list rather than a subset check.
+      #
+      # `render-child.mjs` is the render subprocess, a second bundle because a
+      # process cannot fork itself into a different entry point. Without it the
+      # bridge falls back to rendering in-process, which works and leaks — so it
+      # too is listed for its absence, not just against extras.
+      #
+      # This list is pinned in two places on purpose, and they must agree:
+      # `packages/bridge/test/hygiene.test.ts` checks the manifest a developer
+      # can see, and this checks the tarball npm would actually receive.
       - name: Inspect what is inside it
         run: |
           set -euo pipefail
@@ -159,6 +168,7 @@ jobs:
           diff -u - /tmp/contents <<'EOF'
           package/LICENSE
           package/README.md
+          package/dist/render-child.mjs
           package/dist/stable-audio/requirements.txt
           package/dist/stable-audio/run.py
           package/dist/txt2sfx-bridge.mjs
