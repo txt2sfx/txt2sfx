@@ -1,121 +1,67 @@
 /**
- * The recipe bank: SQLite with an FTS5 index, and the queries over it.
+ * The recipe bank: the queries over `recipes` and its FTS5 index.
  *
- * ## Why `node:sqlite` and not better-sqlite3
- *
- * The plan named better-sqlite3. This uses Node's built-in `node:sqlite`, because
- * the development machine is **Windows on ARM64** and a native addon is exactly
- * where that platform hurts: prebuilt binaries for win32-arm64 have historically
- * been the last ones published, and without one the install falls back to node-gyp
- * and a Visual Studio toolchain. This workspace already narrows
- * `pnpm.onlyBuiltDependencies` to esbuild alone for the same reason. `node:sqlite`
- * is part of the Node binary, so there is nothing to build and nothing to ship per
- * architecture. Verified here: SQLite 3.51.3, `ENABLE_FTS5` in
- * `PRAGMA compile_options`, `bm25()` and external-content tables both working on
- * win32-arm64.
- *
- * The escape hatch, should this ever regress: better-sqlite3 v13+ ships N-API
- * prebuilds inside its own tarball — `prebuilds/win32-arm64.node` included — with
- * no install script, so the toolchain objection no longer applies to it either. It
- * is still one 17 MB dependency against zero, which is why the built-in wins.
- *
- * ## FTS5 is a build flag, and Node has flipped it
- *
- * The JavaScript API of `node:sqlite` has been stable, but whether its SQLite was
- * compiled with FTS5 has not: it is absent in Node 22.5–22.15, arrives in 22.16,
- * is absent again throughout **every** 23.x, and is unconditional from 24.0. So
- * "has `node:sqlite`" does not imply "can run this schema", and the failure mode is
- * a bare `no such module: fts5` from a `CREATE VIRTUAL TABLE` deep in startup.
- * {@link openBank} probes for it and says what is wrong instead.
+ * The schema, the migrations and the `node:sqlite` handle live in `schema.ts`; this
+ * module takes a database and answers questions about recipes. That split arrived
+ * with likes and comments — four stores over one file need one place that owns the
+ * file, or each of them opens its own handle and WAL turns into a lock fight.
  *
  * ## Where validation is not
  *
- * This module writes what it is given. Validating a soundline before storing it is
- * the HTTP boundary's job (`routes/recipes.ts`), because that is where untrusted
- * input arrives. The seeder is not untrusted input — it is the repository's own
- * reference set — and it needs to be able to load a recipe the validator objects
- * to while *reporting* the objection, rather than silently ending up with a bank
- * that is missing whichever recipes are currently imperfect.
+ * This module writes what it is given. Validating and *rendering* a soundline before
+ * storing it is the HTTP boundary's job (`routes/recipes.ts`), because that is where
+ * untrusted input arrives. The seeder is not untrusted input — it is the
+ * repository's own reference set — and it needs to be able to load a recipe the
+ * validator objects to while *reporting* the objection, rather than silently ending
+ * up with a bank that is missing whichever recipes are currently imperfect.
+ *
+ * ## Hidden rows
+ *
+ * Every read here excludes `hidden = 1`. Moderation hides rather than deletes, and a
+ * single missed filter would put a hidden recipe back into search results, into
+ * `retrieve`, and therefore into someone else's model prompt. The one deliberate
+ * exception is {@link RecipeBank.getForModeration}, whose name says so.
  *
  * @packageDocumentation
  */
 
-import type * as NodeSqlite from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import type { Recipe, RecipeInput, SoundCategory, SoundProfile } from '@txt2sfx/shared';
-
-/**
- * `node:sqlite`, fetched in a way bundlers cannot mangle.
- *
- * A plain `import { DatabaseSync } from 'node:sqlite'` is correct and works when
- * Node runs this file directly. It breaks under the Vite version this workspace
- * pins — which is how the tests run — because Vite decides what is a builtin by
- * stripping the `node:` prefix and looking the bare name up in
- * `module.builtinModules`, where `sqlite` appears *only* under its prefixed name.
- * Vite concludes there is an npm package called `sqlite`, rewrites the import to
- * it, and cannot resolve it. (Fixed upstream in vitest 3; this workspace is on 2.x.
- * Bumping it is a phase-7 decision, and this line stops mattering when it happens.)
- *
- * `process.getBuiltinModule` is the API for precisely this situation — reaching a
- * builtin without a specifier a bundler can rewrite — so production and tests load
- * the same module through the same line. The type is imported normally; type
- * imports are erased and nothing resolves them at runtime.
- */
-const { DatabaseSync } = process.getBuiltinModule('node:sqlite') as typeof NodeSqlite;
+import { parse, serialize } from '@txt2sfx/core';
+import type { Database } from './schema.js';
+import { openDatabase } from './schema.js';
 
 /* ------------------------------------------------------------------------- *
- * Schema
+ * Identity of a recipe
  * ------------------------------------------------------------------------- */
 
 /**
- * Schema and the triggers that keep the index honest.
+ * The canonical-form hash that decides whether two recipes are the same recipe.
  *
- * `content='recipes'` makes the FTS table a pure index — the text lives once, in
- * `recipes`, and FTS5 reads it through the rowid. That rules out the failure where
- * a recipe is edited and its index still matches the old words, but it also means
- * FTS5 does not notice writes on its own, hence the three triggers. Losing them
- * would produce a bank that searches fine until the first update.
+ * Not a hash of the posted bytes. `serialize(parse(src))` is byte-stable in this
+ * project — the round-trip test asserts it — so re-serializing first collapses the
+ * whole family of "same sound, different whitespace, different number formatting"
+ * into one identity. That is what makes flooding the bank with a thousand copies of
+ * one recipe impossible rather than merely detectable: the unique index refuses the
+ * second one.
+ *
+ * Returns `''` for a source the parser rejects. The caller decides what that means;
+ * for the HTTP boundary it cannot happen (parsing comes first), and for the seeder
+ * it means an old reference recipe simply does not participate in deduplication.
  */
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS recipes (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  name         TEXT    NOT NULL,
-  prompt       TEXT    NOT NULL,
-  soundline    TEXT    NOT NULL,
-  profile_json TEXT    NOT NULL,
-  category     TEXT    NOT NULL,
-  tags         TEXT    NOT NULL DEFAULT '[]',
-  duration_ms  INTEGER NOT NULL,
-  rating       INTEGER NOT NULL DEFAULT 0,
-  created_at   TEXT    NOT NULL
-);
-
-CREATE VIRTUAL TABLE IF NOT EXISTS recipes_fts USING fts5(
-  name, prompt, tags,
-  content='recipes',
-  content_rowid='id'
-);
-
-CREATE TRIGGER IF NOT EXISTS recipes_ai AFTER INSERT ON recipes BEGIN
-  INSERT INTO recipes_fts(rowid, name, prompt, tags) VALUES (new.id, new.name, new.prompt, new.tags);
-END;
-
-CREATE TRIGGER IF NOT EXISTS recipes_ad AFTER DELETE ON recipes BEGIN
-  INSERT INTO recipes_fts(recipes_fts, rowid, name, prompt, tags)
-    VALUES ('delete', old.id, old.name, old.prompt, old.tags);
-END;
-
-CREATE TRIGGER IF NOT EXISTS recipes_au AFTER UPDATE ON recipes BEGIN
-  INSERT INTO recipes_fts(recipes_fts, rowid, name, prompt, tags)
-    VALUES ('delete', old.id, old.name, old.prompt, old.tags);
-  INSERT INTO recipes_fts(rowid, name, prompt, tags) VALUES (new.id, new.name, new.prompt, new.tags);
-END;
-`;
+export function fingerprintOf(source: string): string {
+  try {
+    return createHash('sha256').update(serialize(parse(source)), 'utf8').digest('hex');
+  } catch {
+    return '';
+  }
+}
 
 /* ------------------------------------------------------------------------- *
  * Rows
  * ------------------------------------------------------------------------- */
 
-/** A row as SQLite hands it back. */
+/** A row as SQLite hands it back, with the author joined in. */
 interface RecipeRow {
   readonly id: number;
   readonly name: string;
@@ -127,15 +73,26 @@ interface RecipeRow {
   readonly duration_ms: number;
   readonly rating: number;
   readonly created_at: string;
+  readonly fingerprint: string;
+  readonly author_id: number | null;
+  readonly parent_id: number | null;
+  readonly hidden: number;
+  readonly author_login: string | null;
+  readonly author_avatar: string | null;
+  readonly comment_count: number | null;
 }
 
 /**
  * Row to {@link Recipe}.
  *
- * `profile_json` is parsed defensively. It was written by whoever posted the
- * recipe, and a bank that throws on one malformed row would stop serving every
- * search that happens to rank that row highly — a corrupt profile should cost
- * that recipe its usefulness, not the endpoint its availability.
+ * `profile_json` is parsed defensively. It was written by whoever posted the recipe,
+ * and a bank that throws on one malformed row would stop serving every search that
+ * happens to rank that row highly — a corrupt profile should cost that recipe its
+ * usefulness, not the endpoint its availability.
+ *
+ * The optional fields are spread conditionally rather than set to `undefined`:
+ * `exactOptionalPropertyTypes` is on, and more to the point a reference recipe has
+ * no author at all — `author: undefined` and "no author" should not be two states.
  */
 function toRecipe(row: RecipeRow): Recipe {
   return {
@@ -149,6 +106,12 @@ function toRecipe(row: RecipeRow): Recipe {
     durationMs: row.duration_ms,
     rating: row.rating,
     createdAt: row.created_at,
+    ...(row.author_id === null || row.author_login === null
+      ? {}
+      : { author: { id: row.author_id, login: row.author_login, avatarUrl: row.author_avatar ?? '' } }),
+    ...(row.parent_id === null ? {} : { parentId: row.parent_id }),
+    ...(row.fingerprint === '' ? {} : { fingerprint: row.fingerprint }),
+    ...(row.comment_count === null ? {} : { comments: row.comment_count }),
   };
 }
 
@@ -172,6 +135,23 @@ const EMPTY_PROFILE: SoundProfile = {
   loudnessLufsApprox: -Infinity,
 };
 
+/**
+ * The columns every read needs, with the author and the comment count attached.
+ *
+ * One string rather than one per query: the author join is easy to forget, and a
+ * listing where half the recipes silently lost their attribution is the kind of bug
+ * that reaches production because it looks like data, not like code.
+ */
+const SELECT_RECIPE = `
+  SELECT recipes.*,
+         actors.login      AS author_login,
+         actors.avatar_url AS author_avatar,
+         (SELECT COUNT(*) FROM comments WHERE comments.recipe_id = recipes.id AND comments.hidden = 0)
+           AS comment_count
+  FROM recipes
+  LEFT JOIN actors ON actors.id = recipes.author_id
+`;
+
 /* ------------------------------------------------------------------------- *
  * Full-text queries
  * ------------------------------------------------------------------------- */
@@ -179,11 +159,11 @@ const EMPTY_PROFILE: SoundProfile = {
 /**
  * English function words, dropped from a search.
  *
- * Deliberately short. FTS5 ranks with bm25, which already gives a term appearing
- * in every document almost no weight, so a long stopword list would be
- * duplicating the ranker's job and would eventually delete a word that mattered.
- * These are here because they are pure syntax — "a pop for the menu" should find
- * the same thing as "pop menu".
+ * Deliberately short. FTS5 ranks with bm25, which already gives a term appearing in
+ * every document almost no weight, so a long stopword list would be duplicating the
+ * ranker's job and would eventually delete a word that mattered. These are here
+ * because they are pure syntax — "a pop for the menu" should find the same thing as
+ * "pop menu".
  */
 const STOPWORDS = new Set([
   'a', 'an', 'the', 'and', 'or', 'of', 'for', 'in', 'on', 'at', 'to', 'with',
@@ -193,13 +173,13 @@ const STOPWORDS = new Set([
 /**
  * A user prompt turned into an FTS5 expression.
  *
- * Two things this has to get right. **Quoting:** every token becomes an FTS5
- * string literal, because a prompt is user text and words like `NEAR`, `OR` or a
- * bare `*` are operators in FTS5 syntax — an unquoted prompt is a query-injection
- * bug that shows up as a 500 on the day someone searches for "near miss".
- * **`OR`, not the implicit `AND`:** FTS5 defaults to requiring every term, and no
- * recipe in the bank contains all of "coin", "pickup" and "sound", so the default
- * would answer a perfectly good prompt with nothing.
+ * Two things this has to get right. **Quoting:** every token becomes an FTS5 string
+ * literal, because a prompt is user text and words like `NEAR`, `OR` or a bare `*`
+ * are operators in FTS5 syntax — an unquoted prompt is a query-injection bug that
+ * shows up as a 500 on the day someone searches for "near miss". **`OR`, not the
+ * implicit `AND`:** FTS5 defaults to requiring every term, and no recipe in the bank
+ * contains all of "coin", "pickup" and "sound", so the default would answer a
+ * perfectly good prompt with nothing.
  */
 export function ftsQuery(prompt: string): string | null {
   const tokens = prompt
@@ -213,10 +193,10 @@ export function ftsQuery(prompt: string): string | null {
 /**
  * bm25 column weights: name, prompt, tags.
  *
- * The name is what a recipe is called and is the shortest, most deliberate field
- * — a match there is nearly always the right answer. Tags come next because they
- * were chosen to be searched. The prompt is prose and matches loosely, so it
- * ranks lowest per hit while still carrying most of the recall.
+ * The name is what a recipe is called and is the shortest, most deliberate field — a
+ * match there is nearly always the right answer. Tags come next because they were
+ * chosen to be searched. The prompt is prose and matches loosely, so it ranks lowest
+ * per hit while still carrying most of the recall.
  */
 const BM25_WEIGHTS = '5.0, 1.0, 3.0';
 
@@ -230,6 +210,15 @@ export interface ListQuery {
   readonly q?: string;
   readonly category?: SoundCategory;
   readonly limit?: number;
+  /** Only recipes published by this actor. */
+  readonly authorId?: number;
+  /**
+   * Order a text-free listing by likes rather than by recency.
+   *
+   * The gallery's two tabs. Newest is the default because a bank whose front page
+   * cannot change is a bank nobody returns to.
+   */
+  readonly sort?: 'new' | 'top';
 }
 
 /** Outcome of a retrieval. */
@@ -239,10 +228,10 @@ export interface RetrieveResult {
    * True when the search matched nothing and these are stand-ins.
    *
    * An empty answer is the worst thing this endpoint can return: its caller is a
-   * language model that needs examples of the grammar before it can write any,
-   * and it has no other source for them. Highest-rated recipes are a poor answer
-   * to the prompt but a good answer to "show me what a recipe looks like" — and
-   * the flag keeps the caller from mistaking one for the other.
+   * language model that needs examples of the grammar before it can write any, and
+   * it has no other source for them. Highest-rated recipes are a poor answer to the
+   * prompt but a good answer to "show me what a recipe looks like" — and the flag
+   * keeps the caller from mistaking one for the other.
    */
   readonly fallback: boolean;
   /** The FTS expression used, or null when the prompt had no usable words. */
@@ -253,33 +242,19 @@ export interface RetrieveResult {
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
 
-/**
- * Fail early and legibly when this Node cannot do full-text search.
- *
- * The probe lives in `temp`, so it touches nothing in a real database file. Without
- * it, an unlucky Node version reports `no such module: fts5` from inside a
- * `CREATE VIRTUAL TABLE` during startup, which reads as a corrupt schema rather
- * than as a missing build flag — see the note at the top of this module about which
- * versions have it.
- */
-function assertFts5(db: NodeSqlite.DatabaseSync): void {
-  try {
-    db.exec('CREATE VIRTUAL TABLE temp.__fts5_probe USING fts5(probe)');
-    db.exec('DROP TABLE temp.__fts5_probe');
-  } catch (cause) {
-    throw new Error(
-      `this Node build has no SQLite FTS5, which the recipe bank needs for search. ` +
-        `Running ${process.version}; FTS5 is compiled in from Node 22.16 (but not in any 23.x) and from 24.0 onwards. ` +
-        `Upgrade Node, or use a build of Node with SQLITE_ENABLE_FTS5.`,
-      { cause },
-    );
-  }
+/** What a recipe carries beyond its text when it is published by a person. */
+export interface Attribution {
+  readonly authorId?: number;
+  /** The recipe this one was derived from. */
+  readonly parentId?: number;
 }
 
 /** Everything the HTTP layer is allowed to do to the bank. */
 export interface RecipeBank {
   list(query?: ListQuery): Recipe[];
   get(id: number): Recipe | undefined;
+  /** Ignores `hidden`. For moderation, and named so nothing else reaches for it. */
+  getForModeration(id: number): Recipe | undefined;
   /**
    * Whether a recipe by this name is already stored.
    *
@@ -290,105 +265,134 @@ export interface RecipeBank {
    */
   hasName(name: string): boolean;
   /**
-   * The stored recipe with exactly this name and this soundline, if any.
+   * The stored recipe with this canonical fingerprint, if any.
    *
-   * For making writes safe to retry. A client whose request timed out will send the
-   * identical bytes again, and two identical rows in a bank is worse than a dropped
-   * write: both are retrievable, both are used as few-shot examples, and votes
-   * split between them.
+   * This is both the retry-safety and the anti-flood mechanism. A client whose
+   * request timed out sends the identical bytes again, and two identical rows in a
+   * bank is worse than a dropped write: both are retrievable, both are used as
+   * few-shot examples, and likes split between them. Someone posting the same sound
+   * a thousand times under a thousand names hits exactly the same wall.
    */
-  findIdentical(name: string, soundline: string): Recipe | undefined;
+  findByFingerprint(fingerprint: string): Recipe | undefined;
   /** Stores a recipe as given. Validation belongs to the caller. */
-  insert(input: RecipeInput): Recipe;
-  /** Adjusts a rating and returns the updated recipe, or undefined if unknown. */
-  vote(id: number, delta: number): Recipe | undefined;
+  insert(input: RecipeInput, attribution?: Attribution): Recipe;
+  /** Sets the denormalized like count. Owned by the social store. */
+  setRating(id: number, rating: number): void;
+  /** Hides or unhides. Returns false when there is no such recipe. */
+  setHidden(id: number, hidden: boolean): boolean;
   /** Top-k for few-shot prompting. */
   retrieve(prompt: string, k?: number): RetrieveResult;
   count(): number;
+  /** Every non-hidden recipe, oldest first. For the corpus dump. */
+  all(): Recipe[];
   close(): void;
 }
 
 /**
- * Open (or create) a bank.
+ * The bank over an already-open database.
  *
- * @param path - File path, or `':memory:'` for a throwaway database. Tests use
- *   the second; it exercises the same schema and the same queries, which is the
- *   only way a search test is worth anything.
+ * @param db - A handle from {@link openDatabase}, migrated. Shared with the identity
+ *   and social stores; closing it is the owner's job, not this object's, except
+ *   through {@link RecipeBank.close} which exists for the callers that own both.
  */
-export function openBank(path: string): RecipeBank {
-  const db = new DatabaseSync(path);
-  db.exec('PRAGMA journal_mode = WAL');
-  assertFts5(db);
-  db.exec(SCHEMA);
-
+export function recipeBank(db: Database): RecipeBank {
   const clampLimit = (limit: number | undefined): number =>
     Math.max(1, Math.min(MAX_LIMIT, Math.trunc(limit ?? DEFAULT_LIMIT)));
 
-  const selectById = db.prepare('SELECT * FROM recipes WHERE id = ?');
+  const rowsToRecipes = (rows: unknown): Recipe[] => (rows as RecipeRow[]).map(toRecipe);
 
-  const byRating = (limit: number, category?: string): Recipe[] => {
-    const rows =
+  const byRating = (limit: number, category?: string): Recipe[] =>
+    rowsToRecipes(
       category === undefined
-        ? db.prepare('SELECT * FROM recipes ORDER BY rating DESC, id DESC LIMIT ?').all(limit)
+        ? db
+            .prepare(`${SELECT_RECIPE} WHERE recipes.hidden = 0 ORDER BY recipes.rating DESC, recipes.id DESC LIMIT ?`)
+            .all(limit)
         : db
-            .prepare('SELECT * FROM recipes WHERE category = ? ORDER BY rating DESC, id DESC LIMIT ?')
-            .all(category, limit);
-    return (rows as unknown as RecipeRow[]).map(toRecipe);
-  };
+            .prepare(
+              `${SELECT_RECIPE} WHERE recipes.hidden = 0 AND recipes.category = ? ORDER BY recipes.rating DESC, recipes.id DESC LIMIT ?`,
+            )
+            .all(category, limit),
+    );
 
   const search = (expression: string, limit: number, category?: string): Recipe[] => {
     const sql = `
-      SELECT recipes.*, bm25(recipes_fts, ${BM25_WEIGHTS}) AS score
+      SELECT recipes.*,
+             actors.login      AS author_login,
+             actors.avatar_url AS author_avatar,
+             (SELECT COUNT(*) FROM comments WHERE comments.recipe_id = recipes.id AND comments.hidden = 0)
+               AS comment_count,
+             bm25(recipes_fts, ${BM25_WEIGHTS}) AS score
       FROM recipes_fts
       JOIN recipes ON recipes.id = recipes_fts.rowid
-      WHERE recipes_fts MATCH ?${category === undefined ? '' : ' AND recipes.category = ?'}
+      LEFT JOIN actors ON actors.id = recipes.author_id
+      WHERE recipes_fts MATCH ? AND recipes.hidden = 0${category === undefined ? '' : ' AND recipes.category = ?'}
       ORDER BY score, recipes.rating DESC
       LIMIT ?
     `;
-    const rows =
+    return rowsToRecipes(
       category === undefined
         ? db.prepare(sql).all(expression, limit)
-        : db.prepare(sql).all(expression, category, limit);
-    return (rows as unknown as RecipeRow[]).map(toRecipe);
+        : db.prepare(sql).all(expression, category, limit),
+    );
   };
 
-  return {
+  const bank: RecipeBank = {
     list(query: ListQuery = {}): Recipe[] {
       const limit = clampLimit(query.limit);
       const expression = query.q === undefined ? null : ftsQuery(query.q);
-      if (expression === null) {
-        const rows =
-          query.category === undefined
-            ? db.prepare('SELECT * FROM recipes ORDER BY id DESC LIMIT ?').all(limit)
-            : db
-                .prepare('SELECT * FROM recipes WHERE category = ? ORDER BY id DESC LIMIT ?')
-                .all(query.category, limit);
-        return (rows as unknown as RecipeRow[]).map(toRecipe);
+      if (expression !== null) return search(expression, limit, query.category);
+
+      /* Built rather than enumerated: three optional filters times two orderings is
+         twelve hand-written statements, and the twelfth is where the `hidden`
+         predicate goes missing. Every value is still bound, never interpolated. */
+      const where: string[] = ['recipes.hidden = 0'];
+      const params: (string | number)[] = [];
+      if (query.category !== undefined) {
+        where.push('recipes.category = ?');
+        params.push(query.category);
       }
-      return search(expression, limit, query.category);
+      if (query.authorId !== undefined) {
+        where.push('recipes.author_id = ?');
+        params.push(query.authorId);
+      }
+      const order = query.sort === 'top' ? 'recipes.rating DESC, recipes.id DESC' : 'recipes.id DESC';
+      params.push(limit);
+      return rowsToRecipes(
+        db.prepare(`${SELECT_RECIPE} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`).all(...params),
+      );
     },
 
     get(id: number): Recipe | undefined {
-      const row = selectById.get(id) as unknown as RecipeRow | undefined;
-      return row === undefined ? undefined : toRecipe(row);
+      const row = db.prepare(`${SELECT_RECIPE} WHERE recipes.id = ? AND recipes.hidden = 0`).get(id) as
+        | unknown
+        | undefined;
+      return row === undefined ? undefined : toRecipe(row as RecipeRow);
+    },
+
+    getForModeration(id: number): Recipe | undefined {
+      const row = db.prepare(`${SELECT_RECIPE} WHERE recipes.id = ?`).get(id) as unknown | undefined;
+      return row === undefined ? undefined : toRecipe(row as RecipeRow);
     },
 
     hasName(name: string): boolean {
       return db.prepare('SELECT 1 AS found FROM recipes WHERE name = ? LIMIT 1').get(name) !== undefined;
     },
 
-    findIdentical(name: string, soundline: string): Recipe | undefined {
-      const row = db
-        .prepare('SELECT * FROM recipes WHERE name = ? AND soundline = ? ORDER BY id LIMIT 1')
-        .get(name, soundline) as unknown as RecipeRow | undefined;
-      return row === undefined ? undefined : toRecipe(row);
+    findByFingerprint(fingerprint: string): Recipe | undefined {
+      if (fingerprint === '') return undefined;
+      const row = db.prepare(`${SELECT_RECIPE} WHERE recipes.fingerprint = ? LIMIT 1`).get(fingerprint) as
+        | unknown
+        | undefined;
+      return row === undefined ? undefined : toRecipe(row as RecipeRow);
     },
 
-    insert(input: RecipeInput): Recipe {
+    insert(input: RecipeInput, attribution: Attribution = {}): Recipe {
       const result = db
         .prepare(
-          `INSERT INTO recipes (name, prompt, soundline, profile_json, category, tags, duration_ms, rating, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+          `INSERT INTO recipes
+             (name, prompt, soundline, profile_json, category, tags, duration_ms, rating, created_at,
+              fingerprint, author_id, parent_id, hidden)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0)`,
         )
         .run(
           input.name,
@@ -399,16 +403,23 @@ export function openBank(path: string): RecipeBank {
           JSON.stringify(input.tags),
           Math.round(input.durationMs),
           new Date().toISOString(),
+          fingerprintOf(input.soundline),
+          attribution.authorId ?? null,
+          attribution.parentId ?? null,
         );
       const id = Number(result.lastInsertRowid);
-      const stored = this.get(id);
+      const stored = bank.getForModeration(id);
       if (stored === undefined) throw new Error(`insert lost recipe ${String(id)}`);
       return stored;
     },
 
-    vote(id: number, delta: number): Recipe | undefined {
-      const result = db.prepare('UPDATE recipes SET rating = rating + ? WHERE id = ?').run(Math.trunc(delta), id);
-      return result.changes === 0 ? undefined : this.get(id);
+    setRating(id: number, rating: number): void {
+      db.prepare('UPDATE recipes SET rating = ? WHERE id = ?').run(Math.trunc(rating), id);
+    },
+
+    setHidden(id: number, hidden: boolean): boolean {
+      const result = db.prepare('UPDATE recipes SET hidden = ? WHERE id = ?').run(hidden ? 1 : 0, id);
+      return result.changes > 0;
     },
 
     retrieve(prompt: string, k = 3): RetrieveResult {
@@ -420,12 +431,29 @@ export function openBank(path: string): RecipeBank {
     },
 
     count(): number {
-      const row = db.prepare('SELECT COUNT(*) AS n FROM recipes').get() as unknown as { n: number };
+      const row = db.prepare('SELECT COUNT(*) AS n FROM recipes WHERE hidden = 0').get() as unknown as { n: number };
       return Number(row.n);
+    },
+
+    all(): Recipe[] {
+      return rowsToRecipes(db.prepare(`${SELECT_RECIPE} WHERE recipes.hidden = 0 ORDER BY recipes.id`).all());
     },
 
     close(): void {
       db.close();
     },
   };
+
+  return bank;
+}
+
+/**
+ * Open a database and return just its recipe bank.
+ *
+ * Kept because the seeder and a good many tests want nothing else. Anything that
+ * needs likes, comments or identities wants `openStore` in `store.ts`, which builds
+ * all four over a single handle.
+ */
+export function openBank(path: string): RecipeBank {
+  return recipeBank(openDatabase(path));
 }

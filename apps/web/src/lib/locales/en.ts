@@ -78,6 +78,38 @@ export const en = {
   'time.justNow': 'just now',
   'card.edited': 'edited {when}',
 
+  /* --- the social row on a published card, and the account behind it ------ */
+
+  'card.likeTitle': 'like it — likes decide which recipes a model is shown as examples',
+  'card.unlikeTitle': 'take the like back',
+  'card.commentsTitle': 'read and answer — a reply can carry a sound',
+
+  'account.signIn': 'sign in',
+  'account.signInTitle': 'GitHub, for publishing, liking and replying. Accounts must be at least {days} days old.',
+  'account.signOut': 'sign out',
+  'account.left': '{count} left today',
+  'account.standing': '{count} like(s) received; {left} more recipes today',
+  'account.signedInAs': 'signed in as {login}',
+  'account.signedOut': 'signed out',
+  'account.errorTooNew': 'That GitHub account is too new to write here. The age limit is the whole spam defence; nothing else about the account matters.',
+  'account.errorBanned': 'This account may read the bank but not write to it.',
+  'account.errorCancelled': 'Sign-in cancelled.',
+  'account.errorGeneric': 'Sign-in failed ({code}).',
+
+  'comments.title': 'discussion — {name}',
+  'comments.close': 'close',
+  'comments.loading': 'reading the thread…',
+  'comments.empty': 'Nothing here yet. A reply can carry a sound — that is the interesting kind.',
+  'comments.placeholder': 'what would you change?',
+  'comments.attach': 'reply with a version',
+  'comments.attachedAria': 'the soundline attached to this reply',
+  'comments.detach': 'drop the attached sound',
+  'comments.rule': 'No links. Refer to a recipe as #12. An attached soundline is parsed, validated and rendered like any published recipe.',
+  'comments.send': 'reply',
+  'comments.sending': 'sending…',
+  'comments.openInStudio': 'open in studio',
+  'comments.signInFirst': 'Reading is open to everyone. Replying needs an account.',
+
   /* --- the studio rail ---------------------------------------------------- */
 
   'rail.new': 'New sound',
@@ -97,10 +129,12 @@ export const en = {
 
   'studio.soundline': 'Soundline',
   'studio.model': 'Model',
+  'studio.search': 'Search',
   'studio.compare': 'Compare A / B',
   'studio.viewAria': 'view',
   'studio.hintCompare': 'numeric, not perceptual — it ranks candidates, it does not judge them',
   'studio.hintModel': 'rendered audio from the same prompt — no recipe, nothing to tune',
+  'studio.hintSearch': 'recordings somebody already made — a target to aim at, not something to ship',
   'studio.edited': ' · edited {when}',
   'studio.unsaved': ' · unsaved',
 
@@ -130,6 +164,8 @@ export const en = {
   'prompt.runsSoundline': 'writes a new recipe for this prompt and fits its numbers',
   'prompt.runsModel': 'renders this prompt with the diffusion model, on this machine',
   'prompt.modelMissing': 'the model is not installed yet — the Model tab has the button',
+  'prompt.runsSearch': 'searches freesound.org for a recording of this',
+  'prompt.searchMissing': 'paste a freesound.org API key in the Search tab first',
   'prompt.noteMock':
     'answers from the recipes in the catalog — no network, no key, and the validator, render, optimizer and export all still run',
   'prompt.noteAgentReady':
@@ -280,15 +316,58 @@ export const en = {
     'This model reads no script but Latin — every other one tokenizes into holes and renders as noise. Write the caption in English.',
   'model.captionLength': 'Past {limit} characters the text encoder drops the rest without saying so.',
 
+  /* --- the search view ---------------------------------------------------- */
+
+  'search.keyLabel': 'freesound.org key',
+  'search.keyPlaceholder': 'API key',
+  'search.keyAria': 'freesound.org API key',
+  'search.remember': 'remember',
+  'search.rememberTitle': 'encrypted in this browser under a key that cannot be exported',
+  'search.forget': 'forget',
+  'search.getKey': 'get a key ↗',
+  'search.cc0': 'CC0 only',
+  'search.cc0Title': 'public domain — nothing to credit, nothing to track',
+  'search.anyLicence': 'all licences',
+  'search.anyLicenceTitle': 'includes sounds that must be credited wherever they end up',
+  'search.anyLength': 'any length',
+  'search.under': '≤ {seconds}s',
+  'search.searchedFor': 'searched for',
+  'search.rewritten': 'written by the model',
+  'search.found': '{count} in the library, {shown} here',
+  'search.searching': 'searching…',
+  'search.needsKey': 'Paste a freesound.org key above. Requests go from this tab to the library and nowhere else.',
+  'search.idle': 'Describe the sound in the box above and press Make sound.',
+  'search.nothing': 'Nothing matched. Try “all licences”, a longer length, or plainer words.',
+  'search.play': 'play the preview',
+  'search.stop': 'stop',
+  'search.playFail': 'the preview for {name} would not play',
+  'search.useTitle': 'load it as the B side and compare',
+  'search.downloadTitle': 'download the preview (mp3)',
+  'search.creditTitle': 'copy the credit line',
+  'search.credit': 'the credit line',
+  'search.pageTitle': 'open its page on freesound.org',
+  'search.saved': 'saved {file} · {size}',
+  'search.downloads': '{count} downloads',
+  'search.licenceFree': 'public domain — no obligation',
+  'search.licenceBound': 'must be credited wherever this ends up — the © button copies the line',
+  'search.errKey': 'freesound.org refused the key. Check it, or get a new one from the link above.',
+  'search.errThrottled': 'freesound.org is throttling this key. Wait a minute and search again.',
+  'search.errNetwork': 'Could not reach freesound.org. Check the connection and try again.',
+  'search.errHttp': 'freesound.org refused the search.',
+  'search.caption':
+    'A target, not a deliverable: the button downloads the preview (mp3), and the original lives on the sound’s own page under the licence on its badge.',
+
   /* --- the compare view --------------------------------------------------- */
 
   'compare.bIs': 'B is a',
   'compare.model': 'Model render',
+  'compare.library': 'Library',
   'compare.file': 'File',
   'compare.take': 'Another take',
   'compare.modelBlocked': 'needs the local diffusion model — install it from the Model tab',
   'compare.nothingLoaded': 'nothing loaded',
   'compare.hintModel': 'rendered by a diffusion model from the same prompt — a target, not a competitor',
+  'compare.hintLibrary': 'a recording from freesound.org — preview quality, under the licence its row states',
   'compare.hintUpload': 'your own file, onset-aligned and peak-normalized on load',
   'compare.hintTake': 'the same recipe with a different seed — how much of this sound is the design?',
   'compare.colour': 'COLOUR',
@@ -296,6 +375,7 @@ export const en = {
     'Nothing to compare against yet. Drop an audio file here, pick “{take}” to render this recipe with a new seed, or {model}.',
   'compare.dropzoneModelReady': 'let the local model render a target',
   'compare.dropzoneModelMissing': 'install the local model in the Model tab',
+  'compare.dropzoneLibrary': 'or find a recording of it in the Search tab',
   'compare.candidate': 'candidate',
   'compare.alignment':
     'both onsets shifted to {onset} ms · peak-normalized · log frequency {min} Hz – {max}',

@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RecipeInput, SoundProfile } from '@txt2sfx/shared';
-import { MAX_LIMIT, ftsQuery, openBank, type RecipeBank } from '../src/db.js';
+import { MAX_LIMIT, fingerprintOf, ftsQuery, openBank, type RecipeBank } from '../src/db.js';
 
 /** FTS5 is a Node build flag, not a given — `openBank` probes for it on open. */
 describe('opening a bank', () => {
@@ -30,16 +30,31 @@ const profile: SoundProfile = {
   loudnessLufsApprox: -15,
 };
 
-const recipe = (over: Partial<RecipeInput> = {}): RecipeInput => ({
-  name: 'coin',
-  prompt: 'coin pickup sound for a platformer',
-  soundline: 'sound "coin" 260ms pickup\n  blip: tone square 988Hz | gain 0.5 decay 70ms\n',
-  profile,
-  category: 'pickup',
-  tags: ['coin', 'pickup', 'arcade'],
-  durationMs: 260,
-  ...over,
-});
+/**
+ * A soundline per name.
+ *
+ * It has to differ per fixture now: a recipe's identity is the hash of its canonical
+ * form, so a helper that handed every fixture the same text would make every second
+ * insert a duplicate. Which is exactly what the column is for — so the fixture
+ * bends, not the rule.
+ */
+const soundlineFor = (name: string, category: string): string =>
+  `sound "${name}" 260ms ${category}\n  blip: tone square 988Hz | gain 0.5 decay 70ms\n`;
+
+const recipe = (over: Partial<RecipeInput> = {}): RecipeInput => {
+  const name = over.name ?? 'coin';
+  const category = over.category ?? 'pickup';
+  return {
+    name,
+    prompt: 'coin pickup sound for a platformer',
+    soundline: soundlineFor(name, category),
+    profile,
+    category,
+    tags: ['coin', 'pickup', 'arcade'],
+    durationMs: 260,
+    ...over,
+  };
+};
 
 let bank: RecipeBank;
 
@@ -172,21 +187,36 @@ describe('search', () => {
    */
   it('keeps the index in step with a rating update', () => {
     const stored = bank.insert(recipe({ name: 'sword-clash', prompt: 'two swords clashing', tags: ['sword'] }));
-    bank.vote(stored.id, 1);
+    bank.setRating(stored.id, 1);
     expect(bank.list({ q: 'swords' }).map((r) => r.name)).toEqual(['sword-clash']);
+  });
+
+  it('orders by likes when asked, and by recency otherwise', () => {
+    const stored = bank.list({ limit: 3 });
+    const oldest = stored.at(-1);
+    bank.setRating(oldest?.id ?? 0, 5);
+    expect(bank.list({ sort: 'top' })[0]?.name).toBe(oldest?.name);
+    expect(bank.list()[0]?.name).toBe(stored[0]?.name);
   });
 });
 
-describe('votes', () => {
-  it('adds and subtracts', () => {
-    const stored = bank.insert(recipe());
-    expect(bank.vote(stored.id, 1)?.rating).toBe(1);
-    expect(bank.vote(stored.id, 1)?.rating).toBe(2);
-    expect(bank.vote(stored.id, -1)?.rating).toBe(1);
-  });
+describe('hidden recipes', () => {
+  /**
+   * Moderation hides rather than deletes, and a hidden recipe that is still
+   * retrievable is a hidden recipe in someone else's model prompt. Checked through
+   * every read rather than through the one that was written last.
+   */
+  it('disappear from every read except the moderation one', () => {
+    const stored = bank.insert(recipe({ name: 'spam', prompt: 'buy cheap sounds now' }));
+    expect(bank.setHidden(stored.id, true)).toBe(true);
 
-  it('reports an unknown id rather than pretending', () => {
-    expect(bank.vote(4242, 1)).toBeUndefined();
+    expect(bank.get(stored.id)).toBeUndefined();
+    expect(bank.list({ q: 'cheap' })).toEqual([]);
+    expect(bank.list().map((r) => r.name)).not.toContain('spam');
+    expect(bank.retrieve('cheap sounds', 5).recipes.map((r) => r.name)).not.toContain('spam');
+    expect(bank.all().map((r) => r.name)).not.toContain('spam');
+    expect(bank.count()).toBe(0);
+    expect(bank.getForModeration(stored.id)?.name).toBe('spam');
   });
 });
 
@@ -234,7 +264,7 @@ describe('retrieve', () => {
    */
   it('falls back to the best-rated recipes rather than answering nothing', () => {
     const top = bank.insert(recipe({ name: 'door-creak', prompt: 'creaking door', tags: ['door'] }));
-    bank.vote(top.id, 1);
+    bank.setRating(top.id, 1);
 
     const result = bank.retrieve('harpsichord glissando', 2);
     expect(result.fallback).toBe(true);
@@ -270,17 +300,45 @@ describe('identity', () => {
 
   it('recognizes an identical recipe and distinguishes a changed one', () => {
     const stored = bank.insert(recipe());
-    expect(bank.findIdentical('coin', recipe().soundline)?.id).toBe(stored.id);
-    expect(bank.findIdentical('coin', 'sound "coin" 260ms pickup\n  b: tone sine 400Hz | gain 0.5 decay 70ms\n')).toBeUndefined();
-    expect(bank.findIdentical('other', recipe().soundline)).toBeUndefined();
+    expect(bank.findByFingerprint(fingerprintOf(recipe().soundline))?.id).toBe(stored.id);
+    expect(bank.findByFingerprint(fingerprintOf(soundlineFor('coin-b', 'pickup')))).toBeUndefined();
+  });
+
+  /**
+   * The reason identity is the *canonical* form and not the posted bytes: reformat a
+   * recipe and it is still the same sound, and a bank that accepted both would be one
+   * whitespace edit away from unlimited duplicates.
+   */
+  it('sees through reformatting, and refuses the duplicate outright', () => {
+    const stored = bank.insert(recipe());
+    const reformatted = recipe().soundline.replace('  blip:', '      blip:').replace(' | ', '  |  ');
+    expect(reformatted).not.toBe(recipe().soundline);
+    expect(fingerprintOf(reformatted)).toBe(stored.fingerprint);
+    expect(bank.findByFingerprint(fingerprintOf(reformatted))?.id).toBe(stored.id);
+    expect(() => bank.insert(recipe({ name: 'coin-again', soundline: reformatted }))).toThrow(/UNIQUE/);
+  });
+
+  /**
+   * A recipe stored before the fingerprint column existed, or one the parser no
+   * longer accepts, gets an empty fingerprint — and empty must not collide with
+   * empty, or the first two such rows would make the bank unwritable.
+   */
+  it('lets unparseable recipes coexist rather than colliding on the empty hash', () => {
+    expect(fingerprintOf('not a soundline at all')).toBe('');
+    expect(() => {
+      bank.insert(recipe({ name: 'broken-a', soundline: 'not a soundline at all' }));
+      bank.insert(recipe({ name: 'broken-b', soundline: 'also not a soundline' }));
+    }).not.toThrow();
+    expect(bank.findByFingerprint('')).toBeUndefined();
   });
 });
 
 describe('robustness', () => {
   /**
-   * The profile is the one field the server cannot recompute — it has no audio
-   * stack — so a malformed one will eventually reach the table. When it does, that
-   * recipe should lose its usefulness, not take down every search that ranks it.
+   * The HTTP boundary measures profiles now, so a malformed one can no longer be
+   * posted — but the seeder writes directly, and a database file outlives the code
+   * that wrote it. When a bad profile does reach the table, that recipe should lose
+   * its usefulness, not take down every search that ranks it.
    */
   it('serves a recipe with an unreadable profile instead of throwing', () => {
     const good = bank.insert(recipe());

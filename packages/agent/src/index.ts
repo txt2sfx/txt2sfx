@@ -59,6 +59,9 @@ export type { RecipeSource, RetrievedRecipes } from './bank.js';
 export { parseKeywords, searchQuery } from './query.js';
 export type { SearchQueryOptions } from './query.js';
 
+export { parseRanking, rankSounds } from './rank.js';
+export type { RankCandidate, RankSoundsOptions, Ranking } from './rank.js';
+
 export { CAPTION_LIMIT, audioCaption, captionIssue, parseCaption } from './caption.js';
 export type { AudioCaptionOptions, Caption, CaptionIssue } from './caption.js';
 

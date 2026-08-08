@@ -179,8 +179,14 @@ export function saveFormat(scope: FormatScope, id: string): void {
   }
 }
 
-/** Hand a blob to the browser as a download. */
-function save(blob: Blob, filename: string): void {
+/**
+ * Hand a blob to the browser as a download.
+ *
+ * Exported because the Search tab downloads bytes that were never rendered here — a
+ * library's preview, fetched over the network — and a second copy of the object-URL
+ * dance would be a second place to learn the Firefox revoke timing the hard way.
+ */
+export function save(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

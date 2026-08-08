@@ -17,18 +17,23 @@
  *
  * ## One button, whichever engine the tab is about
  *
- * The row sits above the tabs and stays put across all three, so the sentence in it is
- * the one thing both engines are asked. Pressing it therefore runs *the tab you are
- * looking at*: the loop on `Soundline`, the diffusion model on `Model`. The alternative —
- * one button that always meant the recipe — put the model's own Render button a scroll
- * away from the prompt it renders, and left the row's accent hue saying `Model` while the
- * button meant something else. The label is `Make sound` for the same reason: it is the
- * one verb that is true of both engines, where `Regenerate` described only the loop.
+ * The row sits above the tabs and stays put across all four, so the sentence in it is
+ * the one thing every engine is asked. Pressing it therefore runs *the tab you are
+ * looking at*: the loop on `Soundline`, the diffusion model on `Model`, the library
+ * search on `Search`. The alternative — one button that always meant the recipe — put
+ * the model's own Render button a scroll away from the prompt it renders, and left the
+ * row's accent hue saying `Model` while the button meant something else. The label is
+ * `Make sound` for the same reason: it is the one verb that is true of every engine,
+ * where `Regenerate` described only the loop.
  *
- * What follows from that: on `Model` the provider and the key are not consulted at all
- * (nothing here goes to a vendor — the render happens on this machine through the
- * bridge), so what blocks the button there is the model not being installed yet, not an
- * empty key field. `Compare A / B` has no engine of its own and keeps the recipe's.
+ * What follows from that is that each tab is blocked by its own missing thing. On
+ * `Model` the provider and the key are not consulted at all (nothing there goes to a
+ * vendor — the render happens on this machine through the bridge), so what blocks the
+ * button is the model not being installed. On `Search` it is the library key, which is
+ * a different credential living in a different field: the provider key is optional
+ * there, because a search with no model still searches, it just does not get its query
+ * rewritten or its results reordered. `Compare A / B` has no engine of its own and
+ * keeps the recipe's.
  *
  * The button also grows a spinner while a run is in flight. It is the smallest honest
  * signal there is: the stage list below says *what* is happening once a run reports
@@ -58,8 +63,8 @@ import { HUE } from '../lib/design.js';
 import { useI18n, type Key } from '../lib/i18n.js';
 import type { ProviderSettings } from '../lib/useGenerate.js';
 
-/** Which of the three studio views is showing, so the row can take its hue. */
-export type StudioView = 'sound' | 'model' | 'compare';
+/** Which of the four studio views is showing, so the row can take its hue. */
+export type StudioView = 'sound' | 'model' | 'compare' | 'search';
 
 export interface PromptRowProps {
   readonly prompt: string;
@@ -77,6 +82,8 @@ export interface PromptRowProps {
   readonly view: StudioView;
   /** Whether the diffusion model is installed — what gates the button on the Model tab. */
   readonly modelReady: boolean;
+  /** Whether the library has a key — what gates the button on the Search tab. */
+  readonly searchReady: boolean;
   /** Runs whichever engine `view` is about; the screen decides which. */
   readonly onRun: () => void;
   readonly onStop: () => void;
@@ -96,6 +103,7 @@ export function PromptRow({
   stopping,
   view,
   modelReady,
+  searchReady,
   onRun,
   onStop,
 }: PromptRowProps): React.JSX.Element {
@@ -106,11 +114,13 @@ export function PromptRow({
   const options = providerOptions(import.meta.env.DEV);
   const option = options.find((entry) => entry.kind === settings.kind);
   const wantsKey = option?.needsKey === true;
-  /* Which engine this press means. Only the Model tab has one of its own; Compare has
+  /* Which engine this press means. Model and Search have one of their own; Compare has
      no engine and regenerating from it is regenerating the recipe. */
   const toModel = view === 'model';
+  const toSearch = view === 'search';
   const blocked =
-    prompt.trim() === '' || (toModel ? !modelReady : wantsKey && settings.apiKey.trim() === '');
+    prompt.trim() === '' ||
+    (toModel ? !modelReady : toSearch ? !searchReady : wantsKey && settings.apiKey.trim() === '');
 
   /* Fill the field from storage when the provider changes to one that has a key. Never
      overwrites something already typed — a key in the box is the user's most recent
@@ -146,7 +156,14 @@ export function PromptRow({
     };
   }, [open]);
 
-  const hue = view === 'model' ? HUE.model : view === 'compare' ? HUE.compare : HUE.recipe;
+  const hue =
+    view === 'model'
+      ? HUE.model
+      : view === 'compare'
+        ? HUE.compare
+        : view === 'search'
+          ? HUE.library
+          : HUE.recipe;
 
   return (
     <div className="prompt-row" style={{ ['--hue' as string]: String(hue) }}>
@@ -287,7 +304,17 @@ export function PromptRow({
                label is the verb and it does not change, and a button whose text moves
                under the cursor as tabs are switched is harder to aim at than one whose
                meaning is stated on hover. */
-            title={t(toModel ? (modelReady ? 'prompt.runsModel' : 'prompt.modelMissing') : 'prompt.runsSoundline')}
+            title={t(
+              toModel
+                ? modelReady
+                  ? 'prompt.runsModel'
+                  : 'prompt.modelMissing'
+                : toSearch
+                  ? searchReady
+                    ? 'prompt.runsSearch'
+                    : 'prompt.searchMissing'
+                  : 'prompt.runsSoundline',
+            )}
           >
             {t('prompt.make')}
           </button>

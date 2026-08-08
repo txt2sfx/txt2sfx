@@ -104,6 +104,28 @@ The metric is scale-normalized and onset-aligned, so it cannot distinguish "this
 - `renderSound` reports clipping and never normalizes — normalization would hide the problem where it can still be fixed in the spec.
 - Dev-only instruments that must not reach a static build: the devtools `bridge` provider (`apps/web/src/lib/bridge.ts`, installed on `window` only under `vite dev`) and the Stable Audio endpoint (`apps/web/plugins/stable-audio.ts`, `apply: 'serve'`). The latter drives an already-provisioned Python venv — see [test/stable-audio/README.md](test/stable-audio/README.md) — and provisions nothing itself.
 
+## The public bank
+
+`apps/server` is deployed to **https://txt2sfx.pix3.dev** by
+[`.github/workflows/deploy-server.yml`](.github/workflows/deploy-server.yml), which fires
+only on a push to `main` touching the server or a package it links against (`shared`,
+`core`, `analyzer`, `agent`). It repeats the whole gate, SSHes in, runs
+`/srv/txt2sfx/deploy.sh <sha>` and polls `/api/health`. There is no manual step, and
+[`apps/server/deploy/README.md`](apps/server/deploy/README.md) is the host preparation and
+the backup and moderation procedures.
+
+Three things about that server are easy to undo by accident:
+
+- **It renders what it stores.** `node-web-audio-api` is a *dependency* of `apps/server`,
+  not a devDependency, and `POST /api/recipes` measures the profile rather than believing
+  the body. That is the anti-spam mechanism, not a detail — `render.ts` says why.
+- **Reading is anonymous; writing needs a session**, carried as a bearer token and never a
+  cookie. That is what lets CORS stay `origin: true`, which is the property the whole bank
+  exists for.
+- **Solo mode refuses a non-loopback bind.** With no GitHub app configured every write is
+  attributed to a built-in `local` account, and serving that publicly is not a state
+  anybody chooses on purpose.
+
 ## Releasing `txt2sfx-bridge`
 
 Triggered by any request to publish, release or ship an update to the bridge — "опубликуй

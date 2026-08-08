@@ -10,47 +10,56 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { SoundProfile } from '@txt2sfx/shared';
-import { extractProfile } from '@txt2sfx/analyzer';
+import { parse } from '@txt2sfx/core';
 import { buildApp } from '../src/app.js';
-import { openBank, type RecipeBank } from '../src/db.js';
+import type { AuthContext } from '../src/auth.js';
+import { measure } from '../src/render.js';
+import { SCHEMA_VERSION, openDatabase } from '../src/schema.js';
+import { type Store, storeOver } from '../src/store.js';
 import { seedBank } from '../src/seed.js';
-
-const profile: SoundProfile = {
-  durationMs: 42,
-  attackMs: 1,
-  rmsEnvelope: [1, 0.4],
-  centroidHz: [1100],
-  flatness: 0.01,
-  noiseRatio: 0.02,
-  peakHz: 836,
-  loudnessLufsApprox: -15,
-};
 
 const VALID = 'sound "tick" 45ms ui\n  body: tone sine 1800Hz | gain 0.6 decay 25ms\n';
 
-let bank: RecipeBank;
+/**
+ * Solo mode, which is what a bank with no identity provider configured is.
+ *
+ * These tests are about the recipe contract rather than about sign-in, and against
+ * the solo actor each of them stays one request long. `auth.test.ts` covers what
+ * changes once GitHub is configured.
+ */
+const SOLO: AuthContext = { mode: 'solo', adminToken: '' };
+
+let store: Store;
+let bank: Store['recipes'];
 let app: FastifyInstance;
 
 beforeEach(async () => {
-  bank = openBank(':memory:');
-  app = await buildApp({ bank });
+  store = storeOver(openDatabase(':memory:'));
+  bank = store.recipes;
+  app = await buildApp({ store, auth: SOLO });
 });
 
 afterEach(async () => {
   await app.close();
-  bank.close();
+  store.close();
 });
 
 /** POST a recipe, with sensible defaults for everything not under test. */
 const post = (body: Record<string, unknown>) =>
-  app.inject({ method: 'POST', url: '/api/recipes', payload: { name: 'tick', prompt: 'ui tick', soundline: VALID, profile, tags: ['ui'], ...body } });
+  app.inject({ method: 'POST', url: '/api/recipes', payload: { name: 'tick', prompt: 'ui tick', soundline: VALID, tags: ['ui'], ...body } });
 
 describe('GET /api/health', () => {
   it('reports liveness, size and the grammar version', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok', recipes: 0, grammar: 'soundline/v0' });
+    expect(response.json()).toEqual({
+      status: 'ok',
+      recipes: 0,
+      grammar: 'soundline/v0',
+      schema: SCHEMA_VERSION,
+      auth: 'solo',
+      renderQueue: 0,
+    });
   });
 });
 
@@ -116,7 +125,6 @@ describe('POST /api/recipes', () => {
     ['missing-soundline', { soundline: '' }],
     ['missing-name', { name: '' }],
     ['missing-prompt', { prompt: '' }],
-    ['missing-profile', { profile: undefined }],
   ])('answers %s with an actionable message', async (error, body) => {
     const response = await post(body);
     expect(response.statusCode).toBe(400);
@@ -125,14 +133,39 @@ describe('POST /api/recipes', () => {
   });
 
   /**
-   * The profile is the one field the server cannot recompute — it has no audio
-   * stack — so the least it can do is refuse one of the wrong shape rather than
-   * store something that poisons every later comparison.
+   * The profile used to arrive on trust. It is measured here now, which is what
+   * makes it honest — and what makes a write cost the work it claims to be worth.
+   * A posted profile is accepted and ignored, so an older client keeps working.
    */
-  it('refuses a profile that is only shaped like one', async () => {
-    const response = await post({ profile: { durationMs: 42, attackMs: 1 } });
-    expect(response.statusCode).toBe(400);
-    expect(response.json().error).toBe('missing-profile');
+  it('measures the profile itself and ignores whatever the body claimed', async () => {
+    const lie = {
+      durationMs: 9999,
+      attackMs: 1,
+      rmsEnvelope: [1],
+      centroidHz: [1],
+      flatness: 0,
+      noiseRatio: 0,
+      peakHz: 1,
+      loudnessLufsApprox: -1,
+    };
+    const body = (await post({ profile: lie })).json();
+    expect(body.recipe.profile.durationMs).not.toBe(9999);
+    expect(body.recipe.profile.peakHz).toBeGreaterThan(1000);
+    expect(body.measured.peak).toBeGreaterThan(0);
+  });
+
+  /**
+   * Nothing that is not a sound can be stored — which is why this system has no
+   * field for a spammer to write a message into.
+   */
+  it('refuses a recipe that renders to silence', async () => {
+    const response = await post({
+      name: 'nothing',
+      soundline: 'sound "hush" 45ms ui\n  body: tone sine 1800Hz | gain 0.0008 decay 25ms\n',
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error).toBe('silence');
+    expect(bank.count()).toBe(0);
   });
 
   /**
@@ -161,17 +194,34 @@ describe('POST /api/recipes', () => {
   });
 
   /**
-   * A silent render profiles to the bottom of the loudness scale, and that number
-   * has to survive JSON: `-Infinity` becomes `null`, the shape check rejects it, and
-   * the caller is told it sent no profile when it sent one.
+   * Reformatting is not a new recipe. Identity is the canonical form, which is the
+   * wall a thousand reposts under a thousand names run into.
    */
-  it('accepts the profile of a silent sound', async () => {
-    const silence = extractProfile({ samples: new Float32Array(4410), sampleRate: 44100 });
-    expect(Number.isFinite(silence.loudnessLufsApprox)).toBe(true);
-    expect(JSON.parse(JSON.stringify(silence)).loudnessLufsApprox).toBe(silence.loudnessLufsApprox);
+  it('treats a reformatted repost as the same recipe', async () => {
+    const first = await post({});
+    const again = await post({ name: 'tick-again', soundline: VALID.replace('  body:', '    body:') });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().created).toBe(false);
+    expect(again.json().recipe.id).toBe(first.json().recipe.id);
+    expect(bank.count()).toBe(1);
+  });
 
-    const response = await post({ name: 'quiet', profile: silence });
-    expect(response.statusCode).toBe(201);
+  it('records who published it and what it was derived from', async () => {
+    const parent = (await post({})).json().recipe;
+    const child = await post({
+      name: 'tick-bright',
+      soundline: 'sound "tick" 45ms ui\n  body: tone sine 2400Hz | gain 0.6 decay 25ms\n',
+      parentId: parent.id,
+    });
+    expect(child.statusCode).toBe(201);
+    expect(child.json().recipe.parentId).toBe(parent.id);
+    expect(child.json().recipe.author.login).toBe('local');
+  });
+
+  it('refuses a parent that does not exist rather than dropping the link', async () => {
+    const response = await post({ parentId: 4242 });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('unknown-parent');
   });
 });
 
@@ -228,28 +278,32 @@ describe('GET /api/recipes/:id', () => {
   });
 });
 
-describe('POST /api/recipes/:id/vote', () => {
-  it('adds and subtracts a rating', async () => {
+describe('PUT and DELETE /api/recipes/:id/like', () => {
+  const like = (id: number, method: 'PUT' | 'DELETE' = 'PUT') =>
+    app.inject({ method, url: `/api/recipes/${String(id)}/like` });
+
+  /**
+   * The old endpoint took `{ delta: ±1 }` from anybody, so a rating was whatever the
+   * last script to run said it was. A like belongs to one person and is therefore
+   * idempotent: pressing it twice is one like, everywhere in the system.
+   */
+  it('is idempotent in both directions', async () => {
     const id = (await post({})).json().recipe.id;
-    const url = `/api/recipes/${String(id)}/vote`;
-    expect((await app.inject({ method: 'POST', url, payload: { delta: 1 } })).json().rating).toBe(1);
-    expect((await app.inject({ method: 'POST', url, payload: { delta: -1 } })).json().rating).toBe(0);
+    expect((await like(id)).json()).toEqual({ id, rating: 1, liked: true });
+    expect((await like(id)).json()).toEqual({ id, rating: 1, liked: true });
+    expect((await like(id, 'DELETE')).json()).toEqual({ id, rating: 0, liked: false });
+    expect((await like(id, 'DELETE')).json()).toEqual({ id, rating: 0, liked: false });
   });
 
-  it('refuses a delta that is not ±1', async () => {
+  it('reports back which recipes the caller has liked, in one request', async () => {
     const id = (await post({})).json().recipe.id;
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/recipes/${String(id)}/vote`,
-      payload: { delta: 50 },
-    });
-    expect(response.statusCode).toBe(400);
-    expect(response.json().error).toBe('bad-delta');
+    await like(id);
+    const body = (await app.inject({ method: 'GET', url: '/api/recipes' })).json();
+    expect(body.liked).toEqual([id]);
   });
 
-  it('404s a vote for a recipe that is not there', async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/recipes/999/vote', payload: { delta: 1 } });
-    expect(response.statusCode).toBe(404);
+  it('404s a like for a recipe that is not there', async () => {
+    expect((await like(999)).statusCode).toBe(404);
   });
 });
 
@@ -339,15 +393,20 @@ describe('the edges', () => {
     expect(response.json().message).toContain('/api/llms.txt');
   });
 
-  it('stores a profile measured by the analyzer, end to end', async () => {
-    /* Not a real render — the point is that a real `SoundProfile` passes the shape
-       check and survives the round trip through JSON and SQLite. */
-    const measured = extractProfile({
-      samples: Float32Array.from({ length: 4410 }, (_, i) => Math.sin((i / 44100) * 2 * Math.PI * 1000) * Math.exp(-i / 2000)),
-      sampleRate: 44100,
-    });
-    const response = await post({ profile: measured });
+  /**
+   * The whole chain in one test: the endpoint compiled the posted text, rendered it,
+   * measured it, and stored the measurement — through JSON and through SQLite, where
+   * a profile full of `Infinity` or of arrays would previously have been mangled.
+   */
+  it('stores the profile it measured itself, end to end', async () => {
+    const expected = await measure(parse(VALID));
+    const response = await post({});
     expect(response.statusCode).toBe(201);
-    expect(response.json().recipe.profile.peakHz).toBeCloseTo(measured.peakHz, 6);
+
+    const stored = response.json().recipe.profile;
+    expect(stored.peakHz).toBeCloseTo(expected.profile.peakHz, 6);
+    expect(stored.rmsEnvelope).toEqual(expected.profile.rmsEnvelope);
+    expect(stored.loudnessLufsApprox).toBeCloseTo(expected.profile.loudnessLufsApprox, 6);
+    expect(bank.get(response.json().recipe.id)?.profile.peakHz).toBeCloseTo(expected.profile.peakHz, 6);
   });
 });

@@ -1,16 +1,20 @@
 /**
  * A against B: two waveforms, two spectrograms, and seven numbers.
  *
- * ## What B is allowed to be, and why there are three answers
+ * ## What B is allowed to be, and why there are four answers
  *
  * The old panel had one: a file you loaded. That covers the case where a real recording
- * of the thing exists, which is the minority of the work. The three sources here are the
- * three questions people actually ask:
+ * of the thing exists *and you already have it*, which is the minority of the work. The
+ * four sources here are the four questions people actually ask:
  *
  * - **A model's render.** Send the same prompt to a diffusion model running locally and
  *   compare against what it produced. A *target*, never a competitor: the deliverable is
  *   still a recipe, and the model's output is a 400 kB file that answers "what should
  *   this sound like" and nothing else.
+ * - **A recording from a library.** The same target at a different price: someone
+ *   already recorded this, and the Search tab finds it in one request instead of thirty
+ *   seconds of CPU. Preview quality, under a licence the row states — see
+ *   `components/SearchPanel.tsx`.
  * - **A file.** Your own recording, peak-normalized on load.
  * - **Another take.** The same recipe rendered with a different seed. This is the one
  *   the old panel could not express at all, and it answers a question specific to
@@ -58,7 +62,7 @@ import { playBuffer, type Playback } from '../lib/engine.js';
 import { useI18n, type Key } from '../lib/i18n.js';
 
 /** Where B comes from. */
-export type BKind = 'model' | 'upload' | 'take';
+export type BKind = 'model' | 'library' | 'upload' | 'take';
 
 /**
  * Spectrogram window, shared by both signals so their bins line up.
@@ -91,6 +95,7 @@ const SPEC_HEIGHT = 132;
 /** What each kind of B side is, said once under the two names. */
 const B_HINT: Readonly<Record<BKind, Key>> = {
   model: 'compare.hintModel',
+  library: 'compare.hintLibrary',
   upload: 'compare.hintUpload',
   take: 'compare.hintTake',
 };
@@ -106,7 +111,11 @@ export interface ComparePanelProps {
   readonly onBKind: (kind: BKind) => void;
   /** True under `vite dev` with the local diffusion model provisioned. */
   readonly modelAvailable: boolean;
+  /** True when what is loaded came from the library, so its chip need not go looking. */
+  readonly libraryLoaded: boolean;
   readonly onLoadFile: (file: File) => void;
+  /** Go to the Search tab. Each B chip is a door to where that kind of B comes from. */
+  readonly onFindLibrary: () => void;
   readonly onNewTake: () => void;
   readonly onFit: () => void;
   readonly fitBlocked: string | null;
@@ -123,7 +132,9 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
     bKind,
     onBKind,
     modelAvailable,
+    libraryLoaded,
     onLoadFile,
+    onFindLibrary,
     onNewTake,
     onFit,
     fitBlocked,
@@ -426,6 +437,7 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
           {(
             [
               { id: 'model', label: t('compare.model') },
+              { id: 'library', label: t('compare.library') },
               { id: 'upload', label: t('compare.file') },
               { id: 'take', label: t('compare.take') },
             ] as const
@@ -437,6 +449,10 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
               onClick={() => {
                 onBKind(entry.id);
                 if (entry.id === 'upload') fileInput.current?.click();
+                /* Only when there is nothing to select: a recording already loaded is
+                   what this chip is *for*, and bouncing to the search would throw away
+                   the comparison the user came here to look at. */
+                if (entry.id === 'library' && !libraryLoaded) onFindLibrary();
                 if (entry.id === 'take') onNewTake();
               }}
               disabled={entry.id === 'model' && !modelAvailable}
@@ -523,6 +539,14 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
               take: t('compare.take'),
               model: t(modelAvailable ? 'compare.dropzoneModelReady' : 'compare.dropzoneModelMissing'),
             })}
+          </p>
+          {/* A second sentence rather than another clause in the first: the sentence
+              above is already carrying two placeholders in nine languages, and the
+              library needs no local model and no file of your own to be worth trying. */}
+          <p className="faint">
+            <button type="button" className="link" onClick={onFindLibrary}>
+              {t('compare.dropzoneLibrary')}
+            </button>
           </p>
         </div>
       ) : (

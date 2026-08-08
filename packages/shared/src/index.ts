@@ -10,6 +10,7 @@
 
 export type {
   ArgValue,
+  Author,
   EffectNode,
   EnumArg,
   EnvelopeNode,
@@ -24,6 +25,7 @@ export type {
   ParamSpec,
   RampSegment,
   Recipe,
+  RecipeComment,
   RecipeInput,
   Signature,
   SlotRange,

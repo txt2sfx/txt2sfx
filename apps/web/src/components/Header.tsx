@@ -65,9 +65,17 @@ export interface HeaderProps {
   readonly onScreen: (screen: Screen) => void;
   readonly bridge: BridgeStatus;
   readonly onOpenBridge: () => void;
+  /**
+   * The account control, passed in rather than built here.
+   *
+   * It needs the bank client, the session and the sign-in flow, and none of those are
+   * things a header should know about. Handing it in as a node keeps this file about
+   * the bar and keeps the one stateful control next to the state it reads.
+   */
+  readonly account?: React.ReactNode;
 }
 
-export function Header({ screen, onScreen, bridge, onOpenBridge }: HeaderProps): React.JSX.Element {
+export function Header({ screen, onScreen, bridge, onOpenBridge, account }: HeaderProps): React.JSX.Element {
   const { t } = useI18n();
   const live = bridge.state === 'live';
   const agent = bridge.health?.agent;
@@ -139,6 +147,8 @@ export function Header({ screen, onScreen, bridge, onOpenBridge }: HeaderProps):
           ☆ {t('repo.star')}
         </a>
       </div>
+
+      {account}
 
       <LanguageMenu />
     </header>

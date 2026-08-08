@@ -92,7 +92,7 @@ describe('seeding', () => {
     async () => {
       await seedBank(bank);
       const coin = bank.list({ q: 'coin', limit: 1 })[0];
-      bank.vote(coin?.id ?? 0, 1);
+      bank.setRating(coin?.id ?? 0, 1);
 
       const again = await seedBank(bank);
       expect(again.stored).toBe(0);

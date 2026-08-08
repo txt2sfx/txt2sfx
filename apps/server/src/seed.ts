@@ -17,13 +17,12 @@
  * recipe. `--strict` flips it to refusing, which is the mode CI should use once the
  * finding has been resolved either way.
  *
- * ## The renderer is here and only here
+ * ## The renderer used to be here and only here
  *
- * The server has no audio stack: it stores profiles, it does not measure them. The
- * seeder does, so `node-web-audio-api` is a devDependency of this package and is
- * imported nowhere else. Note the copy out of the `AudioBuffer` — `getChannelData`
- * returns a view into memory the native context owns, and holding it while
- * rendering the next recipe is how you get a profile full of NaN.
+ * It is now in `render.ts`, shared with `POST /api/recipes` — the server measures
+ * what it stores rather than trusting a posted profile, which is both the honest
+ * thing to do and the reason a write costs real work. The seeder calls the same
+ * function, so a reference recipe and a published one are measured identically.
  *
  * @packageDocumentation
  */
@@ -32,11 +31,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { OfflineAudioContext as NodeOfflineAudioContext } from 'node-web-audio-api';
-import type { SoundAST, ValidationIssue } from '@txt2sfx/shared';
-import { declaredDurationMs, hasErrors, parse, renderSound, validate } from '@txt2sfx/core';
-import { extractProfile } from '@txt2sfx/analyzer';
+import type { ValidationIssue } from '@txt2sfx/shared';
+import { declaredDurationMs, hasErrors, parse, validate } from '@txt2sfx/core';
 import type { RecipeBank } from './db.js';
+import { measure } from './render.js';
 import { configFromEnv, openConfiguredBank } from './index.js';
 
 const EXAMPLES_DIR = fileURLToPath(new URL('../../../examples', import.meta.url));
@@ -91,17 +89,6 @@ const PROMPTS: Readonly<Record<string, { prompt: string; tags: readonly string[]
     tags: ['ui', 'click', 'menu', 'button', 'interface'],
   },
 };
-
-/** Render one AST, copying the samples out of the native buffer. */
-async function measure(ast: SoundAST): Promise<ReturnType<typeof extractProfile>> {
-  const result = await renderSound(ast, {
-    context: (options) => new NodeOfflineAudioContext(options) as unknown as OfflineAudioContext,
-  });
-  return extractProfile({
-    samples: Float32Array.from(result.buffer.getChannelData(0)),
-    sampleRate: result.buffer.sampleRate,
-  });
-}
 
 /** What happened to one recipe. */
 export interface SeedEntry {
@@ -161,7 +148,7 @@ export async function seedBank(bank: RecipeBank, options: SeedOptions = {}): Pro
       name,
       prompt: meta.prompt,
       soundline: source,
-      profile: await measure(ast),
+      profile: (await measure(ast)).profile,
       category: ast.category,
       tags: meta.tags,
       durationMs: declaredDurationMs(ast),

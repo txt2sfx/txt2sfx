@@ -300,6 +300,21 @@ export interface SoundProfile {
  * Recipe bank
  * ------------------------------------------------------------------------- */
 
+/**
+ * Whoever published a recipe or wrote a comment.
+ *
+ * Deliberately three fields. The bank stores what it needs to attribute a sound and
+ * to ban an account, and an identity provider will happily hand over an email
+ * address, a company and a location that this project has no use for and would then
+ * have to protect.
+ */
+export interface Author {
+  readonly id: number;
+  /** Handle at the identity provider, e.g. a GitHub login. */
+  readonly login: string;
+  readonly avatarUrl: string;
+}
+
 /** A solved sound stored in the recipe bank. */
 export interface Recipe {
   readonly id: number;
@@ -312,7 +327,42 @@ export interface Recipe {
   readonly category: SoundCategory;
   readonly tags: readonly string[];
   readonly durationMs: number;
+  /**
+   * How many people liked it.
+   *
+   * Not a vanity number: retrieval orders by it and few-shot selection prefers it,
+   * so a like is the community telling the next person's model which recipes are
+   * worth imitating.
+   */
   readonly rating: number;
+  /** ISO-8601 timestamp. */
+  readonly createdAt: string;
+  /** Absent for the reference set in `examples/`, which has no author. */
+  readonly author?: Author;
+  /** The recipe this one was derived from, when it is a remix. */
+  readonly parentId?: number;
+  /** Hash of the canonical form — the identity that deduplication uses. */
+  readonly fingerprint?: string;
+  /** Number of visible comments. Absent when the source did not count them. */
+  readonly comments?: number;
+}
+
+/**
+ * A reply on a recipe.
+ *
+ * The interesting field is `soundline`. A comment may answer with a sound — "your
+ * gate, with 40 ms off the tail" — and when it does, that text went through the same
+ * parse, validate and render as a published recipe. It is the one thing in this
+ * system that is both a discussion and a proposal, and it is also why the comment
+ * form is hard for a spammer to use: the valuable move requires the grammar.
+ */
+export interface RecipeComment {
+  readonly id: number;
+  readonly recipeId: number;
+  readonly author: Author;
+  readonly body: string;
+  /** A counter-proposal, already validated and rendered. */
+  readonly soundline?: string;
   /** ISO-8601 timestamp. */
   readonly createdAt: string;
 }

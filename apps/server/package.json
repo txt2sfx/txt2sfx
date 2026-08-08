@@ -12,7 +12,8 @@
     "build": "tsc -b",
     "start": "node dist/index.js",
     "dev": "tsc -b && node dist/index.js",
-    "seed": "tsc -b && node dist/seed.js"
+    "seed": "tsc -b && node dist/seed.js",
+    "dump": "tsc -b && node dist/dump.js"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -20,9 +21,7 @@
     "@txt2sfx/analyzer": "workspace:*",
     "@txt2sfx/core": "workspace:*",
     "@txt2sfx/shared": "workspace:*",
-    "fastify": "^5.2.0"
-  },
-  "devDependencies": {
+    "fastify": "^5.2.0",
     "node-web-audio-api": "^2.1.0"
   }
 }

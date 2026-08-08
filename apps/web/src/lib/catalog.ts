@@ -40,6 +40,10 @@ export interface Entry {
   readonly rating?: number;
   /** The bank's id, for entries that live there. */
   readonly id?: number;
+  /** How many visible comments the bank reports. */
+  readonly comments?: number;
+  /** Who published it. Absent for the reference set, which has no author. */
+  readonly author?: string;
 }
 
 /** Alphabetical, the order the sidebar has always used. */
@@ -58,6 +62,8 @@ export function bankEntries(recipes: readonly Recipe[]): Entry[] {
       category: recipe.category,
       rating: recipe.rating,
       id: recipe.id,
+      comments: recipe.comments ?? 0,
+      ...(recipe.author === undefined ? {} : { author: recipe.author.login }),
     }))
     .sort(byName);
 }

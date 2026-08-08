@@ -547,6 +547,10 @@ input[type='range'] {
   background: oklch(0.28 0.035 var(--violet));
   color: oklch(0.9 0.07 var(--violet));
 }
+.segmented.small button.selected.green {
+  background: oklch(0.28 0.035 var(--green));
+  color: oklch(0.9 0.07 var(--green));
+}
 
 .pill {
   display: flex;
@@ -838,6 +842,16 @@ input[type='range'] {
 }
 .chip-amber {
   border-color: oklch(0.27 0.014 265);
+}
+/* The licence chips. Green because the choice they express is "can I use this",
+   which is the same claim the licence badge on every row makes. */
+.chip-green {
+  border-color: oklch(0.27 0.014 265);
+}
+.chip-green.selected {
+  border-color: oklch(0.4 0.06 var(--green));
+  background: oklch(0.26 0.035 var(--green));
+  color: oklch(0.88 0.1 var(--green));
 }
 
 .grid {
@@ -2020,6 +2034,153 @@ input[type='range'] {
 }
 
 /* ------------------------------------------------------------------------- *
+ * Search — somebody else's recording
+ * ------------------------------------------------------------------------- */
+
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  animation: rise 0.28s var(--ease) both;
+}
+/* The key, on the raised ground the model's install form uses, and for the same
+   reason: it is the one control with a consequence outside this page. */
+.library-key {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 11px 12px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.library-key .field {
+  flex: 1 1 260px;
+}
+.library-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+}
+.library-words {
+  color: oklch(0.8 0.1 var(--green));
+}
+.library-error {
+  padding: 10px 12px;
+  background: oklch(0.2 0.03 var(--red));
+  border: 1px solid oklch(0.36 0.06 var(--red));
+  border-radius: var(--radius-sm);
+}
+.library-error p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.library-error p + p {
+  margin-top: 5px;
+  font-size: 10.5px;
+  word-break: break-word;
+}
+/* A scrolling list rather than a growing panel: thirty results are taller than the
+   screen, and the transport and the recipe below have to stay reachable. */
+.library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 420px;
+  overflow: auto;
+}
+.library-empty {
+  margin: 0;
+  padding: 26px 14px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-4);
+  text-wrap: pretty;
+}
+.library-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--panel-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+.library-row:hover {
+  border-color: oklch(0.34 0.04 var(--green));
+}
+.library-play {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 10px;
+  color: oklch(0.8 0.1 var(--green));
+}
+.library-play.playing {
+  border-color: oklch(0.44 0.08 var(--green));
+  background: oklch(0.26 0.045 var(--green));
+}
+.library-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.library-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.library-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+.library-meta {
+  margin-top: 2px;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The licence badge is a link, because the only honest answer to "what does CC-BY
+   mean here" is the licence itself. Two states, not five: something to do, or not. */
+.lic {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  text-decoration: none;
+}
+.lic-free {
+  border-color: oklch(0.36 0.06 var(--green));
+  color: oklch(0.82 0.11 var(--green));
+}
+.lic-bound {
+  border-color: oklch(0.38 0.06 var(--amber));
+  color: oklch(0.84 0.11 var(--amber));
+}
+.library-acts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+.library-acts .chip {
+  min-width: 28px;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------------- *
  * Share
  * ------------------------------------------------------------------------- */
 
@@ -2464,4 +2625,142 @@ input[type='range'] {
 .tk-bad {
   text-decoration: underline wavy oklch(0.7 0.15 var(--red));
   text-underline-offset: 3px;
+}
+
+/* --- the social row on a published card, and the thread behind it ---------
+   The heart is the only control here that changes a number somebody else can
+   see, so it is the only one that gets a colour when it is on. Everything else
+   stays the card's quiet grey: a grid of forty cards should read as forty
+   sounds, not as forty widgets. */
+
+.card-social {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+.chip-social {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-4);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.chip-social:hover {
+  color: var(--ink-2);
+  border-color: oklch(0.42 0.02 265);
+}
+.chip-social.on {
+  color: oklch(0.82 0.13 var(--red));
+  border-color: oklch(0.42 0.09 var(--red));
+}
+.card-author {
+  font-size: 10.5px;
+  margin-left: auto;
+}
+
+/* --- the account control -------------------------------------------------- */
+
+.account-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar {
+  border-radius: 50%;
+  display: block;
+}
+.avatar-fallback {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  background: oklch(0.34 0.02 265);
+  color: var(--ink-2);
+}
+
+/* --- the thread ----------------------------------------------------------- */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 14px 0;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.comment header {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 11px;
+}
+.comment p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  /* Somebody else's text, on one line or on forty, must not be able to push the
+     dialog wider than the screen. */
+  overflow-wrap: anywhere;
+}
+.comment-sound {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.comment-sound pre {
+  margin: 0;
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-3);
+  overflow-x: auto;
+}
+.play-round.small {
+  width: 24px;
+  height: 24px;
+  font-size: 9px;
+}
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.comment-form textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.comment-form .attached {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.comment-form .small {
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
 }

@@ -1,23 +1,25 @@
 /**
  * One sound, and everything that can be done to it.
  *
- * ## Three views over one recipe, not three tools
+ * ## Four views over one recipe, not four tools
  *
  * `Soundline` is the sound as this project makes it. `Model` is the same prompt answered
- * by a diffusion model, which is a target rather than a rival. `Compare A / B` is the
- * two of them measured against each other — or against a second seed, or against a file.
- * They are tabs rather than panels because they answer the same question at three
- * distances and only one of them is wanted at a time, and because the middle one is
- * expensive: the model view holds a subprocess and a checkpoint, and putting it
- * permanently on screen would start it for people who never asked.
+ * by a diffusion model, and `Search` is the same prompt answered by somebody's recording
+ * in a public library — both targets rather than rivals, at two different costs: thirty
+ * seconds of this machine's CPU, or one request. `Compare A / B` is any two of them
+ * measured against each other — or against a second seed, or against a file. They are
+ * tabs rather than panels because they answer the same question at four distances and
+ * only one of them is wanted at a time, and because the expensive one is expensive: the
+ * model view holds a subprocess and a checkpoint, and putting it permanently on screen
+ * would start it for people who never asked.
  *
- * The prompt row above them stays put across all three, and takes its accent hue from
+ * The prompt row above them stays put across all four, and takes its accent hue from
  * whichever is active — so the colour of the page says which mode you are in without a
  * label for it. It also *acts* on whichever is active: Make sound runs the loop on
- * `Soundline` and the diffusion model on `Model`, which is why this screen holds a handle
- * on the model panel and a flag for what it is doing. The panel keeps its own Render
- * button — the row is a second door to the same run, not a replacement — and the two
- * cannot disagree, because both call through the one handle.
+ * `Soundline`, the diffusion model on `Model` and the library search on `Search`, which
+ * is why this screen holds a handle on the model panel and a flag for what it is doing.
+ * The panel keeps its own Render button — the row is a second door to the same run, not a
+ * replacement — and the two cannot disagree, because both call through the one handle.
  *
  * ## Why the recipe stays editable while a run is going
  *
@@ -40,6 +42,7 @@ import { PromptRow, type StudioView } from '../components/PromptRow.js';
 import { Rail, type RailMode } from '../components/Rail.js';
 import { RunStrip } from '../components/RunStrip.js';
 import { SlotsCard } from '../components/SlotsCard.js';
+import { SearchPanel } from '../components/SearchPanel.js';
 import { SoundPanel } from '../components/SoundPanel.js';
 import { SoundlineCard } from '../components/SoundlineCard.js';
 import { captionProviderFor } from '../lib/agent.js';
@@ -48,7 +51,9 @@ import { ago, ms } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
 import type { Format } from '../lib/download.js';
 import type { Slot } from '../lib/slots.js';
+import type { FreesoundSound } from '../lib/freesound.js';
 import type { Generation, ProviderSettings } from '../lib/useGenerate.js';
+import type { LibrarySearch } from '../lib/useSearch.js';
 import type { GalleryItem } from './Gallery.js';
 
 export interface StudioProps {
@@ -90,6 +95,13 @@ export interface StudioProps {
   readonly generation: Generation;
   readonly agentReady: boolean;
 
+  /* --- the library --- */
+  readonly search: LibrarySearch;
+  /** Make this recording the B side: fetch its preview, decode it, name it. */
+  readonly onUseSound: (sound: FreesoundSound) => Promise<void>;
+  /** The app's toast, for the panels that report a download or a clipboard write. */
+  readonly onStatus: (message: string) => void;
+
   /* --- playback and export --- */
   readonly playing: boolean;
   readonly looping: boolean;
@@ -109,6 +121,8 @@ export interface StudioProps {
   readonly onBKind: (kind: BKind) => void;
   readonly candidateLayers: readonly (AudioBuffer | null)[];
   readonly modelAvailable: boolean;
+  /** True when what is loaded as B came from the library. */
+  readonly libraryLoaded: boolean;
   /** The Model tab can install the model; when it does, the rest of the app must know. */
   readonly onModelReady: (ready: boolean) => void;
   readonly onLoadFile: (file: File) => void;
@@ -137,6 +151,7 @@ export function Studio(props: StudioProps): React.JSX.Element {
   const modelControls = useRef<ModelControls | null>(null);
   const [modelBusy, setModelBusy] = useState(false);
   const toModel = props.view === 'model';
+  const toSearch = props.view === 'search';
 
   /**
    * Who writes the reference model's caption.
@@ -150,7 +165,22 @@ export function Studio(props: StudioProps): React.JSX.Element {
     if (provider === null) return null;
     return ({ prompt, seconds, signal }) => audioCaption({ prompt, provider, seconds, signal });
   }, [props.settings, props.agentReady]);
-  const running = toModel ? modelBusy : props.generation.running;
+
+  /**
+   * Who writes the search query and reorders the answer.
+   *
+   * The same choice, and therefore the same function: both stages are *about words in
+   * English* rather than about sound design, which is exactly the set `captionProviderFor`
+   * describes — the mock answers with a recipe, so it is no more able to write keywords
+   * than a caption. Null is not a failure here: a search with no model runs on the prompt
+   * as typed and on the library's own relevance, which is a working search.
+   */
+  const searchProvider = useMemo(
+    () => captionProviderFor(props.settings, props.agentReady),
+    [props.settings, props.agentReady],
+  );
+
+  const running = toModel ? modelBusy : toSearch ? props.search.running : props.generation.running;
 
   return (
     <div className="screen screen-studio">
@@ -182,15 +212,18 @@ export function Studio(props: StudioProps): React.JSX.Element {
             running={running}
             /* The model's abort is immediate — it kills a subprocess — so there is no
                "stopping…" state to report for it. */
-            stopping={toModel ? false : props.generation.stopping}
+            stopping={toModel || toSearch ? false : props.generation.stopping}
             view={props.view}
             modelReady={props.modelAvailable}
+            searchReady={props.search.key.trim() !== ''}
             onRun={() => {
               if (toModel) modelControls.current?.run();
+              else if (toSearch) props.search.start(props.prompt.trim(), searchProvider);
               else props.generation.start(props.prompt.trim(), props.settings);
             }}
             onStop={() => {
               if (toModel) modelControls.current?.stop();
+              else if (toSearch) props.search.cancel();
               else props.generation.cancel();
             }}
           />
@@ -225,6 +258,13 @@ export function Studio(props: StudioProps): React.JSX.Element {
               </button>
               <button
                 type="button"
+                className={props.view === 'search' ? 'selected green' : ''}
+                onClick={() => props.onView('search')}
+              >
+                {t('studio.search')}
+              </button>
+              <button
+                type="button"
                 className={props.view === 'compare' ? 'selected violet' : ''}
                 onClick={() => props.onView('compare')}
               >
@@ -233,6 +273,7 @@ export function Studio(props: StudioProps): React.JSX.Element {
             </nav>
             {props.view === 'compare' ? <span className="faint hint">{t('studio.hintCompare')}</span> : null}
             {props.view === 'model' ? <span className="faint hint">{t('studio.hintModel')}</span> : null}
+            {props.view === 'search' ? <span className="faint hint">{t('studio.hintSearch')}</span> : null}
           </div>
 
           <section className="card-panel" style={{ ['--hue' as string]: String(catHue(current?.category)) }}>
@@ -287,6 +328,10 @@ export function Studio(props: StudioProps): React.JSX.Element {
               />
             ) : null}
 
+            {props.view === 'search' ? (
+              <SearchPanel search={props.search} onUseSound={props.onUseSound} onStatus={props.onStatus} />
+            ) : null}
+
             {props.view === 'compare' ? (
               <ComparePanel
                 candidateName={props.selected}
@@ -297,7 +342,9 @@ export function Studio(props: StudioProps): React.JSX.Element {
                 bKind={props.bKind}
                 onBKind={props.onBKind}
                 modelAvailable={props.modelAvailable}
+                libraryLoaded={props.libraryLoaded}
                 onLoadFile={props.onLoadFile}
+                onFindLibrary={() => props.onView('search')}
                 onNewTake={props.onNewTake}
                 onFit={props.onFit}
                 fitBlocked={props.fitBlocked}

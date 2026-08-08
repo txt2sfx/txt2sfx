@@ -48,7 +48,9 @@ import {
 import { extractProfile, humanReadableDiff, soundDistance } from '@txt2sfx/analyzer';
 import { optimize } from '@txt2sfx/optimizer';
 import { GLOBAL_LIMITS } from '@txt2sfx/shared';
+import { AccountPill } from './components/AccountPill.js';
 import { BridgeDialog } from './components/BridgeDialog.js';
+import { CommentsDialog } from './components/CommentsDialog.js';
 import { Header, type Screen } from './components/Header.js';
 import type { BKind } from './components/ComparePanel.js';
 import type { RailMode } from './components/Rail.js';
@@ -58,11 +60,13 @@ import { Share } from './screens/Share.js';
 import { Studio } from './screens/Studio.js';
 import { renderSignalFor, targetFromBuffer } from './lib/agent.js';
 import { decodeAudioFile, metricsOf, signalOf, type Reference } from './lib/analysis.js';
-import { bankClient, DEFAULT_BANK_URL, type BankHealth } from './lib/bank.js';
+import { useAccount } from './lib/account.js';
+import { BankError, bankClient, DEFAULT_BANK_URL, type BankHealth } from './lib/bank.js';
 import { bridge } from './lib/bridge.js';
 import { bridgeClient, type BridgeStatus } from './lib/bridge-client.js';
 import { bankEntries, exampleEntries, mergeCatalog, type Entry } from './lib/catalog.js';
 import { download, loadFormat, saveFormat, type Format } from './lib/download.js';
+import { fetchPreview, type FreesoundSound } from './lib/freesound.js';
 import { playBuffer, playLive, render, type Playback } from './lib/engine.js';
 import { bundledRecipes, canSave, fetchRecipes, saveRecipe } from './lib/examples.js';
 import { useI18n } from './lib/i18n.js';
@@ -73,6 +77,7 @@ import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
 import { modelStatus, renderTarget } from './lib/stable-audio.js';
 import { DEFAULT_PROVIDER, useGenerate, type ProviderSettings } from './lib/useGenerate.js';
+import { useSearch } from './lib/useSearch.js';
 
 /** How long to wait after the last edit before re-rendering offline. */
 const RENDER_DEBOUNCE_MS = 140;
@@ -135,6 +140,18 @@ export function App(): React.JSX.Element {
   const [bankUrl] = useState(DEFAULT_BANK_URL);
   const [bankHealth, setBankHealth] = useState<BankHealth | null>(null);
   const [bankNonce, setBankNonce] = useState(0);
+  /** Which listed recipes this viewer has liked. Answered with the listing itself. */
+  const [liked, setLiked] = useState<ReadonlySet<number>>(() => new Set());
+  /** The recipe whose thread is open, if any. */
+  const [discussing, setDiscussing] = useState<{ id: number; name: string; soundline: string } | null>(null);
+  /**
+   * The session token.
+   *
+   * A ref, not state: the bank client reads it through a getter at call time, so the
+   * client stays the same object across a sign-in and the effects keyed on it — the
+   * gallery listing among them — do not all re-run.
+   */
+  const sessionToken = useRef<string | null>(null);
   const [library, setLibrary] = useState<Library>(() => loadLibrary());
 
   /* --- navigation --------------------------------------------------------- */
@@ -176,6 +193,15 @@ export function App(): React.JSX.Element {
   const [take, setTake] = useState<{ name: string; buffer: AudioBuffer } | null>(null);
   const [layerBuffers, setLayerBuffers] = useState<readonly (AudioBuffer | null)[]>([]);
   const [modelAvailable, setModelAvailable] = useState(false);
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
+
+  /* --- the library -------------------------------------------------------- */
+
+  /* Above the screens for the reason the run is: the Search tab unmounts every time
+     someone switches to Compare to look at what they just found, and a result list —
+     never mind a pasted key — that died on a tab switch would make the two unusable
+     together, which is the whole workflow. */
+  const search = useSearch();
 
   /* --- fitting ------------------------------------------------------------ */
 
@@ -206,7 +232,8 @@ export function App(): React.JSX.Element {
     };
   }, []);
 
-  const bank = useMemo(() => bankClient(bankUrl), [bankUrl]);
+  const bank = useMemo(() => bankClient(bankUrl, { token: () => sessionToken.current }), [bankUrl]);
+  const account = useAccount(bank, sessionToken);
 
   /* The bank is optional. Health decides whether the agent gets few-shot examples at all,
      so it is asked first and the listing only follows a live answer — otherwise a wrong
@@ -222,12 +249,14 @@ export function App(): React.JSX.Element {
         return;
       }
       const listed = await bank.list();
-      if (!cancelled) setBankList(bankEntries(listed));
+      if (cancelled) return;
+      setBankList(bankEntries(listed.recipes));
+      setLiked(listed.liked);
     });
     return () => {
       cancelled = true;
     };
-  }, [bank, bankNonce]);
+  }, [bank, bankNonce, account.account]);
 
   /* Re-asked whenever the bridge's state changes, not once at mount: the ordinary way
      this goes from "no model" to "ready" is somebody running `npx txt2sfx-bridge` while
@@ -319,9 +348,18 @@ export function App(): React.JSX.Element {
           origin: entry.origin,
           editedAt: library.touched[entry.name],
           trashed: library.trashed.includes(entry.name),
+          ...(entry.id === undefined
+            ? {}
+            : {
+                bankId: entry.id,
+                likes: entry.rating ?? 0,
+                liked: liked.has(entry.id),
+                comments: entry.comments ?? 0,
+                ...(entry.author === undefined ? {} : { author: entry.author }),
+              }),
         };
       }),
-    [entries, edits, library],
+    [entries, edits, library, liked],
   );
 
   /* --- rendering ---------------------------------------------------------- */
@@ -440,8 +478,13 @@ export function App(): React.JSX.Element {
 
   /* --- the reference and the B side --------------------------------------- */
 
-  const loadReference = useCallback((file: File) => {
+  const loadReference = useCallback((file: File, fromLibrary = false) => {
     setReferenceError(null);
+    /* Remembered here rather than derived from `bKind`, which is a *label* for what is
+       loaded and moves whenever someone flips a chip to read a different hint. The
+       Compare panel needs the fact — is the thing on screen a library recording — to
+       decide whether its Library chip should go looking for one. */
+    setLibraryLoaded(fromLibrary);
     void decodeAudioFile(file)
       .then((buffer) => setReference({ name: file.name, buffer }))
       .catch((error: unknown) => {
@@ -449,6 +492,22 @@ export function App(): React.JSX.Element {
         setReferenceError(t('warn.decodeFail', { file: file.name, error: String(error) }));
       });
   }, [t]);
+
+  /**
+   * Take a search result and make it the B side.
+   *
+   * The preview is fetched here rather than in the panel because this is where the
+   * reference lives, and because the road a library sound takes must be the same one a
+   * dropped file takes — one decode, one failure message, one place that knows what B is.
+   */
+  const useSound = useCallback(
+    async (sound: FreesoundSound): Promise<void> => {
+      const file = await fetchPreview(sound);
+      loadReference(file, true);
+      setBKind('library');
+    },
+    [loadReference],
+  );
 
   /**
    * Render the current recipe again with a different seed.
@@ -511,6 +570,73 @@ export function App(): React.JSX.Element {
       setView('sound');
     },
     [entries, select],
+  );
+
+  /**
+   * Take a soundline that arrived from somewhere else into this session.
+   *
+   * Used by a comment that carries a counter-proposal. It becomes a session recipe —
+   * this tab's, unsaved, and marked as such in the gallery — rather than overwriting
+   * the recipe it was a reply to, which is somebody else's.
+   */
+  const adopt = useCallback(
+    (name: string, source_: string) => {
+      stop();
+      setSession((currentSession) => [
+        ...currentSession.filter((entry) => entry.name !== name),
+        { name, source: source_, origin: 'session' as const, prompt: '' },
+      ]);
+      setSelected(name);
+      setScreen('studio');
+      setView('sound');
+    },
+    [stop],
+  );
+
+  /**
+   * Like or unlike a published recipe.
+   *
+   * Optimistic, and then corrected by the number the bank answers with: the round trip
+   * is a hundred milliseconds and a heart that fills only after it reads as a broken
+   * button. A refusal — no session, or too many likes too fast — puts the heart back
+   * and says why, because a silent revert is indistinguishable from a bug.
+   */
+  const like = useCallback(
+    (item: GalleryItem) => {
+      const id = item.bankId;
+      if (id === undefined) return;
+      const next = !(item.liked ?? false);
+
+      setLiked((current) => {
+        const updated = new Set(current);
+        if (next) updated.add(id);
+        else updated.delete(id);
+        return updated;
+      });
+      setBankList((current) =>
+        current.map((entry) =>
+          entry.id === id ? { ...entry, rating: Math.max(0, (entry.rating ?? 0) + (next ? 1 : -1)) } : entry,
+        ),
+      );
+
+      void bank
+        .setLiked(id, next)
+        .then((answer) => {
+          setBankList((current) => current.map((entry) => (entry.id === id ? { ...entry, rating: answer.rating } : entry)));
+          account.refresh();
+        })
+        .catch((error: unknown) => {
+          setLiked((current) => {
+            const updated = new Set(current);
+            if (next) updated.delete(id);
+            else updated.add(id);
+            return updated;
+          });
+          setBankNonce((n) => n + 1);
+          setStatus(error instanceof BankError ? error.message : String(error));
+        });
+    },
+    [account, bank],
   );
 
   const trash = useCallback((name: string) => {
@@ -1026,6 +1152,7 @@ export function App(): React.JSX.Element {
         }}
         bridge={bridgeStatus}
         onOpenBridge={() => setBridgeOpen(true)}
+        account={<AccountPill state={account} />}
       />
 
       {screen === 'gallery' ? (
@@ -1051,6 +1178,11 @@ export function App(): React.JSX.Element {
           onOpen={open}
           onPlay={(name) => playNamed(name, items.find((item) => item.name === name)?.source ?? '')}
           onTrash={trash}
+          onLike={like}
+          onComments={(item) => {
+            if (item.bankId === undefined) return;
+            setDiscussing({ id: item.bankId, name: item.name, soundline: item.source });
+          }}
         />
       ) : null}
 
@@ -1097,6 +1229,9 @@ export function App(): React.JSX.Element {
           onSettingsChange={setSettings}
           generation={generation}
           agentReady={bridgeStatus.health?.agent.connected === true}
+          search={search}
+          onUseSound={useSound}
+          onStatus={setStatus}
           playing={playingName === selected}
           looping={looping && playingName === selected}
           onPlay={play}
@@ -1112,6 +1247,7 @@ export function App(): React.JSX.Element {
           onBKind={setBKind}
           candidateLayers={layerBuffers}
           modelAvailable={modelAvailable}
+          libraryLoaded={libraryLoaded}
           onModelReady={setModelAvailable}
           onLoadFile={loadReference}
           onNewTake={newTake}
@@ -1148,6 +1284,26 @@ export function App(): React.JSX.Element {
           onDownload={onDownload}
         />
       ) : null}
+
+      {discussing === null ? null : (
+        <CommentsDialog
+          bank={bank}
+          account={account}
+          recipe={discussing}
+          onClose={() => {
+            setDiscussing(null);
+            /* The count on the card is part of the listing, so a reply that was just
+               posted has to come from somewhere — re-listing is one request and keeps
+               one source of truth rather than two counters drifting apart. */
+            setBankNonce((n) => n + 1);
+          }}
+          onPlay={(name, source) => playNamed(name, source)}
+          onOpen={(name, source) => {
+            setDiscussing(null);
+            adopt(name, source);
+          }}
+        />
+      )}
 
       {bridgeOpen ? (
         <BridgeDialog

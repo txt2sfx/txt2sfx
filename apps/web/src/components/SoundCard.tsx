@@ -36,9 +36,23 @@ export interface SoundCardProps {
   readonly editedAt: number | undefined;
   readonly trashed: boolean;
   readonly playing: boolean;
+  /**
+   * The bank's id, when this recipe is published.
+   *
+   * Everything social hangs off it being present: a recipe in `examples/` or one
+   * generated a minute ago has nobody to like it and nothing to discuss, and drawing
+   * a hollow heart on it would promise otherwise.
+   */
+  readonly bankId?: number;
+  readonly likes?: number;
+  readonly liked?: boolean;
+  readonly comments?: number;
+  readonly author?: string;
   readonly onOpen: () => void;
   readonly onPlay: () => void;
   readonly onTrash: () => void;
+  readonly onLike?: () => void;
+  readonly onComments?: () => void;
 }
 
 export function SoundCard({
@@ -51,6 +65,13 @@ export function SoundCard({
   editedAt,
   trashed,
   playing,
+  bankId,
+  likes = 0,
+  liked = false,
+  comments = 0,
+  author,
+  onLike,
+  onComments,
   onOpen,
   onPlay,
   onTrash,
@@ -123,6 +144,51 @@ export function SoundCard({
       </div>
 
       <p className="card-prompt">{prompt === '' ? <span className="faint">{t('card.noPrompt')}</span> : prompt}</p>
+
+      {/* The social row exists only for a published recipe, and it says who made it —
+          a like is worth having because it is attached to a name. */}
+      {bankId === undefined ? null : (
+        <div className="card-social">
+          <span
+            role="button"
+            tabIndex={0}
+            className={`chip-social${liked ? ' on' : ''}`}
+            title={liked ? t('card.unlikeTitle') : t('card.likeTitle')}
+            onClick={(event) => {
+              event.stopPropagation();
+              onLike?.();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.stopPropagation();
+              event.preventDefault();
+              onLike?.();
+            }}
+          >
+            {liked ? '♥' : '♡'} {likes}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            className="chip-social"
+            title={t('card.commentsTitle')}
+            onClick={(event) => {
+              event.stopPropagation();
+              onComments?.();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.stopPropagation();
+              event.preventDefault();
+              onComments?.();
+            }}
+          >
+            ✎ {comments}
+          </span>
+          {author === undefined ? null : <span className="mono faint card-author">@{author}</span>}
+        </div>
+      )}
+
       {editedAt === undefined ? null : (
         <div className="mono card-edited">{t('card.edited', { when: ago(editedAt) })}</div>
       )}

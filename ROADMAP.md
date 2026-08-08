@@ -51,6 +51,12 @@ that needs a sample set with licensing we can actually publish. The analyzer alr
 `{ samples, sampleRate }`, and `node-web-audio-api` decodes mp3/wav/flac/ogg through
 symphonia, so the decoding half is done.
 
+Half of the licensing half is now answered by hand: the playground's `Search` tab queries
+freesound.org filtered to **CC0**, plays the result, and loads it as the B side — a corpus
+this project can publish results against, one sound at a time. What is still missing is
+the collection step: choosing fifty of them, pinning ids, and fetching them reproducibly
+from `bench/` rather than from a browser tab.
+
 Also in scope: reporting per-target *model* scores when run against a real provider, so the
 table says something about models and not only about this repository.
 

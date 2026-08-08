@@ -1,0 +1,68 @@
+; Install as /etc/systemd/system/txt2sfx-bank.service. See deploy/README.md for the
+; one-time host preparation; `deploy.sh` is what CI runs on every push.
+;
+; A system unit rather than a --user one: the sandbox below is the point, and a user
+; slice cannot be given ProtectSystem=strict.
+
+[Unit]
+Description=txt2sfx recipe bank (soundline corpus, likes, comments)
+Documentation=https://github.com/txt2sfx/txt2sfx
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=txt2sfx
+Group=txt2sfx
+WorkingDirectory=/srv/txt2sfx/app/apps/server
+ExecStart=/usr/bin/node dist/index.js
+EnvironmentFile=/srv/txt2sfx/env
+
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+; SQLite in WAL mode plus an in-flight render. Both finish in milliseconds; the margin
+; is for the case where the render queue is full when the signal arrives.
+TimeoutStopSec=15
+
+; ## The resource budget
+;
+; This box is shared — it also serves a game-room server and two other sites — so what
+; matters is not a ceiling but who wins the core. A weight, not a quota: the bank wants
+; a whole core for the ~30 ms a render takes and nothing at all the rest of the time,
+; and it should lose that contest to anything with a person waiting on the other end.
+; 200 against pix3-rooms' 800 says so.
+;
+; Memory is a real ceiling, though. An OfflineAudioContext holds its whole output as
+; float samples; five seconds at 44.1 kHz is 900 KB, and the queue is two wide. 512 MB
+; is many times what that needs, and small enough that a leak takes this service down
+; rather than the box.
+CPUWeight=200
+MemoryMax=512M
+TasksMax=512
+LimitNOFILE=8192
+
+; ## The sandbox
+;
+; The service writes exactly one thing: the SQLite file (plus its -wal and -shm) under
+; /srv/txt2sfx/data. Everything else — the checkout, /etc, /home — is read-only to it.
+; The corpus dump writes to /srv/txt2sfx/corpus, which is why that is listed too.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+ReadWritePaths=/srv/txt2sfx/data /srv/txt2sfx/corpus
+
+; Loopback only. nginx is the only thing that may reach the port, and the app binds
+; 127.0.0.1 by default anyway — this is the second lock on the same door.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

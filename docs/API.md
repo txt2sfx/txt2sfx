@@ -9,22 +9,43 @@ pnpm --filter @txt2sfx/server dev       # http://127.0.0.1:8787
 ```
 
 Loopback by default — a recipe bank on a laptop should not appear on the office network
-because someone ran `pnpm dev`. `PORT`, `HOST` and `TXT2SFX_DB` override it.
+because someone ran `pnpm dev`. `PORT`, `HOST` and `TXT2SFX_DB` override it. The public
+instance is <https://txt2sfx.pix3.dev>; [`apps/server/deploy/`](../apps/server/deploy/)
+is how it runs.
 
-CORS is open (`origin: true`) and no endpoint takes a key: the bank is public data with no
-secrets in it, and locking it to one origin would block the single scenario it exists for.
+**Reading needs nothing. Writing needs an account.** Every `GET` here is open to anybody
+with no key, no cookie and no sign-in — that is the scenario the bank exists for, and CORS
+stays `origin: true` so somebody else's agent on somebody else's page can reach it without
+arrangements. Publishing, liking and commenting need a session, carried as
+`Authorization: Bearer …` and never as a cookie: the browser then cannot attach a
+credential to a request another page made, which is what makes open CORS safe here.
+
+With no identity provider configured the bank runs **solo** — one built-in `local` account,
+no sign-in — and refuses to bind anything but loopback in that state. That is the mode a
+laptop and the test suite run in.
 
 ## Endpoints
 
-| method | path | what it does |
-| --- | --- | --- |
-| `GET` | `/api/health` | liveness, recipe count, and `grammar: "soundline/v0"` — the version of the *contract*, so a client that cached `llms.txt` knows when what it learned has moved |
-| `GET` | `/api/llms.txt` | the whole contract as `text/plain`: grammar, parameter tables, category limits, invariants, few-shot examples, this API |
-| `GET` | `/api/recipes?q=&category=&limit=` | search (FTS5) with filters |
-| `GET` | `/api/recipes/:id` | one recipe |
-| `POST` | `/api/recipes` | store a solved sound — **validated before it is written** |
-| `POST` | `/api/recipes/:id/vote` | `{ "delta": 1 }` or `{ "delta": -1 }` |
-| `GET` | `/api/retrieve?prompt=&k=3` | top-k for few-shot prompting |
+| method | path | auth | what it does |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | — | liveness, recipe count, `grammar: "soundline/v0"`, schema version, auth mode, render-queue depth |
+| `GET` | `/api/llms.txt` | — | the whole contract as `text/plain`: grammar, parameter tables, category limits, invariants, few-shot examples, this API |
+| `GET` | `/api/recipes?q=&category=&author=&sort=&limit=` | — | search (FTS5) with filters; answers `liked` for the caller in the same request |
+| `GET` | `/api/recipes/:id` | — | one recipe |
+| `POST` | `/api/recipes` | session | store a solved sound — **parsed, validated and rendered before it is written** |
+| `PUT` `DELETE` | `/api/recipes/:id/like` | session | like / unlike, idempotent both ways |
+| `GET` | `/api/recipes/:id/comments` | — | the thread |
+| `POST` | `/api/recipes/:id/comments` | session | reply, optionally with a soundline of your own |
+| `POST` | `/api/reports` | session | `{ target, id, reason }` — puts something in front of a person |
+| `GET` | `/api/retrieve?prompt=&k=3` | — | top-k for few-shot prompting |
+| `GET` | `/api/auth/config` | — | whether this bank has a sign-in at all |
+| `GET` | `/api/auth/github/start?return=` | — | begins the sign-in redirect |
+| `POST` | `/api/auth/exchange` | — | trades the one-time hand-off code for a session token |
+| `GET` | `/api/auth/me` | session | who you are, and what is left of today's allowances |
+| `POST` | `/api/auth/signout` | session | forgets the session |
+
+`/api/moderation/*` exists only when `TXT2SFX_ADMIN_TOKEN` is set, and answers 404 — not
+401 — to anybody without it. An endpoint that says "unauthorized" has confirmed it exists.
 
 A 404 on an unknown route points the caller at `/api/llms.txt`.
 
@@ -45,7 +66,7 @@ in [AGENT_LOOP.md](AGENT_LOOP.md).
 
 ## `POST /api/recipes`
 
-Body: `{ name, prompt, soundline, profile, tags }`.
+Body: `{ name, prompt, soundline, tags, parentId? }`.
 
 - The **soundline is parsed and validated** before anything is written. A syntax error is
   a 400 with the parser's message; a broken invariant is a 422 with every issue and its
@@ -57,16 +78,62 @@ Body: `{ name, prompt, soundline, profile, tags }`.
   the body supplies them. A recipe whose stored category disagrees with its own header
   would be found by the wrong searches forever, and the text is the one field that cannot
   be wrong about itself.
-- **`profile` arrives on trust** — the server has no audio stack and cannot recompute it.
-  It is shape-checked, because a recipe stored with a half-populated profile poisons every
-  distance computed against it later and nothing downstream could explain why.
-- **The write is idempotent.** An identical `(name, soundline)` returns `200` with
-  `created: false` instead of inserting a twin. An agent whose request timed out sends the
-  same bytes again, and two identical rows are worse than a dropped write: both are
-  retrievable, both become few-shot examples, and votes split between them. A *different*
-  soundline under the same name is still a new recipe.
-- Warnings do not block a write and are returned in `warnings` — dropping them would lose
-  the one chance to tell the author.
+- **The profile is measured here.** The server renders the soundline and analyses the
+  result; a `profile` in the body is accepted and ignored, so an older client still works.
+  This is the single most load-bearing change in the whole endpoint — see below.
+- **A render to silence is refused** (`422 silence`, peak below −60 dBFS). A recipe that
+  makes no sound is not a recipe.
+- **The write is idempotent, keyed on the canonical form.** The identity of a recipe is
+  `sha256(serialize(parse(source)))`, so reformatting is not a new recipe: a repost
+  returns `200` with `created: false` and costs the author nothing. A *different* sound
+  under the same name is still a new recipe.
+- Warnings do not block a write and are returned in `warnings`, alongside `measured`
+  (peak, clipping, duration) — dropping either would lose the one chance to tell the author.
+
+### Why the server renders
+
+Three things at once, and only the first is about correctness:
+
+1. **The profile cannot be forged.** It was the one field arriving on trust, and a recipe
+   stored with an invented one poisons every distance computed against it later.
+2. **Nothing that is not a sound can be posted.** There is no free-text field here for a
+   spammer to write a message into: the name and prompt are short and searchable, and the
+   body is a DSL that either compiles or is refused.
+3. **A write costs real work** — not a captcha, but the thing the service is for. An honest
+   author pays it once per sound; a flood pays it per attempt, behind a rate limiter that
+   already said no.
+
+The DoS surface is small by construction: the compiler caps a render at 5 s and the
+validator caps layers at six, so the work per request is bounded before it starts. What is
+left is pile-up, so renders queue two wide and the rate limit is spent *before* the queue.
+
+## Likes, comments and what stops the spam
+
+**A like is a vote in the retrieval ranking.** `recipes.rating` is not a display counter:
+`/api/retrieve` orders by it and few-shot selection prefers it, so a like is the community
+pointing somebody else's model at better examples. That is why it is worth defending with
+an account, and why it is a `PUT`/`DELETE` on a resource rather than the old
+`POST /vote {delta}` any script could loop.
+
+**A comment carries no links.** Comment spam is an economic activity and the payload is
+always a link; refusing links removes the payoff entirely and costs nothing, because the
+only thing anybody here needs to point at is another recipe — `#12`, which the playground
+renders as something you can press and hear. Refused with a reason rather than silently
+stripped.
+
+**A comment may be a sound.** `{ body, soundline }` — and an attached soundline is held to
+exactly what a published recipe is held to: parsed, validated, rendered, refused with the
+rule that refused it. The most valuable move in the system is the one a bot cannot make.
+
+**The allowance is earned.** A token bucket per account and kind of write, refilled
+continuously — "twenty a day" has to mean "not twenty at once". A new account gets a small
+burst; an account whose recipes have collected likes gets two or three times that, and no
+more. A 429 carries `Retry-After` and says what the allowance grows with.
+
+**The age gate is the whole defence against industrial spam, and it is one line.** A GitHub
+account must be at least 30 days old at first sign-in. Spam needs accounts in bulk and now;
+an account that has to have existed for a month is not something a bulk supplier can
+conjure. Everything above handles the dedicated nuisance — this handles the industry.
 
 ## `GET /api/retrieve`
 
@@ -88,11 +155,42 @@ one may break an invariant. Filter before using them as examples.
 ## Schema
 
 `recipes` (id, name, prompt, soundline, profile_json, category, tags, duration_ms, rating,
-created_at) plus a `recipes_fts` FTS5 index with `content=recipes`.
+created_at, fingerprint, author_id, parent_id, hidden) plus a `recipes_fts` FTS5 index with
+`content=recipes`, and `actors`, `sessions`, `likes`, `comments`, `reports`, `buckets`.
 
 `duration_ms` is the **declared** duration from the header; the **measured** one lives in
 `profile_json`. Both facts are kept and neither is lost — for `helicopter` they are 1500
 and 3892, which is exactly the discrepancy the validator reports.
+
+Four decisions worth their columns:
+
+- **`fingerprint` is unique.** It is the canonical form's hash, so a thousand reposts under
+  a thousand names are one row. The index is partial (`WHERE fingerprint <> ''`) because a
+  recipe stored before the column existed, or one the parser no longer accepts, has no
+  canonical form — and those must not all collide on the empty string.
+- **`author_id` is nullable and stays that way.** The reference recipes have no author, and
+  inventing one so the column could be `NOT NULL` would put a fictional person's name under
+  ten sounds in the gallery.
+- **`likes` is a table of rows and `rating` is derived from it**, recomputed inside the same
+  transaction as every change. A counter incremented in place eventually disagrees with
+  reality and nothing notices.
+- **`hidden`, never `DELETE`.** Moderation that destroys the evidence cannot be reviewed.
+  Hidden rows leave every listing, every search, `/api/retrieve` and the corpus dump.
+
+The version lives in `PRAGMA user_version` and each migration step runs once, in a
+transaction. Step 1 is the pre-social schema written with `IF NOT EXISTS` throughout, so a
+database that predates all of this reports version 0 and is brought forward without losing
+a recipe or a rating — which is what `schema.test.ts` asserts against a database with rows
+in it, because an empty file migrating proves nothing.
+
+## The corpus outlives the service
+
+`pnpm --filter @txt2sfx/server dump <dir>` writes every visible recipe as a canonical
+`.soundline` file plus a `bank.jsonl` index with the measured profiles, the like counts and
+the attribution. Run on a timer into a public repository, it means the sounds survive this
+host, the history of the bank is a git log rather than a promise, and nobody has to trust
+an uptime figure. No comment, session, token or report is in it: the corpus is the sounds
+and who made them.
 
 ## SQLite: `node:sqlite`, and the flag that moves
 

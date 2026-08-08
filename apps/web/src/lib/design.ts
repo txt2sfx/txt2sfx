@@ -62,6 +62,15 @@ export const HUE = {
   model: 80,
   /** Comparison and sharing: what leaves the tool. */
   compare: 300,
+  /**
+   * Somebody else's recording, found in a library.
+   *
+   * The same angle as {@link HUE.ok}, and deliberately: green here means *available* —
+   * a sound that already exists and can be had — which is the same claim a green dot
+   * makes about a daemon. The two never appear in the same control, so one angle
+   * carrying both readings costs nothing and keeps the palette at five.
+   */
+  library: 150,
   /** Something is fine. */
   ok: 150,
   /** Something is not. */

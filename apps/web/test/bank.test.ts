@@ -80,23 +80,33 @@ describe('bank client', () => {
       fetch: () => Promise.reject(new TypeError('fetch failed')),
     });
     await expect(client.health()).resolves.toBeNull();
-    await expect(client.list()).resolves.toEqual([]);
+    await expect(client.list()).resolves.toEqual({ recipes: [], liked: new Set() });
+    /* Reads answer with nothing; a write has to say what went wrong, because
+       "you are over your allowance" and "your comment has a link in it" are the
+       messages that tell somebody what to do next. */
+    await expect(client.setLiked(1, true)).rejects.toThrow(/no bank at/);
   });
 
   it('reads health', async () => {
-    const { fetch } = stub({ 'GET /api/health': () => json(200, { recipes: 10, grammar: 'soundline/v0' }) });
+    const { fetch } = stub({
+      'GET /api/health': () => json(200, { recipes: 10, grammar: 'soundline/v0', auth: 'github' }),
+    });
     await expect(bankClient(DEFAULT_BANK_URL, { fetch }).health()).resolves.toEqual({
       recipes: 10,
       grammar: 'soundline/v0',
+      auth: 'github',
     });
   });
 
   it('lists recipes and drops anything that is not one', async () => {
     const { fetch } = stub({
-      'GET /api/recipes': () => json(200, { recipes: [RECIPE, { name: 'no id or soundline' }, 42] }),
+      'GET /api/recipes': () => json(200, { recipes: [RECIPE, { name: 'no id or soundline' }, 42], liked: [7] }),
     });
     const listed = await bankClient(DEFAULT_BANK_URL, { fetch }).list();
-    expect(listed.map((recipe) => recipe.name)).toEqual(['coin']);
+    expect(listed.recipes.map((recipe) => recipe.name)).toEqual(['coin']);
+    /* The listing answers "which of these have I liked" in the same request — a heart
+       that fills half a second after the grid settles reads as a bug. */
+    expect([...listed.liked]).toEqual([7]);
   });
 
   it('publishes and reports what the bank created', async () => {

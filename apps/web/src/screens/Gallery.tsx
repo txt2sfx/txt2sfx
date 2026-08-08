@@ -46,6 +46,12 @@ export interface GalleryItem {
   readonly origin: 'session' | 'examples' | 'bank';
   readonly editedAt: number | undefined;
   readonly trashed: boolean;
+  /** Present only for a recipe that lives in the bank — see {@link SoundCard}. */
+  readonly bankId?: number;
+  readonly likes?: number;
+  readonly liked?: boolean;
+  readonly comments?: number;
+  readonly author?: string;
 }
 
 export interface GalleryProps {
@@ -64,6 +70,9 @@ export interface GalleryProps {
   readonly onOpen: (name: string) => void;
   readonly onPlay: (name: string) => void;
   readonly onTrash: (name: string) => void;
+  /** Like or unlike a published recipe. Absent when there is no bank to ask. */
+  readonly onLike: (item: GalleryItem) => void;
+  readonly onComments: (item: GalleryItem) => void;
 }
 
 /** The three steps, which is the whole of the product in eleven words. */
@@ -85,6 +94,8 @@ export function Gallery({
   onOpen,
   onPlay,
   onTrash,
+  onLike,
+  onComments,
 }: GalleryProps): React.JSX.Element {
   const { t } = useI18n();
   const trashedCount = items.filter((item) => item.trashed).length;
@@ -236,9 +247,16 @@ export function Gallery({
                   editedAt={item.editedAt}
                   trashed={item.trashed}
                   playing={playing === item.name}
+                  {...(item.bankId === undefined ? {} : { bankId: item.bankId })}
+                  {...(item.likes === undefined ? {} : { likes: item.likes })}
+                  {...(item.liked === undefined ? {} : { liked: item.liked })}
+                  {...(item.comments === undefined ? {} : { comments: item.comments })}
+                  {...(item.author === undefined ? {} : { author: item.author })}
                   onOpen={() => onOpen(item.name)}
                   onPlay={() => onPlay(item.name)}
                   onTrash={() => onTrash(item.name)}
+                  onLike={() => onLike(item)}
+                  onComments={() => onComments(item)}
                 />
               ))}
             </div>

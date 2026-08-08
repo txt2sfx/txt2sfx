@@ -22,23 +22,54 @@
  * @packageDocumentation
  */
 
-import type { Recipe, SoundProfile, ValidationIssue } from '@txt2sfx/shared';
+import type { Author, Recipe, RecipeComment, SoundProfile, ValidationIssue } from '@txt2sfx/shared';
 import { httpBank, type FetchLike, type RecipeSource } from '@txt2sfx/agent';
 
 /**
  * Where the bank lives when nothing says otherwise.
  *
- * Loopback, matching the server's own default (`apps/server/src/index.ts`): a
- * recipe bank on a laptop should not be reachable from the office network because
- * someone ran `pnpm dev`.
+ * Two answers, and the difference is the whole deployment story. A **development**
+ * page talks to loopback, matching the server's own default: a recipe bank on a
+ * laptop should not be reachable from the office network because someone ran
+ * `pnpm dev`. The **published** page talks to the public bank, because it is a
+ * static site with nowhere else to ask — there is no origin behind it to proxy
+ * through, which is also why the API is a separate host with CORS wide open.
+ *
+ * A bank that is not running stays a normal state in both cases: the gallery falls
+ * back to its bundled snapshot and says the bank is offline.
  */
-export const DEFAULT_BANK_URL = 'http://127.0.0.1:8787';
+export const PUBLIC_BANK_URL = 'https://txt2sfx.pix3.dev';
+export const DEFAULT_BANK_URL = import.meta.env.PROD ? PUBLIC_BANK_URL : 'http://127.0.0.1:8787';
 
 /** What `GET /api/health` answers. */
 export interface BankHealth {
   readonly recipes: number;
   /** Version of the grammar the bank accepts, e.g. `soundline/v0`. */
   readonly grammar: string;
+  /** `github` when writing needs an account, `solo` for a personal bank. */
+  readonly auth: 'github' | 'solo';
+}
+
+/** What `GET /api/auth/config` answers: whether to draw a sign-in button at all. */
+export interface BankAuthConfig {
+  readonly mode: 'github' | 'solo';
+  readonly signInPath?: string;
+  /** How old a provider account must be. Shown *before* the round trip, not after. */
+  readonly minAccountAgeDays?: number;
+}
+
+/** Who the page is signed in as, and how much it may still write today. */
+export interface BankAccount {
+  readonly actor: Author;
+  /** Likes this account's recipes have collected — what the allowance grows with. */
+  readonly standing: number;
+  readonly allowances: Readonly<Record<string, { remaining: number; burst: number; perHour: number }>>;
+}
+
+/** A listing, plus which of it this viewer has already liked. */
+export interface BankListing {
+  readonly recipes: readonly Recipe[];
+  readonly liked: ReadonlySet<number>;
 }
 
 /** A recipe on its way into the bank. */
@@ -80,10 +111,25 @@ export interface BankClient {
   readonly baseUrl: string;
   /** `null` when the bank cannot be reached — an expected answer, not a failure. */
   health(): Promise<BankHealth | null>;
+  /** `null` when the bank cannot be reached. */
+  authConfig(): Promise<BankAuthConfig | null>;
   /** Newest-first listing for the gallery. Empty when the bank is unreachable. */
-  list(limit?: number): Promise<readonly Recipe[]>;
+  list(limit?: number): Promise<BankListing>;
   /** @throws {@link BankError} when the bank refuses the recipe. */
   publish(input: PublishInput): Promise<PublishResult>;
+  /** Like or unlike. Idempotent both ways. @throws {@link BankError} */
+  setLiked(id: number, liked: boolean): Promise<{ rating: number; liked: boolean }>;
+  /** A recipe's thread. Empty when the bank is unreachable — comments are not load-bearing. */
+  comments(id: number): Promise<readonly RecipeComment[]>;
+  /** @throws {@link BankError} carrying the rule that refused it. */
+  comment(id: number, body: string, soundline?: string): Promise<RecipeComment>;
+  /** Where to send the browser to sign in, coming back to `returnTo`. */
+  signInUrl(returnTo: string): string;
+  /** Trade a one-time hand-off code for a session. @throws {@link BankError} */
+  exchange(code: string): Promise<{ token: string } & BankAccount>;
+  /** `null` when there is no session, it expired, or the bank is unreachable. */
+  me(): Promise<BankAccount | null>;
+  signOut(): Promise<void>;
   /** Few-shot retrieval, for the agent loop. */
   readonly recipes: RecipeSource;
 }
@@ -120,15 +166,38 @@ async function bankError(response: Response): Promise<BankError> {
   return new BankError(code, message, issues);
 }
 
+/** Options of {@link bankClient}. */
+export interface BankClientOptions {
+  /** Injectable so tests never touch a network. */
+  readonly fetch?: FetchLike;
+  /**
+   * The session token, read at call time.
+   *
+   * A getter rather than a value because the client is memoized for the lifetime of
+   * the tab while the token changes with every sign-in and sign-out — passing the
+   * value would rebuild the client, and every effect keyed on it, on each change.
+   *
+   * The token travels only in an `Authorization` header, never as a cookie: the
+   * browser then cannot attach it to a request some other page made, which is what
+   * lets this API keep CORS wide open for the agents it exists to serve.
+   */
+  readonly token?: () => string | null;
+}
+
 /**
  * A client for one bank origin.
  *
  * @param baseUrl - Origin, e.g. `http://127.0.0.1:8787`. A trailing slash is fine.
- * @param options - `fetch` is injectable so tests never touch a network.
  */
-export function bankClient(baseUrl: string, options: { fetch?: FetchLike } = {}): BankClient {
+export function bankClient(baseUrl: string, options: BankClientOptions = {}): BankClient {
   const origin = baseUrl.trim().replace(/\/+$/, '');
   const call: FetchLike = options.fetch ?? ((url, init) => globalThis.fetch(url, init));
+
+  /** Headers for a write: JSON, plus the session when there is one. */
+  const authorized = (extra: Record<string, string> = {}): Record<string, string> => {
+    const token = options.token?.() ?? null;
+    return { ...extra, ...(token === null || token === '' ? {} : { authorization: `Bearer ${token}` }) };
+  };
 
   return {
     baseUrl: origin,
@@ -137,24 +206,50 @@ export function bankClient(baseUrl: string, options: { fetch?: FetchLike } = {})
       try {
         const response = await call(`${origin}/api/health`, { method: 'GET' });
         if (!response.ok) return null;
-        const body = (await response.json()) as { recipes?: unknown; grammar?: unknown };
+        const body = (await response.json()) as { recipes?: unknown; grammar?: unknown; auth?: unknown };
         return {
           recipes: typeof body.recipes === 'number' ? body.recipes : 0,
           grammar: typeof body.grammar === 'string' ? body.grammar : 'unknown',
+          auth: body.auth === 'github' ? 'github' : 'solo',
         };
       } catch {
         return null;
       }
     },
 
-    async list(limit = LIST_LIMIT): Promise<readonly Recipe[]> {
+    async authConfig(): Promise<BankAuthConfig | null> {
       try {
-        const response = await call(`${origin}/api/recipes?limit=${String(limit)}`, { method: 'GET' });
-        if (!response.ok) return [];
-        const body = (await response.json()) as { recipes?: unknown };
-        return Array.isArray(body.recipes) ? body.recipes.filter(isRecipe) : [];
+        const response = await call(`${origin}/api/auth/config`, { method: 'GET' });
+        if (!response.ok) return null;
+        const body = (await response.json()) as { mode?: unknown; signInPath?: unknown; minAccountAgeDays?: unknown };
+        return {
+          mode: body.mode === 'github' ? 'github' : 'solo',
+          ...(typeof body.signInPath === 'string' ? { signInPath: body.signInPath } : {}),
+          ...(typeof body.minAccountAgeDays === 'number' ? { minAccountAgeDays: body.minAccountAgeDays } : {}),
+        };
       } catch {
-        return [];
+        return null;
+      }
+    },
+
+    async list(limit = LIST_LIMIT): Promise<BankListing> {
+      try {
+        /* Signed in or not, this is one request: the answer carries which of the
+           listed recipes this account has liked. A heart per card that fills in half
+           a second after the grid settles reads as a bug, and a hundred requests to
+           avoid that reads as one. */
+        const response = await call(`${origin}/api/recipes?limit=${String(limit)}`, {
+          method: 'GET',
+          headers: authorized(),
+        });
+        if (!response.ok) return EMPTY_LISTING;
+        const body = (await response.json()) as { recipes?: unknown; liked?: unknown };
+        return {
+          recipes: Array.isArray(body.recipes) ? body.recipes.filter(isRecipe) : [],
+          liked: new Set(Array.isArray(body.liked) ? body.liked.filter((id): id is number => typeof id === 'number') : []),
+        };
+      } catch {
+        return EMPTY_LISTING;
       }
     },
 
@@ -163,7 +258,7 @@ export function bankClient(baseUrl: string, options: { fetch?: FetchLike } = {})
       try {
         response = await call(`${origin}/api/recipes`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: authorized({ 'content-type': 'application/json' }),
           body: JSON.stringify({
             name: input.name,
             prompt: input.prompt,
@@ -192,9 +287,98 @@ export function bankClient(baseUrl: string, options: { fetch?: FetchLike } = {})
       };
     },
 
+    async setLiked(id: number, liked: boolean): Promise<{ rating: number; liked: boolean }> {
+      const response = await callOrExplain(`${origin}/api/recipes/${String(id)}/like`, {
+        method: liked ? 'PUT' : 'DELETE',
+        headers: authorized(),
+      });
+      const body = (await response.json()) as { rating?: unknown; liked?: unknown };
+      return {
+        rating: typeof body.rating === 'number' ? body.rating : 0,
+        liked: body.liked === true,
+      };
+    },
+
+    async comments(id: number): Promise<readonly RecipeComment[]> {
+      try {
+        const response = await call(`${origin}/api/recipes/${String(id)}/comments`, { method: 'GET' });
+        if (!response.ok) return [];
+        const body = (await response.json()) as { comments?: unknown };
+        return Array.isArray(body.comments) ? (body.comments as RecipeComment[]) : [];
+      } catch {
+        return [];
+      }
+    },
+
+    async comment(id: number, body: string, soundline?: string): Promise<RecipeComment> {
+      const response = await callOrExplain(`${origin}/api/recipes/${String(id)}/comments`, {
+        method: 'POST',
+        headers: authorized({ 'content-type': 'application/json' }),
+        body: JSON.stringify({ body, ...(soundline === undefined ? {} : { soundline }) }),
+      });
+      return ((await response.json()) as { comment: RecipeComment }).comment;
+    },
+
+    signInUrl(returnTo: string): string {
+      return `${origin}/api/auth/github/start?return=${encodeURIComponent(returnTo)}`;
+    },
+
+    async exchange(code: string): Promise<{ token: string } & BankAccount> {
+      const response = await callOrExplain(`${origin}/api/auth/exchange`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      return (await response.json()) as { token: string } & BankAccount;
+    },
+
+    async me(): Promise<BankAccount | null> {
+      const token = options.token?.() ?? null;
+      if (token === null || token === '') return null;
+      try {
+        const response = await call(`${origin}/api/auth/me`, { method: 'GET', headers: authorized() });
+        if (!response.ok) return null;
+        return (await response.json()) as BankAccount;
+      } catch {
+        return null;
+      }
+    },
+
+    async signOut(): Promise<void> {
+      /* Best effort. The page forgets the token either way — a sign-out that fails
+         because the network is down must not leave someone signed in. */
+      try {
+        await call(`${origin}/api/auth/signout`, { method: 'POST', headers: authorized() });
+      } catch {
+        /* ignore */
+      }
+    },
+
     /* The agent package already owns retrieval, including the `fallback` flag and
        the decision to answer with nothing when the bank is down. Re-implementing
        it here would be a second copy that eventually disagrees. */
     recipes: httpBank(origin, options.fetch === undefined ? {} : { fetch: options.fetch }),
   };
+
+  /**
+   * A request whose failure the caller has to see.
+   *
+   * Reads answer with "nothing" when the bank is down, because an empty gallery is a
+   * survivable state. Writes cannot do that: "you are over your allowance, try again
+   * in six minutes" and "your comment contains a link" are the messages that tell
+   * somebody what to do, and swallowing them turns both into "it did not work".
+   */
+  async function callOrExplain(url: string, init: RequestInit): Promise<Response> {
+    let response: Response;
+    try {
+      response = await call(url, init);
+    } catch (error) {
+      throw new BankError('unreachable', `no bank at ${origin} (${String(error)})`);
+    }
+    if (!response.ok) throw await bankError(response);
+    return response;
+  }
 }
+
+/** The answer to a listing nobody could make. Frozen so it cannot be mutated into truth. */
+const EMPTY_LISTING: BankListing = { recipes: [], liked: new Set() };

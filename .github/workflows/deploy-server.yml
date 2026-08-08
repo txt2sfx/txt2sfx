@@ -1,0 +1,123 @@
+name: Deploy the bank
+
+# Only when the bank itself changes.
+#
+# The paths are the server plus everything it links against — a change in `core`
+# changes what `POST /api/recipes` accepts and what it renders, so it is a change to
+# the bank whether or not `apps/server` was touched. `apps/web` is deliberately absent:
+# the playground publishes itself from `ci.yml` and has no server side.
+#
+# A deploy that runs on every push to `main` would restart the service for a README
+# edit, and a service that restarts for no reason is one whose restarts nobody reads.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/server/**'
+      - 'packages/shared/**'
+      - 'packages/core/**'
+      - 'packages/analyzer/**'
+      - 'packages/agent/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-server.yml'
+  # For a rollback, or the first run after the box is provisioned.
+  workflow_dispatch:
+
+# Never two deploys at once: they would race over the same working tree and the same
+# `pnpm install`. Not cancel-in-progress — a half-applied deploy is worse than a
+# superseded one, so the second run waits for the first to finish.
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          # The version the box runs. Testing anything else here would be testing
+          # something other than what is about to be deployed.
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The same gate as `ci.yml`, repeated rather than trusted: this workflow can be
+      # dispatched by hand at any commit, including one CI never saw.
+      - name: Typecheck sources, tests and the playground
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build packages and the server
+        run: pnpm build
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    # The environment is where the URL and any approval rule live; the secrets below
+    # are repository secrets and work with or without it.
+    environment:
+      name: bank
+      url: https://txt2sfx.pix3.dev
+    steps:
+      # ## Why the box pulls instead of receiving an upload
+      #
+      # The server is built from this repository, which is public, so the smallest
+      # possible deploy is `git fetch` plus the same three commands a developer runs.
+      # Shipping a tarball would mean deciding what goes in it — `dist` of six
+      # packages, a pruned `node_modules`, a native module built for the right libc —
+      # and getting that wrong shows up as a service that starts and then fails on the
+      # first render.
+      #
+      # The commit is pinned by SHA rather than by branch: a deploy must apply the
+      # commit that was tested a minute ago, not whatever `main` points at by the time
+      # the SSH connection opens.
+      - name: Ship it
+        env:
+          DEPLOY_KEY: ${{ secrets.BANK_DEPLOY_KEY }}
+          DEPLOY_HOST: ${{ secrets.BANK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.BANK_DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.BANK_KNOWN_HOSTS }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_KEY" || { echo "BANK_DEPLOY_KEY is not set"; exit 1; }
+          test -n "$DEPLOY_HOST" || { echo "BANK_DEPLOY_HOST is not set"; exit 1; }
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          # The host key is configuration, not something to discover at connect time:
+          # `ssh-keyscan` trusts whatever answers on port 22, which is exactly the
+          # thing a known-hosts file exists to stop.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          ssh -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "bash -lc 'set -euo pipefail; /srv/txt2sfx/deploy.sh ${SHA}'"
+
+      # A deploy is not finished when the process starts; it is finished when the
+      # service answers. `/api/health` reports the recipe count and the schema version,
+      # so a migration that failed on this box shows up here rather than on the first
+      # visitor.
+      - name: Wait for it to answer
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if body=$(curl -fsS --max-time 5 https://txt2sfx.pix3.dev/api/health); then
+              echo "$body"
+              echo "$body" | grep -q '"status":"ok"' && exit 0
+            fi
+            sleep 3
+          done
+          echo "the bank did not answer /api/health after 60s"
+          exit 1
