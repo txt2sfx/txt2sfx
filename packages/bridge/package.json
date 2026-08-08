@@ -1,6 +1,6 @@
 {
   "name": "txt2sfx-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Local daemon that puts an MCP coding agent in the same room as the txt2sfx playground: validate, render, measure and audition soundline without hosting anything.",
   "license": "Apache-2.0",
