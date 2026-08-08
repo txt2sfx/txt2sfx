@@ -13,6 +13,15 @@
  * Everything found here ends where a dropped file ends: the B side of Compare, and
  * from there `⌖ Fit to reference` and `match reference` apply unchanged.
  *
+ * ## Why the first control is a sign-in and not a field
+ *
+ * Because the alternative is not allowed and no longer exists. Freesound's API terms
+ * forbid answering for people who are not logged in to Freesound themselves, and what
+ * their settings hand out is an *application*, not a per-person key. So the panel asks
+ * the user to connect their own account, and the payoff is not only compliance: the
+ * download button can then hand over the **original** file, which a pasted key never
+ * could — that endpoint is OAuth2-only.
+ *
  * ## What each control is for
  *
  * The **licence chip is not a preference**, it is the difference between a sound you
@@ -46,7 +55,7 @@ import { useEffect, useRef, useState } from 'react';
 import { copy, save } from '../lib/download.js';
 import {
   attributionFor,
-  fetchPreview,
+  fetchOriginal,
   licenceOf,
   needsAttribution,
   type FreesoundSound,
@@ -56,8 +65,8 @@ import { ms, size } from '../lib/format.js';
 import { useI18n, type Key } from '../lib/i18n.js';
 import type { LibrarySearch } from '../lib/useSearch.js';
 
-/** Where a Freesound key comes from. Shown as a link, never as a step to look up. */
-const KEY_URL = 'https://freesound.org/apiv2/apply/';
+/** Where somebody reads what they just agreed to connect to. */
+const FREESOUND_URL = 'https://freesound.org/';
 
 /**
  * Licence names, untranslated on purpose.
@@ -79,7 +88,7 @@ const LENGTHS: readonly (number | null)[] = [null, 1, 3, 10];
 
 /** What the panel says when the library refuses. One sentence per failure. */
 const FAILURE: Readonly<Record<string, Key>> = {
-  key: 'search.errKey',
+  token: 'search.errToken',
   throttled: 'search.errThrottled',
   network: 'search.errNetwork',
   http: 'search.errHttp',
@@ -132,10 +141,21 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
       .finally(() => setPending(null));
   };
 
-  const downloadPreview = (sound: FreesoundSound): void => {
+  /**
+   * Download the original, with the connected account's token.
+   *
+   * The token is asked for at the moment of the click rather than held here, because
+   * `connection.token()` is what knows whether the 24-hour access token is still good
+   * and refreshes it if it is not. A button that holds a copy is a button that breaks
+   * the day after a session started.
+   */
+  const downloadOriginal = (sound: FreesoundSound): void => {
     setPending(sound.id);
-    void fetchPreview(sound)
-      .then((file) => {
+    void search.connection
+      .token()
+      .then(async (token) => {
+        if (token === null) throw new Error(t('search.errToken'));
+        const file = await fetchOriginal(sound, token);
         save(file, file.name);
         onStatus(t('search.saved', { file: file.name, size: size(file.size) }));
       })
@@ -145,37 +165,7 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
 
   return (
     <div className="library">
-      <div className="library-key">
-        <label className="field wide">
-          {t('search.keyLabel')}
-          <input
-            type="password"
-            name="freesound-key"
-            autoComplete="new-password"
-            value={search.key}
-            placeholder={t('search.keyPlaceholder')}
-            aria-label={t('search.keyAria')}
-            onChange={(event) => search.setKey(event.target.value)}
-          />
-        </label>
-        <label className="toggle" title={t('search.rememberTitle')}>
-          <input
-            type="checkbox"
-            name="remember-freesound"
-            checked={search.remember}
-            onChange={(event) => search.setRemember(event.target.checked)}
-          />
-          {t('search.remember')}
-          {search.stored ? (
-            <button type="button" className="link" onClick={search.forget}>
-              {t('search.forget')}
-            </button>
-          ) : null}
-        </label>
-        <a className="link" href={KEY_URL} target="_blank" rel="noreferrer noopener">
-          {t('search.getKey')}
-        </a>
-      </div>
+      <Connection connection={search.connection} />
 
       <div className="library-controls mono">
         <div className="chips">
@@ -237,10 +227,16 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
         {/* Nothing under a refusal. The red box above already says what happened and
             what to do; "describe the sound and press Make sound" underneath it reads as
             advice to do the thing that just failed. */}
-        {!search.running && search.error === null && search.hits.length === 0 ? (
+        {/* Nothing at all when the bank cannot connect anybody: the block above has
+            already said so, and the same sentence twice on one screen reads as a
+            rendering bug rather than as emphasis. */}
+        {!search.running &&
+        search.error === null &&
+        search.hits.length === 0 &&
+        search.connection.state !== 'unavailable' ? (
           <p className="library-empty">
-            {search.key.trim() === ''
-              ? t('search.needsKey')
+            {search.connection.state !== 'on'
+              ? t('search.needsConnection')
               : search.searched
                 ? t('search.nothing')
                 : t('search.idle')}
@@ -297,7 +293,7 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
                   className="chip"
                   disabled={pending === sound.id}
                   title={t('search.downloadTitle')}
-                  onClick={() => downloadPreview(sound)}
+                  onClick={() => downloadOriginal(sound)}
                 >
                   ⤓
                 </button>
@@ -325,6 +321,74 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
       </div>
 
       <p className="caption">{t('search.caption')}</p>
+    </div>
+  );
+}
+
+/**
+ * The account this tab is acting as, in four states.
+ *
+ * A state machine rather than a button with a disabled attribute, for the reason the
+ * Model tab's install screen is one: "this bank cannot connect anybody" and "you have
+ * not connected yet" are different problems with different answers, and a greyed-out
+ * button says neither. The fourth state, `connecting`, exists because the round trip
+ * leaves the page — coming back to a panel that looks untouched is how a user presses
+ * connect twice.
+ */
+function Connection({ connection }: { readonly connection: LibrarySearch['connection'] }): React.JSX.Element {
+  const { t } = useI18n();
+  const { state } = connection;
+
+  return (
+    <div className="library-key">
+      {state === 'on' ? (
+        <>
+          <span className="mono ok">● {t('search.connected')}</span>
+          <label className="toggle" title={t('search.rememberTitle')}>
+            <input
+              type="checkbox"
+              name="remember-freesound"
+              checked={connection.remember}
+              onChange={(event) => connection.setRemember(event.target.checked)}
+            />
+            {t('search.remember')}
+          </label>
+          <div className="spacer" />
+          <button type="button" className="link" onClick={connection.disconnect}>
+            {t('search.disconnect')}
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="hue-button"
+            disabled={state !== 'off'}
+            onClick={connection.connect}
+          >
+            {state === 'connecting' ? <span className="spinner" aria-hidden="true" /> : null}
+            {t('search.connect')}
+          </button>
+          <p className="caption">
+            {state === 'unavailable' ? t('search.noBank') : t('search.connectNote')}{' '}
+            <a className="link" href={FREESOUND_URL} target="_blank" rel="noreferrer noopener">
+              freesound.org ↗
+            </a>
+          </p>
+        </>
+      )}
+
+      {/* The code the round trip came back with, as a sentence. `cancelled` is the one
+          people will actually see — they pressed Cancel on freesound's own page — and it
+          is not a failure, so it must not read like one. Anything else keeps its raw
+          code beside the sentence, because that is what a bug report needs. */}
+      {connection.error === null ? null : (
+        <p className={connection.error === 'cancelled' ? 'caption' : 'mono bad'}>
+          {connection.error === 'cancelled'
+            ? t('search.connCancelled')
+            : `${t('search.connFailed')} (${connection.error})`}
+        </p>
+      )}
     </div>
   );
 }

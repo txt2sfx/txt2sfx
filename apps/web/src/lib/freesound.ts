@@ -13,14 +13,26 @@
  * So everything here ends where a dropped file ends: `App`'s reference, the B side of
  * Compare, `⌖ Fit to reference`, `match reference` on a generate run.
  *
+ * ## Whose credential this is
+ *
+ * The user's, always. Freesound's API terms (§4d) forbid answering for "end users that
+ * are not logged on to the Platform with valid user credentials and live session", so
+ * there is no shared application key here and never will be: the person searching has
+ * connected their own Freesound account, and every request below carries *their* token.
+ * The bank's only part in it is trading the OAuth2 code for that token, because the
+ * exchange is signed with a client secret that cannot ship to a browser — see
+ * `lib/freesound-auth.ts` and `apps/server/src/routes/freesound.ts`.
+ *
  * ## No proxy, and that was measured before it was designed
  *
  * ```
- * GET  freesound.org/apiv2/search/text/    → Access-Control-Allow-Origin: *
+ * GET  freesound.org/apiv2/search/text/     → Access-Control-Allow-Origin: *
+ * GET  freesound.org/apiv2/sounds/<id>/download/
+ *                                           → Access-Control-Allow-Origin: *
  * OPTIONS (Access-Control-Request-Headers: authorization)
- *                                          → Access-Control-Allow-Headers: …authorization…
- *                                             Access-Control-Max-Age: 86400
- * GET  cdn.freesound.org/previews/…        → Access-Control-Allow-Origin: *, Accept-Ranges
+ *                                           → Access-Control-Allow-Headers: …authorization…
+ *                                              Access-Control-Max-Age: 86400
+ * GET  cdn.freesound.org/previews/…         → Access-Control-Allow-Origin: *, Accept-Ranges
  * ```
  *
  * Both ends send `*`, so the tab talks to the library directly: nothing is proxied
@@ -30,17 +42,14 @@
  * needs the header, an `<audio>` element does not — and decoding is the whole point,
  * because a target that cannot be measured is a target this app has no use for.
  *
- * The key travels in `Authorization: Token …` rather than `?token=`, so it never lands
- * in a URL — not in history, not in a referrer, not in an access log. The cost is a
- * preflight, and `Access-Control-Max-Age: 86400` makes it a daily one.
+ * The token travels in `Authorization: Bearer …`, so it never lands in a URL — not in
+ * history, not in a referrer, not in an access log. The cost is a preflight, and
+ * `Access-Control-Max-Age: 86400` makes it a daily one.
  *
- * ## What this cannot do
- *
- * **Download the original.** That endpoint is behind OAuth2, which means a redirect
- * and a client secret; a static page has neither and should not pretend to. The
- * preview is a ~128 kbps MP3, which is enough to *judge* a sound and not enough to
- * ship one — so the panel says so, offers the preview, and links to the page where
- * the original is.
+ * The download endpoint carrying CORS is what makes {@link fetchOriginal} possible at
+ * all: the original file — the uploader's own WAV or FLAC, not a preview — comes
+ * straight from freesound.org to the tab, with the user's token, and never through
+ * anything of ours.
  *
  * Written against **Freesound APIv2** as documented on 2026-08-08; the request shape
  * and the field mapping are pinned in `test/freesound.test.ts` with an injected
@@ -53,6 +62,8 @@
 export interface FreesoundSound {
   readonly id: number;
   readonly name: string;
+  /** The original's format, as the library reports it: `wav`, `flac`, `mp3`, `ogg`, `aiff`. */
+  readonly format: string;
   /** The sound's page — where the original, the licence and the author are. */
   readonly url: string;
   readonly seconds: number;
@@ -83,7 +94,7 @@ export interface FreesoundPage {
  * console and for a bug report — it names the status and the library's own `detail`,
  * which is the only text that can explain a refusal this code has never seen.
  */
-export type FreesoundFailure = 'key' | 'throttled' | 'network' | 'http';
+export type FreesoundFailure = 'token' | 'throttled' | 'network' | 'http';
 
 export class FreesoundError extends Error {
   readonly code: FreesoundFailure;
@@ -104,8 +115,8 @@ export type LicenceFilter = 'cc0' | 'any';
 export type LengthFilter = number | null;
 
 export interface FreesoundSearchOptions {
-  /** The user's own API key, from the field or the keystore. Never read from anywhere else. */
-  readonly key: string;
+  /** The connected user's own access token. Never a key of ours: see the module note. */
+  readonly token: string;
   /** English keywords — what `searchQuery` in `@txt2sfx/agent` produces. */
   readonly query: string;
   readonly licence: LicenceFilter;
@@ -140,6 +151,9 @@ const FIELDS = [
   'avg_rating',
   'num_downloads',
   'previews',
+  /* Only so the downloaded original can be named `.wav` rather than guessed at — a
+     renamed file is the same class of lie as a WAV called MP3. */
+  'type',
 ].join(',');
 
 /** Default page size. Enough to rank meaningfully, small enough to scan by eye. */
@@ -176,7 +190,7 @@ export async function searchFreesound(options: FreesoundSearchOptions): Promise<
   let response: Response;
   try {
     response = await call(url.toString(), {
-      headers: { Authorization: `Token ${options.key}` },
+      headers: { Authorization: `Bearer ${options.token}` },
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   } catch (error: unknown) {
@@ -188,10 +202,12 @@ export async function searchFreesound(options: FreesoundSearchOptions): Promise<
   if (!response.ok) {
     const detail = await detailOf(response);
     if (response.status === 401 || response.status === 403) {
-      throw new FreesoundError('key', `freesound refused the key (${String(response.status)}): ${detail}`, response.status);
+      /* Nearly always an access token past its 24 hours rather than a broken
+         connection — the caller refreshes once and retries before showing anything. */
+      throw new FreesoundError('token', `freesound refused the token (${String(response.status)}): ${detail}`, response.status);
     }
     if (response.status === 429) {
-      throw new FreesoundError('throttled', `freesound is throttling this key: ${detail}`, 429);
+      throw new FreesoundError('throttled', `freesound is throttling this account: ${detail}`, 429);
     }
     throw new FreesoundError('http', `freesound answered ${String(response.status)}: ${detail}`, response.status);
   }
@@ -244,6 +260,7 @@ function soundsOf(body: unknown): readonly FreesoundSound[] {
     out.push({
       id,
       name: str(row['name']) || `sound ${String(id)}`,
+      format: str(row['type']),
       url: str(row['url']) || `https://freesound.org/s/${String(id)}/`,
       seconds: num(row['duration']),
       license: str(row['license']),
@@ -334,6 +351,42 @@ export async function fetchPreview(
   }
   const blob = await response.blob();
   return new File([blob], `${safeName(sound.name)}.mp3`, { type: 'audio/mpeg' });
+}
+
+/**
+ * Fetch the **original** file — the uploader's own WAV or FLAC, not a preview.
+ *
+ * This is the endpoint that OAuth2 exists for (`Download Sound … requires OAuth2`), and
+ * the reason connecting an account buys something a pasted key never could. It is a
+ * separate function rather than a flag on {@link fetchPreview} because the two answer
+ * different questions: the preview is for *judging* a sound and is fetched constantly,
+ * the original is for keeping one and is fetched once, deliberately, at whatever size
+ * the uploader chose.
+ *
+ * The extension comes from the library's own `type` field, so a FLAC is not saved as
+ * `.wav`. Where the field is missing the name is left extensionless rather than guessed
+ * at — a wrong extension is worse than none.
+ */
+export async function fetchOriginal(
+  sound: FreesoundSound,
+  token: string,
+  options: { readonly signal?: AbortSignal; readonly fetchImpl?: typeof fetch } = {},
+): Promise<File> {
+  const call = options.fetchImpl ?? fetch;
+  const url = `https://freesound.org/apiv2/sounds/${String(sound.id)}/download/`;
+  const response = await call(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new FreesoundError('token', `freesound refused the token for the original of ${String(sound.id)}`, response.status);
+    }
+    throw new FreesoundError('http', `the original of ${String(sound.id)} answered ${String(response.status)}`, response.status);
+  }
+  const blob = await response.blob();
+  const suffix = sound.format === '' ? '' : `.${sound.format}`;
+  return new File([blob], `${safeName(sound.name)}${suffix}`, ...(blob.type === '' ? [] : [{ type: blob.type }]));
 }
 
 /** A library name reduced to something a filesystem accepts, extension dropped. */

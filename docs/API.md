@@ -43,6 +43,19 @@ laptop and the test suite run in.
 | `POST` | `/api/auth/exchange` | — | trades the one-time hand-off code for a session token |
 | `GET` | `/api/auth/me` | session | who you are, and what is left of today's allowances |
 | `POST` | `/api/auth/signout` | session | forgets the session |
+| `GET` | `/api/freesound/config` | — | whether this bank can connect a freesound.org account |
+| `GET` | `/api/freesound/start?return=` | — | begins the OAuth2 redirect to freesound.org |
+| `POST` | `/api/freesound/exchange` | — | trades the one-time hand-off code for the caller's own Freesound tokens |
+| `POST` | `/api/freesound/refresh` | — | renews them, adding the client secret the browser cannot hold |
+
+`/api/freesound/*` is the one place this bank acts for another service, and it is worth
+being precise about how little it does. It signs two requests with a client secret and
+**keeps nothing**: no row, no session, and no account is needed to use it. The tokens it
+hands back belong to the person who logged in to freesound.org, and they are held in
+their browser (`apps/web/src/lib/freesound-auth.ts`). That is not a stylistic choice —
+Freesound's API terms forbid answering for end users who are not logged in to the
+platform themselves, so a bank-held key serving visitors is not an option. Unconfigured,
+`config` answers `{ enabled: false }` and the other three routes do not exist.
 
 `/api/moderation/*` exists only when `TXT2SFX_ADMIN_TOKEN` is set, and answers 404 — not
 401 — to anybody without it. An endpoint that says "unauthorized" has confirmed it exists.

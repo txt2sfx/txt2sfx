@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FreesoundError,
   attributionFor,
+  fetchOriginal,
   fetchPreview,
   licenceOf,
   needsAttribution,
@@ -30,6 +31,7 @@ const ROW = {
   name: 'door_slam_heavy.wav',
   url: 'https://freesound.org/people/someone/sounds/12345/',
   duration: 1.234,
+  type: 'wav',
   license: 'http://creativecommons.org/publicdomain/zero/1.0/',
   username: 'someone',
   tags: ['door', 'slam', 'wood'],
@@ -64,7 +66,7 @@ function stub(response: Response | (() => Promise<Response>)): {
 describe('searchFreesound', () => {
   it('asks for the fields it reads, filtered and sorted by the library’s own relevance', async () => {
     const { fetchImpl, calls } = stub(json(200, { count: 1, results: [ROW] }));
-    await searchFreesound({ key: 'K', query: 'door slam wood', licence: 'cc0', maxSeconds: 4, fetchImpl });
+    await searchFreesound({ token: 'T', query: 'door slam wood', licence: 'cc0', maxSeconds: 4, fetchImpl });
 
     const url = calls[0]?.url;
     expect(`${url?.origin ?? ''}${url?.pathname ?? ''}`).toBe('https://freesound.org/apiv2/search/text/');
@@ -72,36 +74,37 @@ describe('searchFreesound', () => {
     expect(url?.searchParams.get('filter')).toBe('license:"Creative Commons 0" duration:[* TO 4]');
     expect(url?.searchParams.get('sort')).toBe('score');
     expect(url?.searchParams.get('page_size')).toBe('30');
-    for (const field of ['id', 'name', 'url', 'duration', 'license', 'previews']) {
+    for (const field of ['id', 'name', 'url', 'duration', 'license', 'previews', 'type']) {
       expect(url?.searchParams.get('fields')).toContain(field);
     }
   });
 
-  /* The key is a credential: in a header it stays out of history, referrers and access
-     logs. The preflight this costs is allowed and cached for a day — measured, see the
-     module note. */
-  it('sends the key as a header and never in the URL', async () => {
+  /* The token is the user's own credential: in a header it stays out of history,
+     referrers and access logs. The preflight this costs is allowed and cached for a
+     day — measured, see the module note. */
+  it('sends the token as a bearer header and never in the URL', async () => {
     const { fetchImpl, calls } = stub(json(200, { count: 0, results: [] }));
-    await searchFreesound({ key: 'secret-key', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
+    await searchFreesound({ token: 'secret-token', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
 
-    expect((calls[0]?.init?.headers as Record<string, string>)['Authorization']).toBe('Token secret-key');
-    expect(calls[0]?.url.toString()).not.toContain('secret-key');
+    expect((calls[0]?.init?.headers as Record<string, string>)['Authorization']).toBe('Bearer secret-token');
+    expect(calls[0]?.url.toString()).not.toContain('secret-token');
   });
 
   it('sends no filter when nothing is filtered', async () => {
     const { fetchImpl, calls } = stub(json(200, { count: 0, results: [] }));
-    await searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
+    await searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
     expect(calls[0]?.url.searchParams.get('filter')).toBeNull();
   });
 
   it('maps the API’s names onto ours', async () => {
     const { fetchImpl } = stub(json(200, { count: 7, results: [ROW] }));
-    const page = await searchFreesound({ key: 'K', query: 'door', licence: 'cc0', maxSeconds: null, fetchImpl });
+    const page = await searchFreesound({ token: 'T', query: 'door', licence: 'cc0', maxSeconds: null, fetchImpl });
 
     expect(page.count).toBe(7);
     expect(page.sounds[0]).toEqual({
       id: 12345,
       name: 'door_slam_heavy.wav',
+      format: 'wav',
       url: 'https://freesound.org/people/someone/sounds/12345/',
       seconds: 1.234,
       license: 'http://creativecommons.org/publicdomain/zero/1.0/',
@@ -119,14 +122,14 @@ describe('searchFreesound', () => {
   it('takes the low-quality preview when there is no high-quality one', async () => {
     const row = { ...ROW, previews: { 'preview-lq-mp3': 'https://cdn.freesound.org/x-lq.mp3' } };
     const { fetchImpl } = stub(json(200, { count: 1, results: [row] }));
-    const page = await searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
+    const page = await searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
     expect(page.sounds[0]?.preview).toBe('https://cdn.freesound.org/x-lq.mp3');
   });
 
   /* A row whose every button would be dead is worse than one row fewer. */
   it('drops a row with no preview, and keeps the rest', async () => {
     const { fetchImpl } = stub(json(200, { count: 2, results: [{ ...ROW, id: 1, previews: {} }, ROW] }));
-    const page = await searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
+    const page = await searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
     expect(page.sounds.map((s) => s.id)).toEqual([12345]);
   });
 
@@ -134,35 +137,35 @@ describe('searchFreesound', () => {
   it('survives a row missing everything optional', async () => {
     const bare = { id: 9, previews: { 'preview-hq-mp3': 'https://cdn.freesound.org/9.mp3' } };
     const { fetchImpl } = stub(json(200, { count: 1, results: [bare] }));
-    const page = await searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
+    const page = await searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl });
     expect(page.sounds[0]?.name).toBe('sound 9');
     expect(page.sounds[0]?.url).toBe('https://freesound.org/s/9/');
     expect(page.sounds[0]?.tags).toEqual([]);
   });
 
-  it('tells a rejected key apart from a throttled one', async () => {
+  it('tells a refused token apart from a throttled account', async () => {
     const rejected = stub(json(401, { detail: 'Invalid token' }));
     await expect(
-      searchFreesound({ key: 'bad', query: 'x', licence: 'any', maxSeconds: null, fetchImpl: rejected.fetchImpl }),
-    ).rejects.toMatchObject({ code: 'key', status: 401 });
+      searchFreesound({ token: 'bad', query: 'x', licence: 'any', maxSeconds: null, fetchImpl: rejected.fetchImpl }),
+    ).rejects.toMatchObject({ code: 'token', status: 401 });
 
     const throttled = stub(json(429, { detail: 'Request was throttled.' }));
     await expect(
-      searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl: throttled.fetchImpl }),
+      searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl: throttled.fetchImpl }),
     ).rejects.toMatchObject({ code: 'throttled' });
   });
 
   it('reports the library’s own words on a refusal it has never seen', async () => {
     const { fetchImpl } = stub(json(400, { detail: 'Invalid filter' }));
     await expect(
-      searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl }),
+      searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl }),
     ).rejects.toThrow(/Invalid filter/);
   });
 
-  it('calls an unreachable library a network failure, not a bad key', async () => {
+  it('calls an unreachable library a network failure, not a refused token', async () => {
     const { fetchImpl } = stub(() => Promise.reject(new TypeError('Failed to fetch')));
     await expect(
-      searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl }),
+      searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl }),
     ).rejects.toMatchObject({ code: 'network' });
   });
 
@@ -170,7 +173,7 @@ describe('searchFreesound', () => {
   it('lets an abort through as itself', async () => {
     const { fetchImpl } = stub(() => Promise.reject(new DOMException('aborted', 'AbortError')));
     await expect(
-      searchFreesound({ key: 'K', query: 'x', licence: 'any', maxSeconds: null, fetchImpl }),
+      searchFreesound({ token: 'T', query: 'x', licence: 'any', maxSeconds: null, fetchImpl }),
     ).rejects.not.toBeInstanceOf(FreesoundError);
   });
 });
@@ -228,6 +231,42 @@ describe('fetchPreview', () => {
     await expect(
       fetchPreview({ ...ROW, preview: 'https://cdn.freesound.org/gone.mp3' } as unknown as FreesoundSound, { fetchImpl }),
     ).rejects.toBeInstanceOf(FreesoundError);
+  });
+});
+
+describe('fetchOriginal', () => {
+  /* The whole payoff of connecting an account: this endpoint is OAuth2-only, and a
+     pasted key could never reach it. */
+  it('asks the OAuth2-only endpoint with the user’s bearer token', async () => {
+    const { fetchImpl, calls } = stub(new Response(new Uint8Array([1, 2, 3, 4])));
+    const file = await fetchOriginal({ ...ROW, format: 'wav' } as unknown as FreesoundSound, 'access-1', { fetchImpl });
+
+    expect(calls[0]?.url.toString()).toBe('https://freesound.org/apiv2/sounds/12345/download/');
+    expect((calls[0]?.init?.headers as Record<string, string>)['Authorization']).toBe('Bearer access-1');
+    /* Named after the original's own format — a FLAC saved as `.wav` is the same class
+       of lie as a renamed WAV. */
+    expect(file.name).toBe('door_slam_heavy.wav');
+    expect(file.size).toBe(4);
+  });
+
+  it('leaves the name extensionless rather than guessing a format', async () => {
+    const { fetchImpl } = stub(new Response(new Uint8Array([1])));
+    const file = await fetchOriginal({ ...ROW, format: '' } as unknown as FreesoundSound, 'a', { fetchImpl });
+    expect(file.name).toBe('door_slam_heavy');
+  });
+
+  /* A 24-hour token that ran out is the expected end of a long session; the caller
+     refreshes on this code rather than telling anyone the connection is broken. */
+  it('reports a spent token as such, and anything else as http', async () => {
+    const expired = stub(new Response('', { status: 401 }));
+    await expect(
+      fetchOriginal(ROW as unknown as FreesoundSound, 'old', { fetchImpl: expired.fetchImpl }),
+    ).rejects.toMatchObject({ code: 'token' });
+
+    const gone = stub(new Response('', { status: 404 }));
+    await expect(
+      fetchOriginal(ROW as unknown as FreesoundSound, 'fine', { fetchImpl: gone.fetchImpl }),
+    ).rejects.toMatchObject({ code: 'http' });
   });
 });
 

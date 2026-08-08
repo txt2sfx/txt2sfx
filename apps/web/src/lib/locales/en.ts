@@ -318,13 +318,19 @@ export const en = {
 
   /* --- the search view ---------------------------------------------------- */
 
-  'search.keyLabel': 'freesound.org key',
-  'search.keyPlaceholder': 'API key',
-  'search.keyAria': 'freesound.org API key',
-  'search.remember': 'remember',
-  'search.rememberTitle': 'encrypted in this browser under a key that cannot be exported',
-  'search.forget': 'forget',
-  'search.getKey': 'get a key ↗',
+  'search.connect': 'Connect freesound.org',
+  'search.connectNote':
+    'Sign in with your own freesound.org account. Their API answers for accounts, not for keys — and with yours connected the download button hands over the original file, not a preview. Read more at',
+  'search.connected': 'freesound.org connected',
+  'search.disconnect': 'disconnect',
+  'search.remember': 'stay connected',
+  'search.rememberTitle':
+    'Keeps the connection encrypted in this browser under a key that cannot be exported — never in localStorage. Off, it lasts as long as this tab.',
+  'search.noBank':
+    'This bank has no freesound.org application configured, so it cannot connect an account. A bank set up for it offers the button here.',
+  'search.needsConnection': 'Connect a freesound.org account above, then describe the sound and press Make sound.',
+  'search.connCancelled': 'Connection cancelled — nothing was shared.',
+  'search.connFailed': 'freesound.org did not finish the connection. Try again.',
   'search.cc0': 'CC0 only',
   'search.cc0Title': 'public domain — nothing to credit, nothing to track',
   'search.anyLicence': 'all licences',
@@ -335,14 +341,13 @@ export const en = {
   'search.rewritten': 'written by the model',
   'search.found': '{count} in the library, {shown} here',
   'search.searching': 'searching…',
-  'search.needsKey': 'Paste a freesound.org key above. Requests go from this tab to the library and nowhere else.',
   'search.idle': 'Describe the sound in the box above and press Make sound.',
   'search.nothing': 'Nothing matched. Try “all licences”, a longer length, or plainer words.',
   'search.play': 'play the preview',
   'search.stop': 'stop',
   'search.playFail': 'the preview for {name} would not play',
   'search.useTitle': 'load it as the B side and compare',
-  'search.downloadTitle': 'download the preview (mp3)',
+  'search.downloadTitle': 'download the original file',
   'search.creditTitle': 'copy the credit line',
   'search.credit': 'the credit line',
   'search.pageTitle': 'open its page on freesound.org',
@@ -350,12 +355,13 @@ export const en = {
   'search.downloads': '{count} downloads',
   'search.licenceFree': 'public domain — no obligation',
   'search.licenceBound': 'must be credited wherever this ends up — the © button copies the line',
-  'search.errKey': 'freesound.org refused the key. Check it, or get a new one from the link above.',
-  'search.errThrottled': 'freesound.org is throttling this key. Wait a minute and search again.',
+  'search.errToken':
+    'freesound.org refused this connection. It may have expired — connect the account again.',
+  'search.errThrottled': 'freesound.org is throttling this account. Wait a minute and search again.',
   'search.errNetwork': 'Could not reach freesound.org. Check the connection and try again.',
   'search.errHttp': 'freesound.org refused the search.',
   'search.caption':
-    'A target, not a deliverable: the button downloads the preview (mp3), and the original lives on the sound’s own page under the licence on its badge.',
+    'A target, not a deliverable: what you download is somebody else’s recording under the licence on its badge, and the preview is what plays here.',
 
   /* --- the compare view --------------------------------------------------- */
 

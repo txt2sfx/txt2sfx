@@ -12,9 +12,11 @@
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AuthContext } from './auth.js';
+import type { FreesoundConfig } from './freesound.js';
 import type { FetchLike } from './identity.js';
 import { type RenderQueue, renderQueue } from './render.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerFreesoundRoutes } from './routes/freesound.js';
 import { registerModerationRoutes } from './routes/moderation.js';
 import { registerRoutes } from './routes/recipes.js';
 import { registerSocialRoutes } from './routes/social.js';
@@ -24,6 +26,14 @@ import type { Store } from './store.js';
 export interface AppOptions {
   readonly store: Store;
   readonly auth: AuthContext;
+  /**
+   * The Freesound application, when one is configured.
+   *
+   * Separate from {@link AuthContext} on purpose: that context is about *who may write
+   * to this bank*, and a Freesound connection has nothing to do with it — no account is
+   * needed to make one and none is created by it.
+   */
+  readonly freesound?: FreesoundConfig;
   /** Fastify's logger. Off in tests, on when serving. */
   readonly logger?: boolean;
   /** Shared render gate. One is made if none is given. */
@@ -64,6 +74,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   registerRoutes(app, options.store, options.auth, { queue });
   registerSocialRoutes(app, options.store, options.auth, { queue });
   registerAuthRoutes(app, options.store, options.auth, options.fetch === undefined ? {} : { fetch: options.fetch });
+  registerFreesoundRoutes(app, options.freesound, options.fetch === undefined ? {} : { fetch: options.fetch });
   registerModerationRoutes(app, options.store, options.auth);
   return app;
 }

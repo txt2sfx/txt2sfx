@@ -215,7 +215,7 @@ export function Studio(props: StudioProps): React.JSX.Element {
             stopping={toModel || toSearch ? false : props.generation.stopping}
             view={props.view}
             modelReady={props.modelAvailable}
-            searchReady={props.search.key.trim() !== ''}
+            searchReady={props.search.connection.state === 'on'}
             onRun={() => {
               if (toModel) modelControls.current?.run();
               else if (toSearch) props.search.start(props.prompt.trim(), searchProvider);

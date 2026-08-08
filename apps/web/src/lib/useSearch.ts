@@ -6,8 +6,8 @@
  * For the reason `useGenerate` does, minus the minute-long fit: the panel unmounts
  * every time someone switches to Compare to look at what they just found, and a result
  * list that dies on a tab switch would make the two tabs unusable together — which is
- * the whole workflow. The key is the sharper case: it is a credential the user pasted,
- * and losing it on a tab switch would train them to leave it in a file somewhere.
+ * the whole workflow. The connection is the sharper case: it is an OAuth2 round trip
+ * through another site, and losing it on a tab switch would be absurd.
  *
  * ## Three stages, and only the middle one is ours
  *
@@ -15,15 +15,23 @@
  *    recipe bank uses, not a second one that says the same thing. Both indexes want
  *    English words for the material, the object and the event, and both would rather
  *    have the raw prompt than a failed rewrite, which is exactly that stage's stance.
- * 2. **Search.** `lib/freesound.ts`, filtered on the facts that are not text: licence
- *    and duration. Nothing about this step is a judgement.
+ * 2. **Search.** `lib/freesound.ts`, with the connected user's own token, filtered on
+ *    the facts that are not text: licence and duration. Nothing here is a judgement.
  * 3. **Reorder.** `rankSounds` — an opinion about words, applied as a partial order.
  *    Rows it does not mention keep their place behind the ones it does, so a search
  *    can never show fewer results because a model was unhelpful.
  *
  * With no provider — the picker on `mock` and no agent attached — stages 1 and 3 are
  * skipped and the library's own relevance stands. That is a working search, not a
- * degraded one, and it is what someone with a Freesound key and no model key gets.
+ * degraded one, and it is what someone with a Freesound account and no model key gets.
+ *
+ * ## One retry, and only for the one failure that deserves it
+ *
+ * An access token lives 24 hours, so "the library refused this token" is the expected
+ * end of a long session rather than a fault. That case, and only that case, refreshes
+ * and repeats the request once; everything else is reported. A blanket retry would turn
+ * a throttled account into twice the requests, which is the one response that makes
+ * throttling worse.
  *
  * ## Changing a filter does not spend a model call
  *
@@ -34,9 +42,9 @@
  * @packageDocumentation
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { rankSounds, searchQuery, type LLMProvider } from '@txt2sfx/agent';
-import { canRemember, keystore } from './keystore.js';
+import { useFreesoundAuth, type FreesoundConnection } from './freesound-auth.js';
 import {
   FreesoundError,
   searchFreesound,
@@ -45,9 +53,6 @@ import {
   type LengthFilter,
   type LicenceFilter,
 } from './freesound.js';
-
-/** Where the Freesound key is remembered, if the user asks for that. */
-const KEYSTORE_NAME = 'freesound';
 
 /** One row on screen: what the library returned, and why it is where it is. */
 export interface SearchHit {
@@ -65,13 +70,8 @@ export interface SearchFailure {
 
 /** Everything the Search tab needs to show and drive a search. */
 export interface LibrarySearch {
-  readonly key: string;
-  readonly setKey: (key: string) => void;
-  readonly remember: boolean;
-  readonly setRemember: (remember: boolean) => void;
-  /** True when a key is sitting in the keystore, so the Forget button can appear. */
-  readonly stored: boolean;
-  readonly forget: () => void;
+  /** The Freesound account this tab is acting as. */
+  readonly connection: FreesoundConnection;
 
   readonly licence: LicenceFilter;
   readonly setLicence: (licence: LicenceFilter) => void;
@@ -96,10 +96,14 @@ export interface LibrarySearch {
   readonly cancel: () => void;
 }
 
-export function useSearch(): LibrarySearch {
-  const [key, setKey] = useState('');
-  const [remember, setRemember] = useState(false);
-  const [stored, setStored] = useState(false);
+export interface SearchOptions {
+  /** Where the bank is — it is the only part of the OAuth2 dance a page cannot do. */
+  readonly bankUrl: string;
+}
+
+export function useSearch(options: SearchOptions): LibrarySearch {
+  const connection = useFreesoundAuth({ bankUrl: options.bankUrl });
+
   const [licence, setLicence] = useState<LicenceFilter>('cc0');
   const [maxSeconds, setMaxSeconds] = useState<LengthFilter>(null);
   const [words, setWords] = useState<string | null>(null);
@@ -113,36 +117,36 @@ export function useSearch(): LibrarySearch {
   const abort = useRef<AbortController | null>(null);
   /** What a refine re-uses: the words that were searched and the notes that were earned. */
   const last = useRef<{ words: string; notes: ReadonlyMap<number, string> } | null>(null);
-  /** Filters and key, read at call time — `run` must not be rebuilt for a chip. */
-  const live = useRef({ key, licence, maxSeconds, remember });
-  live.current = { key, licence, maxSeconds, remember };
-
-  useEffect(() => {
-    if (!canRemember) return;
-    let cancelled = false;
-    void keystore.load(KEYSTORE_NAME).then((secret) => {
-      if (cancelled || secret === null) return;
-      setStored(true);
-      setRemember(true);
-      /* Never over a key already typed: what is in the box is the user's most recent
-         intent and a stored one is history. Same rule as the provider key field. */
-      setKey((current) => (current === '' ? secret : current));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  /** Filters, read at call time — `run` must not be rebuilt for a chip. */
+  const live = useRef({ licence, maxSeconds });
+  live.current = { licence, maxSeconds };
 
   /** One search, with the words already decided. */
   const run = useCallback(
     async (query: string, provider: LLMProvider | null, signal: AbortSignal): Promise<void> => {
-      const page = await searchFreesound({
-        key: live.current.key.trim(),
-        query,
-        licence: live.current.licence,
-        maxSeconds: live.current.maxSeconds,
-        signal,
-      });
+      const token = await connection.token();
+      if (token === null) return;
+
+      const ask = async (bearer: string): Promise<Awaited<ReturnType<typeof searchFreesound>>> =>
+        searchFreesound({
+          token: bearer,
+          query,
+          licence: live.current.licence,
+          maxSeconds: live.current.maxSeconds,
+          signal,
+        });
+
+      let page;
+      try {
+        page = await ask(token);
+      } catch (failure: unknown) {
+        /* The one expected failure of a long session: a 24-hour token that ran out
+           between two searches. Refresh once, ask once more, then report. */
+        if (!(failure instanceof FreesoundError) || failure.code !== 'token') throw failure;
+        const fresh = await connection.refresh();
+        if (fresh === null) throw failure;
+        page = await ask(fresh);
+      }
 
       /* Show the library's own order first, then reorder in place. A ranking call is a
          second round trip, and a list that appears only after it would make every
@@ -175,7 +179,7 @@ export function useSearch(): LibrarySearch {
       const rest = page.sounds.filter((s) => !notes.has(s.id));
       setHits([...named, ...rest].map((sound) => ({ sound, note: notes.get(sound.id) ?? '' })));
     },
-    [],
+    [connection],
   );
 
   /**
@@ -188,7 +192,7 @@ export function useSearch(): LibrarySearch {
    */
   const launch = useCallback(
     (typed: string, provider: LLMProvider | null, reuse: string | null) => {
-      if (live.current.key.trim() === '') return;
+      if (connection.state !== 'on') return;
 
       abort.current?.abort();
       const controller = new AbortController();
@@ -221,15 +225,8 @@ export function useSearch(): LibrarySearch {
           if (abort.current === controller) abort.current = null;
           setRunning(false);
         });
-
-      /* Persist on use, not on every keystroke: a key that actually reached the library
-         is one the user meant, while a half-pasted one is not worth storing. */
-      const secret = live.current.key.trim();
-      if (live.current.remember && canRemember && secret !== '') {
-        void keystore.save(KEYSTORE_NAME, secret).then(() => setStored(true));
-      }
     },
-    [run],
+    [connection.state, run],
   );
 
   const start = useCallback(
@@ -251,21 +248,8 @@ export function useSearch(): LibrarySearch {
     setRunning(false);
   }, []);
 
-  const forget = useCallback(() => {
-    void keystore.forget(KEYSTORE_NAME).then(() => {
-      setStored(false);
-      setRemember(false);
-      setKey('');
-    });
-  }, []);
-
   return {
-    key,
-    setKey,
-    remember,
-    setRemember,
-    stored,
-    forget,
+    connection,
     licence,
     setLicence,
     maxSeconds,

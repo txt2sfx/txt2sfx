@@ -201,7 +201,7 @@ export function App(): React.JSX.Element {
      someone switches to Compare to look at what they just found, and a result list —
      never mind a pasted key — that died on a tab switch would make the two unusable
      together, which is the whole workflow. */
-  const search = useSearch();
+  const search = useSearch({ bankUrl });
 
   /* --- fitting ------------------------------------------------------------ */
 

@@ -21,6 +21,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { type AuthContext, assertSafeBinding } from './auth.js';
+import type { FreesoundConfig } from './freesound.js';
 import type { GitHubConfig } from './identity.js';
 import { openBank } from './db.js';
 import { openStore } from './store.js';
@@ -35,6 +36,8 @@ export interface ServerConfig {
   readonly port: number;
   readonly host: string;
   readonly auth: AuthContext;
+  /** The Freesound application, when one is configured. Undefined disables the routes. */
+  readonly freesound?: FreesoundConfig;
   /** Serve an unauthenticated writable bank on a public interface. Deliberately awkward. */
   readonly allowOpen: boolean;
 }
@@ -73,6 +76,20 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
         }
       : undefined;
 
+  /* The same three ingredients as GitHub's, and the same rule: nothing is offered
+     until all of them are present. A half-configured OAuth app is a button that fails
+     after the user has already left the page. */
+  const freesoundId = env['FREESOUND_CLIENT_ID'] ?? '';
+  const freesoundSecret = env['FREESOUND_CLIENT_SECRET'] ?? '';
+  const freesound: FreesoundConfig | undefined =
+    freesoundId !== '' && freesoundSecret !== '' && publicUrl !== ''
+      ? {
+          clientId: freesoundId,
+          clientSecret: freesoundSecret,
+          allowedRedirects: [...listOf(env['ALLOWED_ORIGINS']), publicUrl],
+        }
+      : undefined;
+
   return {
     databasePath: env['TXT2SFX_DB'] ?? DEFAULT_DB,
     port: Number.isFinite(port) ? port : 8787,
@@ -88,6 +105,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
          with sign-in not yet configured, and writes have to wait for it. */
       publicWithoutSignIn: github === undefined && publicUrl !== '',
     },
+    ...(freesound === undefined ? {} : { freesound }),
     allowOpen: env['TXT2SFX_ALLOW_OPEN'] === '1',
   };
 }
@@ -112,7 +130,12 @@ async function main(): Promise<void> {
   assertSafeBinding(config.auth.mode, config.host, config.allowOpen);
 
   const store = openConfiguredStore(config);
-  const app = await buildApp({ store, auth: config.auth, logger: true });
+  const app = await buildApp({
+    store,
+    auth: config.auth,
+    logger: true,
+    ...(config.freesound === undefined ? {} : { freesound: config.freesound }),
+  });
 
   const shutdown = async (): Promise<void> => {
     await app.close();
