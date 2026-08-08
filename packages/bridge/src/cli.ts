@@ -28,6 +28,7 @@
  * @packageDocumentation
  */
 
+import { realpathSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { resolve } from 'node:path';
 import process from 'node:process';
@@ -549,9 +550,40 @@ async function main(): Promise<void> {
   }
 }
 
-/* Only run when executed directly — a test imports `parseCliOptions` from this
-   module and must not seize stdin or a port by doing so. `pathToFileURL` rather
-   than string surgery, for the same Windows drive-letter reason as the server. */
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+/**
+ * Is this module the program, rather than something a test imported?
+ *
+ * The guard exists because `parseCliOptions` is imported by a test, which must not
+ * seize stdin or a port by doing so. `pathToFileURL` rather than string surgery, for
+ * the same Windows drive-letter reason as the server.
+ *
+ * `realpathSync` is the load-bearing part, and its absence was a real bug: on POSIX
+ * npm installs a bin as a **symlink** in `node_modules/.bin`, so `process.argv[1]` is
+ * that link while `import.meta.url` is the file it points at — Node's ESM loader
+ * resolves symlinks before it hands a module its own URL. Compared raw, the two never
+ * matched, `main()` never ran, and `npx txt2sfx-bridge` exited 0 having printed
+ * nothing. It worked on Windows only because npm writes a `.cmd` shim there that
+ * carries the real path, which is exactly the kind of platform difference a
+ * developer's machine hides. A silent no-op has no message to search for, so this is
+ * checked by a test that installs through a symlink rather than left to review.
+ *
+ * @param moduleUrl `import.meta.url` of the module asking.
+ * @param argv1 `process.argv[1]`, or undefined when there is none.
+ */
+export function runningAsScript(moduleUrl: string, argv1: string | undefined): boolean {
+  if (argv1 === undefined) return false;
+  const target = resolve(argv1);
+  /* A path that does not exist cannot be this module, but it also must not throw:
+     `node --eval` and some launchers put something unopenable in argv[1]. */
+  let real: string;
+  try {
+    real = realpathSync(target);
+  } catch {
+    real = target;
+  }
+  return moduleUrl === pathToFileURL(real).href;
+}
+
+if (runningAsScript(import.meta.url, process.argv[1])) {
   await main();
 }
