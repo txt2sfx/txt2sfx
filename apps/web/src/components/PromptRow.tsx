@@ -13,12 +13,22 @@
  * What replaced it is a decision instead of a question. An attached coding agent answers
  * if there is one; otherwise the user's Gemini key; otherwise nothing happens and the row
  * says so before the button is pressed rather than after. `chooseProvider` in
- * `lib/agent.ts` is that rule, and everything on this screen reads it — so the label
- * beside the button, the button's own disabled state and the run cannot disagree.
+ * `lib/agent.ts` is that rule, and everything on this screen reads it — so the gear beside
+ * the button, the button's own disabled state and the run cannot disagree.
  *
- * The label is not a picker. It is one word naming who will answer, and clicking it opens
- * the model dialog — the same dialog the header badge opens, because there is now exactly
- * one place where any of this is configured.
+ * ## Why a gear and not the provider's name
+ *
+ * `via your agent` was a label pretending to be a control. It sat between the prompt and
+ * the button — the widest thing in the row after the text itself — to report a fact that
+ * changes maybe twice a week, and the two states rendered at different widths, so the
+ * button it preceded moved sideways depending on whether a key was pasted. A door needs
+ * to look like a door and stay where it was left.
+ *
+ * So it is a gear, and it is *after* the run button rather than before it: the row reads
+ * prompt → run, and settings are what you reach for when that reading did not work out.
+ * The one state worth interrupting for survives — with nothing able to answer, the gear
+ * goes amber and carries a dot, because it is then the only thing standing between the
+ * prompt and a run. Who answers, when somebody does, is on hover and in the dialog.
  *
  * ## One button, whichever engine the tab is about
  *
@@ -125,25 +135,6 @@ export function PromptRow({
           onChange={(event) => onPromptChange(event.target.value)}
         />
 
-        {/* Not a picker: one word saying who answers, and a door to the one place it is
-            configured. Kept in the row because "which model is about to be spent" is the
-            single piece of that state nobody should have to open a dialog to learn. */}
-        <button
-          type="button"
-          className={`chip-hue${model === null ? ' warn' : ''}`}
-          title={t(model === null ? 'prompt.noModelTitle' : 'prompt.modelTitle')}
-          onClick={onOpenSettings}
-        >
-          {model === null ? (
-            <>
-              <span className="warn-dot" />
-              {t('prompt.noModel')}
-            </>
-          ) : (
-            t(model === 'agent' ? 'prompt.viaAgent' : 'prompt.viaGemini')
-          )}
-        </button>
-
         {running ? (
           <button type="button" className="hue-button" onClick={onStop} disabled={stopping}>
             <span className="spinner" aria-hidden="true" />
@@ -175,7 +166,50 @@ export function PromptRow({
             {t('prompt.make')}
           </button>
         )}
+
+        {/* The door to the one place any of this is configured. After the run button,
+            because it is what you reach for when pressing that did not work out — and
+            amber with a dot in the one state where pressing it is the next thing to do. */}
+        <button
+          type="button"
+          className={`chip-hue gear${model === null ? ' warn' : ''}`}
+          aria-label={t('prompt.settingsAria')}
+          title={t(
+            model === null
+              ? 'prompt.noModelTitle'
+              : model === 'agent'
+                ? 'prompt.modelTitleAgent'
+                : 'prompt.modelTitleGemini',
+          )}
+          onClick={onOpenSettings}
+        >
+          <Gear />
+          {model === null ? <span className="warn-dot" /> : null}
+        </button>
       </form>
     </div>
+  );
+}
+
+/**
+ * A gear, drawn rather than typed.
+ *
+ * The same argument as `LanguageMenu`'s globe: ⚙ is an emoji on most platforms and comes
+ * out either coloured and cartoonish or, on the machines that pick the text presentation,
+ * a grey glyph half the weight of everything around it. `currentColor` makes it follow the
+ * button's own state instead — including the amber one — for free.
+ *
+ * Supplied as artwork, so the coordinates are kept exactly as given, flipping transform
+ * and all: the outline is filled rather than stroked, and re-deriving it at 16 units to
+ * make the numbers prettier would be redrawing somebody's icon by hand.
+ */
+function Gear(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 2000 2000" width="15" height="15" aria-hidden="true" focusable="false">
+      <g transform="matrix(.1 0 0 -.1 0 2000)" fill="currentColor" stroke="none">
+        <path d="M9220 19989 c-515 -48 -969 -266 -1336 -641 -179 -183 -284 -331 -390 -553 -34 -71 -182 -441 -329 -821 l-267 -692 -839 -476 -839 -476 -717 110 c-395 60 -767 114 -828 121 -135 14 -404 6 -530 -16 -606 -106 -1121 -435 -1442 -920 -84 -126 -712 -1233 -757 -1333 -119 -266 -172 -494 -183 -787 -18 -485 116 -936 396 -1329 31 -43 264 -336 518 -650 l462 -571 1 -956 0 -956 -470 -599 c-259 -329 -495 -636 -525 -681 -251 -377 -368 -798 -352 -1268 7 -191 29 -330 81 -511 37 -128 107 -300 164 -404 86 -156 635 -1114 668 -1167 263 -410 665 -720 1140 -879 267 -89 584 -124 862 -93 53 6 421 60 818 120 l721 109 824 -474 824 -474 273 -704 c285 -737 355 -895 470 -1068 312 -470 824 -807 1387 -915 163 -31 349 -37 1085 -32 785 4 812 6 1030 63 391 103 704 285 1000 583 144 145 232 261 329 431 80 141 93 172 396 954 145 373 267 682 272 687 4 4 376 219 826 478 l818 471 717 -110 c862 -131 890 -134 1102 -127 177 7 297 23 452 63 496 125 960 453 1241 877 87 131 656 1124 732 1277 285 574 286 1278 2 1862 -112 229 -148 277 -915 1223 l-251 310 -1 956 0 956 470 599 c259 329 501 644 537 698 144 217 260 508 307 766 80 445 29 877 -151 1275 -56 123 -660 1186 -760 1337 -166 250 -392 465 -658 625 -133 80 -166 97 -323 159 -238 96 -453 142 -707 151 -206 7 -235 4 -1101 -128 l-721 -109 -824 474 -824 474 -270 695 c-148 383 -287 734 -309 782 -96 213 -228 406 -396 579 -379 391 -830 608 -1360 656 -134 12 -1421 11 -1550 -1z m1517 -1434 c37 -9 110 -37 162 -62 127 -63 248 -180 308 -298 22 -44 183 -448 358 -898 174 -450 332 -845 351 -877 41 -71 119 -157 182 -203 75 -55 2170 -1257 2246 -1290 75 -31 191 -56 269 -57 26 0 446 61 933 135 528 81 914 135 957 135 107 0 201 -24 305 -76 100 -50 209 -142 265 -223 17 -25 170 -288 339 -585 363 -635 362 -634 362 -836 0 -146 -14 -211 -70 -321 -36 -72 -38 -75 -614 -809 -556 -710 -559 -714 -600 -804 -62 -136 -60 -91 -60 -1490 0 -1439 -4 -1354 77 -1514 41 -79 131 -195 583 -754 294 -364 555 -689 578 -722 102 -142 136 -248 136 -421 1 -142 -15 -210 -76 -329 -69 -136 -598 -1057 -639 -1112 -124 -168 -352 -284 -559 -284 -49 0 -389 48 -931 132 -723 112 -872 132 -969 132 -175 0 -207 -13 -677 -283 -1031 -591 -1782 -1026 -1823 -1056 -92 -68 -179 -175 -221 -272 -12 -26 -160 -407 -330 -846 -170 -439 -319 -817 -330 -840 -108 -211 -304 -354 -534 -387 -56 -8 -282 -10 -750 -8 -752 4 -713 1 -875 81 -113 56 -239 179 -294 285 -21 40 -179 438 -352 884 -173 446 -330 841 -350 878 -41 78 -122 172 -192 223 -39 28 -948 554 -1996 1156 -153 87 -257 140 -310 157 -157 50 -150 51 -1139 -100 -492 -76 -919 -136 -957 -136 -225 0 -465 131 -588 322 -65 102 -603 1048 -633 1115 -47 102 -63 192 -56 318 9 158 48 270 140 395 23 30 269 346 548 701 278 355 521 667 538 693 18 26 46 76 62 112 61 134 59 85 59 1480 0 1124 -2 1284 -16 1351 -18 87 -57 179 -104 248 -18 26 -268 339 -556 697 -289 357 -542 673 -563 702 -50 68 -93 155 -116 236 -26 90 -27 280 -2 369 24 90 50 138 385 724 325 569 353 609 489 698 112 73 226 110 353 116 97 4 168 -5 955 -126 468 -72 882 -134 920 -137 96 -8 238 17 329 60 79 37 2186 1232 2252 1277 64 44 158 152 198 228 20 38 173 423 342 857 168 434 317 816 332 849 84 192 271 352 474 404 68 18 119 19 750 20 576 1 687 -1 745 -14z" />
+        <path d="M9620 13551 c-488 -63 -837 -167 -1245 -373 -492 -248 -947 -639 -1277 -1098 -312 -434 -528 -952 -617 -1485 -43 -258 -54 -406 -48 -655 8 -329 38 -553 113 -840 187 -711 568 -1319 1134 -1811 372 -323 848 -581 1330 -719 305 -87 566 -127 890 -137 931 -27 1835 311 2515 940 270 250 497 530 662 817 346 600 509 1239 490 1910 -20 674 -211 1284 -580 1852 -427 657 -1083 1169 -1824 1422 -385 132 -694 184 -1128 191 -223 3 -295 1 -415 -14z m641 -1426 c389 -51 703 -177 1014 -405 107 -79 304 -266 385 -365 188 -230 331 -514 410 -810 61 -231 64 -262 65 -525 0 -275 -12 -372 -72 -590 -101 -372 -286 -683 -570 -961 -323 -317 -704 -509 -1158 -585 -157 -26 -562 -27 -685 -1 -251 54 -413 108 -605 202 -229 112 -397 236 -584 431 -397 413 -601 918 -601 1489 0 332 72 640 219 940 131 268 318 503 556 703 302 254 686 421 1090 477 128 18 400 18 536 0z" />
+      </g>
+    </svg>
   );
 }

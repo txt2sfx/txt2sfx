@@ -169,6 +169,20 @@ export function App(): React.JSX.Element {
 
   const [prompt, setPrompt] = useState('');
   const [selected, setSelected] = useState<string>(() => bundledRecipes()[0]?.name ?? '');
+  /**
+   * A run was started from the gallery and has not produced a recipe yet.
+   *
+   * `selected` cannot express this. It always names *some* recipe — the first bundled one
+   * in a fresh tab — so arriving in the studio from the gallery's prompt box used to open
+   * a stranger's `metal-door-slam` with an editor, a slider rack and an Export card under
+   * it, none of which had anything to do with the sentence just typed. The screen said
+   * "here is a sound" while the sound was still being written.
+   *
+   * So the studio has a second state, and it lasts exactly until there is something real
+   * to show: {@link onGenerated} clears it, and so does picking a recipe from the rail —
+   * which is the way out when a run comes back with nothing.
+   */
+  const [composing, setComposing] = useState(false);
   /** Editor buffers, keyed by recipe name. Absent means "as stored". */
   const [edits, setEdits] = useState<Readonly<Record<string, string>>>({});
   const [seed, setSeed] = useState(DEFAULT_SEED);
@@ -590,6 +604,9 @@ export function App(): React.JSX.Element {
       stop();
       setSelected(name);
       setStatus(null);
+      /* Naming a recipe by hand ends the wait for one, however that wait started. It is
+         the only way out of the composing state when a run comes back with nothing. */
+      setComposing(false);
       lastPlayed.current = '';
     },
     [stop],
@@ -620,6 +637,7 @@ export function App(): React.JSX.Element {
         { name, source: source_, origin: 'session' as const, prompt: '' },
       ]);
       setSelected(name);
+      setComposing(false);
       setScreen('studio');
       setView('sound');
     },
@@ -698,6 +716,8 @@ export function App(): React.JSX.Element {
         return next;
       });
       setSelected(recipe.name);
+      /* There is a recipe now, so the skeleton has something to become. */
+      setComposing(false);
       touch(recipe.name);
       /* A sentinel that cannot equal a soundline, so the auto-play effect hears the new
          recipe instead of treating it as "already played". Hearing the answer is the
@@ -725,17 +745,24 @@ export function App(): React.JSX.Element {
     let cancelled = false;
     void generation.loadKey().then((secret) => {
       if (cancelled || secret === null) return;
-      setSettings((current) => (current.apiKey === '' ? { ...current, apiKey: secret, remember: true } : current));
+      setSettings((current) => (current.apiKey === '' ? { ...current, apiKey: secret } : current));
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  /** From the gallery: put the prompt in the studio and start immediately. */
+  /**
+   * From the gallery: put the prompt in the studio and start immediately.
+   *
+   * The studio opens *composing* rather than on whatever recipe happened to be selected.
+   * What the reader asked for does not exist yet, and the honest screen for that is the
+   * prompt, the loop explaining itself, and a placeholder where the answer will land.
+   */
   const generateFromGallery = useCallback(
     (text: string) => {
       setPrompt(text);
+      setComposing(true);
       setScreen('studio');
       setView('sound');
       generation.start(text, settings, { attached: agentReady });
@@ -1306,6 +1333,9 @@ export function App(): React.JSX.Element {
             setBKind('model');
             loadReference(file);
           }}
+          composing={composing}
+          matchReference={settings.matchReference}
+          onMatchReference={(next) => setSettings((current) => ({ ...current, matchReference: next }))}
           fitting={fitting}
           fitRunning={fitRunning}
           fitBlocked={fitBlocked}
@@ -1380,7 +1410,6 @@ export function App(): React.JSX.Element {
           model={model}
           keyStored={generation.storedKeys.length > 0}
           onForgetKey={generation.forgetKey}
-          hasReference={b !== null}
         />
       ) : null}
 

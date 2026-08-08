@@ -19,8 +19,9 @@
  * What this does **not** protect against, stated plainly because a security claim
  * that oversells is worse than none: a script injected into this origin can call
  * {@link Keystore.load} exactly as the app does. If the playground were serving
- * untrusted code, remembering the key would be the wrong choice — which is why it is
- * opt-in per key and reversible with one click.
+ * untrusted code, remembering the key would be the wrong choice — which is why every
+ * surface that stores one says so in plain text beside the field, and why forgetting is
+ * one click from there.
  *
  * ## Injectable storage
  *

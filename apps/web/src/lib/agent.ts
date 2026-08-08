@@ -31,8 +31,9 @@
  *
  * It is React state, passed to the provider factory per run. No `localStorage`, no
  * module-level cache, and the providers themselves never read an environment (see
- * `provider.ts`) — so there is exactly one copy of it. **remember** encrypts it into
- * IndexedDB under a non-extractable key; `lib/keystore.ts` says what that protects.
+ * `provider.ts`) — so there is exactly one copy of it. A key that answered a run is also
+ * encrypted into IndexedDB under a non-extractable key, and **forget it** undoes that;
+ * `lib/keystore.ts` says what the encryption protects and what it does not.
  *
  * @packageDocumentation
  */

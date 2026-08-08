@@ -233,17 +233,12 @@ export const ko: Partial<Readonly<Record<Key, string>>> = {
   'dialog.step2': '에이전트에게 자기소개를 시키기',
   'dialog.step2note':
     'sfx_contract는 한 번의 호출로 문법 전체를 넘겨줍니다. 어디에도 API 키가 개입하지 않습니다: 당신의 에이전트가 곧 모델입니다.',
-  'dialog.agentAria': '에이전트',
-  'dialog.copyPrompt': '에이전트 프롬프트 복사',
-  'dialog.copyPromptTitle': '에이전트에 붙여 넣으세요 —— 스스로 서버를 등록하고 첫 소리를 만듭니다',
   'dialog.recheck': '다시 확인',
   'dialog.checking': '확인 중…',
-  'dialog.daemon': '데몬',
   'dialog.daemonAria': '브리지 데몬 URL',
   'dialog.copyWhat': '{what} 복사',
   'dialog.setupOf': '{client} 설정',
   'dialog.firstAsk': '첫 요청',
-  'dialog.agentPrompt': '에이전트 프롬프트',
   'dialog.noteClaude':
     '이것이 설치의 전부입니다 —— 미리 띄워 둘 데몬이 없습니다. `add` 뒤에 `-s user`를 붙이면 모든 프로젝트에서 쓸 수 있습니다. 그다음 Claude Code를 다시 시작하세요: 서버 목록은 시작할 때 읽습니다.',
   'dialog.noteCodex':

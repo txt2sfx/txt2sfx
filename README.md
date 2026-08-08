@@ -147,13 +147,14 @@ soundline. The audio is for handing a sound to a person; the code is for shippin
 There is no model picker, because there is nothing to pick between. If a coding agent is
 attached to the bridge it answers — it already holds a model, it needs no key, and it is
 the reason the next section exists. If none is, your Gemini key does. If neither, the
-prompt row says so before you press anything rather than after. The badge in the header
-opens the one place any of it is configured.
+prompt row says so before you press anything rather than after. The gear beside that row,
+and the badge in the header, open the one place any of it is configured — a tab per answer:
+your Gemini key, or one of five ways to attach a coding agent.
 
-The key lives in that tab's memory and is sent to Google and nowhere else — no proxy, no
-server of ours in the path. Ticking **remember** encrypts it with a non-extractable key in
-IndexedDB rather than storing it in `localStorage`; what that does and does not protect
-against is spelled out in `apps/web/src/lib/keystore.ts`, and **forget** undoes it.
+The key is sent to Google and nowhere else — no proxy, no server of ours in the path. It
+is remembered on your machine without being asked, encrypted with a non-extractable key in
+IndexedDB rather than stored in `localStorage`; what that does and does not protect against
+is spelled out in `apps/web/src/lib/keystore.ts`, and **forget it** undoes it in one click.
 
 ## Your agent, with an ear
 

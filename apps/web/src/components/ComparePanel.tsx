@@ -119,6 +119,17 @@ export interface ComparePanelProps {
   readonly onNewTake: () => void;
   readonly onFit: () => void;
   readonly fitBlocked: string | null;
+  /**
+   * Whether the *next generation* is aimed at B, as opposed to the *current* recipe's
+   * numbers, which is what {@link ComparePanelProps.onFit} does.
+   *
+   * It used to be a checkbox in the model dialog, which was the wrong room twice over: it
+   * is not a setting about who writes the recipe, and it is inert until a B side exists.
+   * Here it is one press away from the reference it names, and it only exists once there
+   * is one.
+   */
+  readonly matchReference: boolean;
+  readonly onMatchReference: (next: boolean) => void;
   readonly maxPeak: number;
 }
 
@@ -138,6 +149,8 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
     onNewTake,
     onFit,
     fitBlocked,
+    matchReference,
+    onMatchReference,
     maxPeak,
   } = props;
 
@@ -646,6 +659,22 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
         </button>
         {note === null ? null : <span className="mono faint">{note}</span>}
         <div className="spacer" />
+        {/* Only once B is loaded. Off, this says what pressing it would do; on, it says
+            what the next run will do — the two are the same sentence, so the state is
+            carried by the button's own accent and `aria-pressed` rather than by a second
+            label the reader has to compare against the first. */}
+        {b === null ? null : (
+          <button
+            type="button"
+            className={`violet${matchReference ? ' selected' : ''}`}
+            aria-pressed={matchReference}
+            onClick={() => onMatchReference(!matchReference)}
+            title={t('compare.matchTitle')}
+          >
+            {matchReference ? '◉ ' : '○ '}
+            {t('compare.match')}
+          </button>
+        )}
         <button type="button" className="violet" onClick={onFit} disabled={fitBlocked !== null} title={fitBlocked ?? ''}>
           {t('compare.fitSlots')}
         </button>

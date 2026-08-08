@@ -84,7 +84,12 @@ export interface ProviderSettings {
   readonly apiKey: string;
   /** Empty means "whatever the provider's default is". */
   readonly model: string;
-  readonly remember: boolean;
+  /**
+   * Aim the optimizer at the B side of Compare rather than at the model's own design.
+   *
+   * Not a property of *who* answers, which is why the toggle for it lives in the compare
+   * panel next to the reference it is about — see `components/ComparePanel.tsx`.
+   */
   readonly matchReference: boolean;
 }
 
@@ -92,7 +97,6 @@ export interface ProviderSettings {
 export const DEFAULT_SETTINGS: ProviderSettings = {
   apiKey: '',
   model: '',
-  remember: false,
   matchReference: false,
 };
 
@@ -134,7 +138,7 @@ export interface Generation {
   readonly best: { readonly source: string; readonly distance: number } | null;
   readonly result: GenerateResult | null;
   readonly error: string | null;
-  /** Non-empty when a key is remembered on this machine, so the checkbox tells truth. */
+  /** Non-empty when a key is stored on this machine, so **forget** is offered only when it undoes something. */
   readonly storedKeys: readonly string[];
   readonly start: (prompt: string, settings: ProviderSettings, context: RunContext) => void;
   readonly cancel: () => void;
@@ -213,8 +217,11 @@ export function useGenerate(deps: GenerateDeps): Generation {
     setBest(null);
 
     /* Persist on use, not on every keystroke: a key that was actually sent to a vendor
-       is one the user meant, while a half-pasted one is not worth storing. */
-    if (settings.remember && canRemember && settings.apiKey.trim() !== '' && kind === 'gemini') {
+       is one the user meant, while a half-pasted one is not worth storing.
+       No checkbox in front of it any more — nobody pastes a key in order to paste it
+       again after a reload, and `forgetKey` is the one-click undo that made the question
+       worth asking in the first place. `lib/keystore.ts` is what "kept" means here. */
+    if (canRemember && settings.apiKey.trim() !== '' && kind === 'gemini') {
       void keystore.save(KEY_NAME, settings.apiKey.trim()).then(() => {
         setStoredKeys((names) => (names.includes(KEY_NAME) ? names : [...names, KEY_NAME]));
       });

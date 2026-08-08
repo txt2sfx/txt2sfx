@@ -234,17 +234,12 @@ export const pt: Partial<Readonly<Record<Key, string>>> = {
   'dialog.step2': 'Peça ao agente que se apresente',
   'dialog.step2note':
     'sfx_contract entrega toda a gramática em uma chamada. Nenhuma chave de API entra em jogo: o seu agente é o modelo.',
-  'dialog.agentAria': 'agente',
-  'dialog.copyPrompt': 'Copiar prompt do agente',
-  'dialog.copyPromptTitle': 'Cole no seu agente — ele mesmo registra o servidor e faz o primeiro som',
   'dialog.recheck': 'Verificar de novo',
   'dialog.checking': 'Verificando…',
-  'dialog.daemon': 'daemon',
   'dialog.daemonAria': 'URL do daemon da ponte',
   'dialog.copyWhat': 'copiar {what}',
   'dialog.setupOf': 'a configuração do {client}',
   'dialog.firstAsk': 'o primeiro pedido',
-  'dialog.agentPrompt': 'o prompt do agente',
   'dialog.noteClaude':
     'Essa é a instalação inteira — não há daemon para subir antes. Acrescente `-s user` depois de `add` para tê-lo em todo projeto. Reinicie o Claude Code depois: ele lê a lista de servidores na inicialização.',
   'dialog.noteCodex':

@@ -131,6 +131,24 @@ export interface StudioProps {
   readonly onLoadFile: (file: File) => void;
   readonly onNewTake: () => void;
   readonly onModelRendered: (file: File) => void;
+  /**
+   * A run is in flight for a recipe that does not exist yet, started from the gallery.
+   *
+   * Everything below the run strip is *about a recipe*, and there is not one — so under
+   * this flag the tabs, the panel, the editor and the slider rack are replaced by a
+   * placeholder of their own shape rather than by the previously selected recipe, which
+   * would be a stranger's sound presented as the answer to the sentence just typed.
+   */
+  readonly composing: boolean;
+  /**
+   * Whether the next generation is aimed at B.
+   *
+   * Lives in {@link ProviderSettings} because that is what a run is handed, but it is
+   * switched from the compare panel: it means nothing until there is a B, and a control
+   * that is dead until you load a file belongs beside the file.
+   */
+  readonly matchReference: boolean;
+  readonly onMatchReference: (next: boolean) => void;
 
   /* --- fitting --- */
   readonly fitting: string | null;
@@ -232,163 +250,198 @@ export function Studio(props: StudioProps): React.JSX.Element {
             best={props.generation.best}
             result={props.generation.result}
             error={props.generation.error}
-            hadTarget={props.settings.matchReference && props.b !== null}
+            hadTarget={props.matchReference && props.b !== null}
             seed={props.seed}
             onTake={() => props.generation.take(props.prompt.trim())}
           />
 
-          <div className="views">
-            <nav className="segmented small" aria-label={t('studio.viewAria')}>
-              <button
-                type="button"
-                className={props.view === 'sound' ? 'selected cyan' : ''}
-                onClick={() => props.onView('sound')}
-              >
-                {t('studio.soundline')}
-              </button>
-              <button
-                type="button"
-                className={props.view === 'model' ? 'selected amber' : ''}
-                onClick={() => props.onView('model')}
-              >
-                {t('studio.model')}
-              </button>
-              <button
-                type="button"
-                className={props.view === 'search' ? 'selected green' : ''}
-                onClick={() => props.onView('search')}
-              >
-                {t('studio.search')}
-              </button>
-              <button
-                type="button"
-                className={props.view === 'compare' ? 'selected violet' : ''}
-                onClick={() => props.onView('compare')}
-              >
-                {t('studio.compare')}
-              </button>
-            </nav>
-            {props.view === 'compare' ? <span className="faint hint">{t('studio.hintCompare')}</span> : null}
-            {props.view === 'model' ? <span className="faint hint">{t('studio.hintModel')}</span> : null}
-            {props.view === 'search' ? <span className="faint hint">{t('studio.hintSearch')}</span> : null}
-          </div>
-
-          <section className="card-panel" style={{ ['--hue' as string]: String(catHue(current?.category)) }}>
-            <div className="card-panel-head">
-              <h2 className="mono">{props.selected}</h2>
-              <span className="cat">{current?.category ?? props.ast?.category ?? 'misc'}</span>
-              {/* The *declared* duration, which is the header's contract and the number the
-                  validator enforces — not the rendered buffer's length, which carries the
-                  analyzer's trailing pad and would report a 55 ms pop as 105 ms. */}
-              <span className="mono faint">
-                {ms(props.ast === null ? 0 : declaredDurationMs(props.ast))}
-                {current?.editedAt === undefined ? '' : t('studio.edited', { when: ago(current.editedAt) })}
-                {props.dirty.includes(props.selected) ? t('studio.unsaved') : ''}
-              </span>
-            </div>
-
-            {props.view === 'sound' ? (
-              <SoundPanel
-                name={props.selected}
-                ast={props.ast}
-                rendered={props.rendered}
-                seed={props.seed}
-                playing={props.playing}
-                looping={props.looping}
-                formatId={props.formatId}
-                onFormat={props.onFormat}
-                onDownload={props.onDownload}
-                onPlay={props.onPlay}
-                onLoop={props.onLoop}
-                onTrash={() => props.onTrash(props.selected)}
-                onShare={props.onShare}
-              />
-            ) : null}
-
-            {props.view === 'model' ? (
-              <ModelPanel
-                prompt={props.prompt}
-                render={props.bKind === 'model' ? props.b : null}
-                onRendered={props.onModelRendered}
-                onCompare={() => {
-                  props.onBKind('model');
-                  props.onView('compare');
-                }}
-                formatId={props.modelFormatId}
-                onFormat={props.onModelFormat}
-                onDownload={props.onDownload}
-                seed={props.seed}
-                writeCaption={writeCaption}
-                onReady={props.onModelReady}
-                controls={modelControls}
-                onBusy={setModelBusy}
-              />
-            ) : null}
-
-            {props.view === 'search' ? (
-              <SearchPanel search={props.search} onUseSound={props.onUseSound} onStatus={props.onStatus} />
-            ) : null}
-
-            {props.view === 'compare' ? (
-              <ComparePanel
-                candidateName={props.selected}
-                candidate={props.rendered?.buffer ?? null}
-                candidateLayers={props.candidateLayers}
-                layerNames={layerNames}
-                b={props.b}
-                bKind={props.bKind}
-                onBKind={props.onBKind}
-                modelAvailable={props.modelAvailable}
-                libraryLoaded={props.libraryLoaded}
-                onLoadFile={props.onLoadFile}
-                onFindLibrary={() => props.onView('search')}
-                onNewTake={props.onNewTake}
-                onFit={props.onFit}
-                fitBlocked={props.fitBlocked}
-                maxPeak={props.maxPeak}
-              />
-            ) : null}
-          </section>
-
-          {/* The recipe and its numbers stay below the views that are *about* the recipe,
-              and disappear under the two that are not. A diffusion render and a stranger's
-              recording both have no recipe by definition: an editor, a slider rack and an
-              Export card under either of them would suggest that what is on screen can be
-              tuned and exported as ours, and neither can. What is under them instead is
-              the thing itself, which is all there is to say about it. */}
-          {props.view === 'model' || props.view === 'search' ? null : (
+          {props.composing ? (
+            <Composing running={props.generation.running} />
+          ) : (
             <>
-              <SoundlineCard
-                source={props.source}
-                errors={props.errors}
-                issues={props.issues}
-                warnings={props.warnings}
-                onChange={props.onSourceChange}
-              />
-
-              <div className="pair">
-                <SlotsCard
-                  slots={props.slots}
-                  layerNames={layerNames}
-                  onChange={props.onSlotChange}
-                  fitting={props.fitting}
-                  fitRunning={props.fitRunning}
-                  fitBlocked={props.fitBlocked}
-                  onFit={props.onFit}
-                  onStopFit={props.onStopFit}
-                />
-                <ExportCard
-                  code={props.code}
-                  source={props.source}
-                  peak={props.rendered?.peak ?? null}
-                  seed={props.seed}
-                  onCompare={() => props.onView('compare')}
-                />
+              <div className="views">
+                <nav className="segmented small" aria-label={t('studio.viewAria')}>
+                  <button
+                    type="button"
+                    className={props.view === 'sound' ? 'selected cyan' : ''}
+                    onClick={() => props.onView('sound')}
+                  >
+                    {t('studio.soundline')}
+                  </button>
+                  <button
+                    type="button"
+                    className={props.view === 'model' ? 'selected amber' : ''}
+                    onClick={() => props.onView('model')}
+                  >
+                    {t('studio.model')}
+                  </button>
+                  <button
+                    type="button"
+                    className={props.view === 'search' ? 'selected green' : ''}
+                    onClick={() => props.onView('search')}
+                  >
+                    {t('studio.search')}
+                  </button>
+                  <button
+                    type="button"
+                    className={props.view === 'compare' ? 'selected violet' : ''}
+                    onClick={() => props.onView('compare')}
+                  >
+                    {t('studio.compare')}
+                  </button>
+                </nav>
+                {props.view === 'compare' ? <span className="faint hint">{t('studio.hintCompare')}</span> : null}
+                {props.view === 'model' ? <span className="faint hint">{t('studio.hintModel')}</span> : null}
+                {props.view === 'search' ? <span className="faint hint">{t('studio.hintSearch')}</span> : null}
               </div>
+
+              <section className="card-panel" style={{ ['--hue' as string]: String(catHue(current?.category)) }}>
+                <div className="card-panel-head">
+                  <h2 className="mono">{props.selected}</h2>
+                  <span className="cat">{current?.category ?? props.ast?.category ?? 'misc'}</span>
+                  {/* The *declared* duration, which is the header's contract and the number the
+                      validator enforces — not the rendered buffer's length, which carries the
+                      analyzer's trailing pad and would report a 55 ms pop as 105 ms. */}
+                  <span className="mono faint">
+                    {ms(props.ast === null ? 0 : declaredDurationMs(props.ast))}
+                    {current?.editedAt === undefined ? '' : t('studio.edited', { when: ago(current.editedAt) })}
+                    {props.dirty.includes(props.selected) ? t('studio.unsaved') : ''}
+                  </span>
+                </div>
+
+                {props.view === 'sound' ? (
+                  <SoundPanel
+                    name={props.selected}
+                    ast={props.ast}
+                    rendered={props.rendered}
+                    seed={props.seed}
+                    playing={props.playing}
+                    looping={props.looping}
+                    formatId={props.formatId}
+                    onFormat={props.onFormat}
+                    onDownload={props.onDownload}
+                    onPlay={props.onPlay}
+                    onLoop={props.onLoop}
+                    onTrash={() => props.onTrash(props.selected)}
+                    onShare={props.onShare}
+                  />
+                ) : null}
+
+                {props.view === 'model' ? (
+                  <ModelPanel
+                    prompt={props.prompt}
+                    render={props.bKind === 'model' ? props.b : null}
+                    onRendered={props.onModelRendered}
+                    onCompare={() => {
+                      props.onBKind('model');
+                      props.onView('compare');
+                    }}
+                    formatId={props.modelFormatId}
+                    onFormat={props.onModelFormat}
+                    onDownload={props.onDownload}
+                    seed={props.seed}
+                    writeCaption={writeCaption}
+                    onReady={props.onModelReady}
+                    controls={modelControls}
+                    onBusy={setModelBusy}
+                  />
+                ) : null}
+
+                {props.view === 'search' ? (
+                  <SearchPanel search={props.search} onUseSound={props.onUseSound} onStatus={props.onStatus} />
+                ) : null}
+
+                {props.view === 'compare' ? (
+                  <ComparePanel
+                    candidateName={props.selected}
+                    candidate={props.rendered?.buffer ?? null}
+                    candidateLayers={props.candidateLayers}
+                    layerNames={layerNames}
+                    b={props.b}
+                    bKind={props.bKind}
+                    onBKind={props.onBKind}
+                    modelAvailable={props.modelAvailable}
+                    libraryLoaded={props.libraryLoaded}
+                    onLoadFile={props.onLoadFile}
+                    onFindLibrary={() => props.onView('search')}
+                    onNewTake={props.onNewTake}
+                    onFit={props.onFit}
+                    fitBlocked={props.fitBlocked}
+                    matchReference={props.matchReference}
+                    onMatchReference={props.onMatchReference}
+                    maxPeak={props.maxPeak}
+                  />
+                ) : null}
+              </section>
+
+              {/* The recipe and its numbers stay below the views that are *about* the recipe,
+                  and disappear under the two that are not. A diffusion render and a stranger's
+                  recording both have no recipe by definition: an editor, a slider rack and an
+                  Export card under either of them would suggest that what is on screen can be
+                  tuned and exported as ours, and neither can. What is under them instead is
+                  the thing itself, which is all there is to say about it. */}
+              {props.view === 'model' || props.view === 'search' ? null : (
+                <>
+                  <SoundlineCard
+                    source={props.source}
+                    errors={props.errors}
+                    issues={props.issues}
+                    warnings={props.warnings}
+                    onChange={props.onSourceChange}
+                  />
+
+                  <div className="pair">
+                    <SlotsCard
+                      slots={props.slots}
+                      layerNames={layerNames}
+                      onChange={props.onSlotChange}
+                      fitting={props.fitting}
+                      fitRunning={props.fitRunning}
+                      fitBlocked={props.fitBlocked}
+                      onFit={props.onFit}
+                      onStopFit={props.onStopFit}
+                    />
+                    <ExportCard
+                      code={props.code}
+                      source={props.source}
+                      peak={props.rendered?.peak ?? null}
+                      seed={props.seed}
+                      onCompare={() => props.onView('compare')}
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+/**
+ * The studio with no recipe in it yet.
+ *
+ * Blocks of the right shape rather than an empty column or a centred spinner. The empty
+ * column makes the strip above jump upward the moment a recipe lands, at exactly the
+ * moment the reader is looking at it; the spinner is a second thing saying "wait" next to
+ * a strip that is already naming the stage it is on. Placeholders say *what is coming* and
+ * where, which is the one thing neither of the alternatives says.
+ *
+ * The pulse stops when the run does. A run that ended with nothing — cancelled, or a model
+ * that never answered — leaves the shapes still and a sentence pointing at the rail, since
+ * picking a recipe there is the way out and nothing else on this screen is.
+ */
+function Composing({ running }: { readonly running: boolean }): React.JSX.Element {
+  const { t } = useI18n();
+  return (
+    <div className="studio-composing" aria-busy={running}>
+      <p className="caption">{t(running ? 'studio.composing' : 'studio.composingIdle')}</p>
+      <div className={`skeleton skeleton-panel${running ? ' pulsing' : ''}`} aria-hidden="true" />
+      <div className="pair">
+        <div className={`skeleton skeleton-card${running ? ' pulsing' : ''}`} aria-hidden="true" />
+        <div className={`skeleton skeleton-card${running ? ' pulsing' : ''}`} aria-hidden="true" />
+      </div>
     </div>
   );
 }

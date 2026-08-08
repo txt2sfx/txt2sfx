@@ -197,9 +197,11 @@ The prompt row is this loop with a form in front of it (`apps/web/src/lib/agent.
   The playground offers no other vendor: a choice between five ways to answer the same
   question was work the user had no way to do well.
 - **The key is React state**, passed to the provider factory when a run starts and held
-  nowhere else — no `localStorage`, no module-level cache. Closing the tab forgets it,
-  unless **remember** was ticked, which encrypts it into IndexedDB under a non-extractable
-  key (`lib/keystore.ts`).
+  nowhere else — no `localStorage`, no module-level cache. A key that actually answered a
+  run is also encrypted into IndexedDB under a non-extractable key (`lib/keystore.ts`), on
+  use rather than on every keystroke and without a checkbox in front of it: nobody pastes a
+  key in order to paste it again after a reload, and **forget it** is the one-click undo
+  that made the question worth asking.
 - **The devtools provider is reachable from nowhere in the interface.** It is passed to
   the run as an explicit override by `window.txt2sfx.run`, which exists only under
   `vite dev` — an escape hatch nobody can click has no business in a table the interface

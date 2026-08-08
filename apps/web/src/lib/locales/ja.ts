@@ -233,17 +233,12 @@ export const ja: Partial<Readonly<Record<Key, string>>> = {
   'dialog.step2': 'エージェントに自己紹介させる',
   'dialog.step2note':
     'sfx_contract は 1 回の呼び出しで文法全体を渡します。API キーはどこにも登場しません: あなたのエージェントがモデルです。',
-  'dialog.agentAria': 'エージェント',
-  'dialog.copyPrompt': 'エージェント用プロンプトをコピー',
-  'dialog.copyPromptTitle': 'エージェントに貼り付けてください —— 自分でサーバーを登録し、最初の音を作ります',
   'dialog.recheck': '再チェック',
   'dialog.checking': 'チェック中…',
-  'dialog.daemon': 'デーモン',
   'dialog.daemonAria': 'ブリッジ・デーモンの URL',
   'dialog.copyWhat': '{what}をコピー',
   'dialog.setupOf': '{client} の設定',
   'dialog.firstAsk': '最初の依頼',
-  'dialog.agentPrompt': 'エージェント用プロンプト',
   'dialog.noteClaude':
     'インストールはこれだけです —— 先にデーモンを起動する必要はありません。`add` のあとに `-s user` を付けるとすべてのプロジェクトで有効になります。そのあと Claude Code を再起動してください: サーバー一覧は起動時に読まれます。',
   'dialog.noteCodex':

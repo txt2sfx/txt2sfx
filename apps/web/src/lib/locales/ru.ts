@@ -163,15 +163,18 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'studio.hintCompare': 'числа, а не восприятие — сравнение ранжирует кандидатов, но не судит о них',
   'studio.hintModel': 'аудио по тому же запросу — рецепта нет, крутить нечего',
   'studio.hintSearch': 'записи, которые уже кто-то сделал — это цель, а не то, что можно поставить в игру',
+  'studio.composing':
+    'Пишем рецепт под этот запрос. Редактор, слайдеры и экспорт появятся здесь, как только он будет.',
+  'studio.composingIdle':
+    'Из этого прогона ничего не вернулось. Нажмите «Сделать звук» ещё раз или выберите рецепт в списке слева.',
   'studio.edited': ' · правка {when}',
   'studio.unsaved': ' · не сохранено',
 
   'prompt.placeholder': 'тяжёлая металлическая дверь захлопывается в коридоре',
   'prompt.describeAria': 'опишите звук',
-  'prompt.viaAgent': 'через вашего агента',
-  'prompt.viaGemini': 'через Gemini',
-  'prompt.modelTitle': 'кто отвечает на этот запрос — нажмите, чтобы поменять',
-  'prompt.noModel': 'нет модели',
+  'prompt.settingsAria': 'настройки модели',
+  'prompt.modelTitleAgent': 'на этот запрос отвечает ваш кодовый агент — нажмите, чтобы открыть настройки',
+  'prompt.modelTitleGemini': 'на этот запрос отвечает Gemini по вашему ключу — нажмите, чтобы открыть настройки',
   'prompt.noModelTitle': 'подключите кодового агента или вставьте ключ Gemini — нажмите, чтобы настроить',
   'prompt.stop': 'Стоп',
   'prompt.stopping': 'останавливаю…',
@@ -377,6 +380,9 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'compare.copyPicture': 'Копировать картинку',
   'compare.copyNumbers': 'Копировать числа',
   'compare.fitSlots': 'Подогнать слоты к B',
+  'compare.match': 'Генерировать под B',
+  'compare.matchTitle':
+    'Нацелить следующую генерацию на этот референс: модель проектирует, а оптимизатор подгоняет числа под B, а не только под сам замысел',
   'compare.copiedPicture': 'картинка скопирована',
   'compare.clipboardRefused': 'буфер обмена не принял картинку — сохранил PNG',
 
@@ -428,18 +434,19 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
     'Отвечает Gemini по вашему ключу, модель {model}. Подключите ниже кодового агента — и отвечать будет он.',
   'dialog.answersNobody':
     'Отвечать на запросы пока некому. Подключите к мосту кодового агента — шаги ниже — или вставьте ключ Gemini.',
+  'dialog.tabsAria': 'у кого модель',
   'dialog.keyTitle': 'Ключ Gemini, на случай когда агент не подключён',
   'dialog.key': 'ключ',
-  'dialog.keyPlaceholder': 'ваш ключ Gemini — только в этой вкладке',
+  'dialog.keyPlaceholder': 'ваш ключ Gemini',
   'dialog.modelId': 'id модели',
-  'dialog.remember': 'запомнить ключ',
-  'dialog.rememberTitle':
-    'Шифруется неизвлекаемым ключом в IndexedDB, а не в localStorage. Любой скрипт на этом origin всё ещё сможет им воспользоваться: см. lib/keystore.ts.',
-  'dialog.forget': 'забыть',
-  'dialog.keyNote': 'Ключ живёт только в этой вкладке и уходит только в Google · получить его можно на {source}',
+  'dialog.forget': 'забыть его',
+  'dialog.keyNote':
+    'Ключ уходит в Google и больше никуда — без прокси, без наших серверов на пути · получить его можно на {source}',
   'dialog.keyIdle': 'Сейчас он не используется: подключённый агент всегда важнее.',
-  'dialog.match': 'подгонять числа под референс',
-  'dialog.matchTitle': 'сначала загрузите референс во вкладке «Сравнить A / B»',
+  'dialog.keyStorage':
+    'Он хранится на этой машине, чтобы не вставлять его заново: зашифрован в IndexedDB этого браузера ключом, который нельзя извлечь, — не в localStorage и никуда не отправляется. Любой скрипт, отданный этой страницей, всё ещё сможет им воспользоваться: это разбирает lib/keystore.ts.',
+  'dialog.keyStorageNone':
+    'Этот браузер не умеет его хранить, так что ключ живёт только в этой вкладке, и после перезагрузки его спросят снова.',
   'dialog.bridgeLedeLive':
     'Мост работает на вашей машине и позволяет кодовому агенту проектировать, рендерить, прослушивать и экспортировать звуки прямо здесь — без API-ключа, потому что модель у агента уже есть. Он же может отвечать на кнопку «Сгенерировать» в этой песочнице.',
   'dialog.bridgeLedeDead':
@@ -457,17 +464,12 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'dialog.step2': 'Попросите агента представиться',
   'dialog.step2note':
     'sfx_contract отдаёт всю грамматику одним вызовом. API-ключ нигде не участвует: моделью здесь работает ваш агент.',
-  'dialog.agentAria': 'агент',
-  'dialog.copyPrompt': 'Копировать промпт для агента',
-  'dialog.copyPromptTitle': 'Вставьте его агенту — он сам зарегистрирует сервер и сделает первый звук',
   'dialog.recheck': 'Проверить снова',
   'dialog.checking': 'Проверяю…',
-  'dialog.daemon': 'демон',
   'dialog.daemonAria': 'URL демона моста',
   'dialog.copyWhat': 'копировать: {what}',
   'dialog.setupOf': 'настройку для {client}',
   'dialog.firstAsk': 'первый запрос',
-  'dialog.agentPrompt': 'промпт для агента',
   'dialog.noteClaude':
     'Это вся установка — заранее ничего поднимать не нужно. Добавьте `-s user` после `add`, чтобы сервер был во всех проектах. Затем перезапустите Claude Code: список серверов он читает при старте.',
   'dialog.claudeModel': 'Либо: Claude Code как модель прямо здесь',

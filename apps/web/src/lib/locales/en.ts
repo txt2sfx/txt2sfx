@@ -200,6 +200,9 @@ export const en = {
   'studio.hintCompare': 'numeric, not perceptual — it ranks candidates, it does not judge them',
   'studio.hintModel': 'rendered audio from the same prompt — no recipe, nothing to tune',
   'studio.hintSearch': 'recordings somebody already made — a target to aim at, not something to ship',
+  /* The studio with no recipe in it yet — a run started from the gallery. */
+  'studio.composing': 'Writing a recipe for this prompt. The editor, the sliders and the export appear here as soon as one exists.',
+  'studio.composingIdle': 'Nothing came back from that run. Press Make sound to try again, or pick a recipe from the list on the left.',
   'studio.edited': ' · edited {when}',
   'studio.unsaved': ' · unsaved',
 
@@ -207,11 +210,11 @@ export const en = {
 
   'prompt.placeholder': 'a heavy metal door slamming shut in a corridor',
   'prompt.describeAria': 'describe the sound',
-  /* Not a picker — one word naming who answers, and a door to the one place it is set. */
-  'prompt.viaAgent': 'via your agent',
-  'prompt.viaGemini': 'via Gemini',
-  'prompt.modelTitle': 'who answers this prompt — click to change it',
-  'prompt.noModel': 'no model',
+  /* The gear beside the button. Who answers is on hover; the one state that has to be
+     visible without hovering is nobody answering, and the icon goes amber for that. */
+  'prompt.settingsAria': 'model settings',
+  'prompt.modelTitleAgent': 'your coding agent answers this prompt — click for the settings',
+  'prompt.modelTitleGemini': 'Gemini answers this prompt, with your key — click for the settings',
   'prompt.noModelTitle': 'attach a coding agent or paste a Gemini key — click to set it up',
   'prompt.stop': 'Stop',
   'prompt.stopping': 'stopping…',
@@ -440,6 +443,9 @@ export const en = {
   'compare.copyPicture': 'Copy picture',
   'compare.copyNumbers': 'Copy numbers',
   'compare.fitSlots': 'Fit slots to B',
+  'compare.match': 'Generate against B',
+  'compare.matchTitle':
+    'Aim the next generation at this reference: the model designs, and the optimizer fits its numbers to B instead of to the design alone',
   'compare.copiedPicture': 'copied the picture',
   'compare.clipboardRefused': 'the clipboard refused an image — saved a PNG instead',
 
@@ -494,18 +500,18 @@ export const en = {
   'dialog.answersGemini': 'Gemini answers, with your key, as {model}. Attach a coding agent below and it takes over instead.',
   'dialog.answersNobody':
     'Nothing can answer a prompt yet. Attach a coding agent to the bridge — the steps are below — or paste a Gemini key.',
+  'dialog.tabsAria': 'who holds the model',
   'dialog.keyTitle': 'Gemini key, for when no agent is attached',
   'dialog.key': 'key',
-  'dialog.keyPlaceholder': 'your Gemini key — this tab only',
+  'dialog.keyPlaceholder': 'your Gemini key',
   'dialog.modelId': 'model id',
-  'dialog.remember': 'remember this key',
-  'dialog.rememberTitle':
-    'Encrypted with a non-extractable key in IndexedDB — not localStorage. Any script on this origin could still use it: see lib/keystore.ts.',
-  'dialog.forget': 'forget',
-  'dialog.keyNote': 'The key lives in this tab only and goes nowhere but Google · get one at {source}',
+  'dialog.forget': 'forget it',
+  'dialog.keyNote': 'The key goes to Google and nowhere else — no proxy, no server of ours in the path · get one at {source}',
   'dialog.keyIdle': 'It is idle right now: an attached agent always wins.',
-  'dialog.match': 'fit the numbers to the reference',
-  'dialog.matchTitle': 'load a reference in Compare A / B first',
+  'dialog.keyStorage':
+    'It is kept on this machine so you do not paste it again: encrypted in this browser’s IndexedDB under a key nothing can export — never in localStorage, never uploaded. Any script served from this page could still use it, which lib/keystore.ts spells out.',
+  'dialog.keyStorageNone':
+    'This browser cannot store it, so the key lives in this tab only and a reload will ask for it again.',
   'dialog.bridgeLedeLive':
     'The bridge runs on your machine and lets a coding agent design, render, audition and export sounds here — with no API key, because the agent already has a model. It can also answer this playground’s own Generate button.',
   'dialog.bridgeLedeDead':
@@ -523,17 +529,12 @@ export const en = {
   'dialog.step2': 'Ask the agent to introduce itself',
   'dialog.step2note':
     'sfx_contract hands over the whole grammar in one call. No API key is involved anywhere: your agent is the model.',
-  'dialog.agentAria': 'agent',
-  'dialog.copyPrompt': 'Copy agent prompt',
-  'dialog.copyPromptTitle': 'Paste it into your agent — it registers the server itself and makes the first sound',
   'dialog.recheck': 'Re-check',
   'dialog.checking': 'Checking…',
-  'dialog.daemon': 'daemon',
   'dialog.daemonAria': 'bridge daemon URL',
   'dialog.copyWhat': 'copy {what}',
   'dialog.setupOf': 'the {client} setup',
   'dialog.firstAsk': 'the first ask',
-  'dialog.agentPrompt': 'the agent prompt',
   'dialog.noteClaude':
     'That is the whole install — no daemon to start first. Add `-s user` after `add` to have it in every project. Restart Claude Code afterwards: it reads its server list at startup.',
   'dialog.claudeModel': 'Or: Claude Code as the model here',

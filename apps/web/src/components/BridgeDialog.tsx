@@ -16,10 +16,32 @@
  * computed by the same `chooseProvider` the button reads — there is no second copy of the
  * rule that could disagree with the first.
  *
- * `Fit to reference` is here too, which is the one thing in this dialog that is not about
- * *who* answers. It rides along because it is the other per-run setting that is set once
- * and then left alone for an hour, and because the alternative was keeping a popover in
- * the prompt row alive for a single checkbox.
+ * What is *not* here any more is `Fit to reference`. It was the one control in this dialog
+ * that answered a different question — not who writes the recipe, but what the numbers are
+ * aimed at — and a checkbox that only means something once a B side is loaded belongs
+ * beside the B side. It is a button in Compare A / B now.
+ *
+ * ## Why the tabs are the whole dialog and not a step inside it
+ *
+ * There is exactly one question here — *who holds a model* — and the answers are mutually
+ * exclusive: a Gemini key, or one of five ways to attach a coding agent. Those used to be
+ * two different shapes on one page, a key section stacked above a client picker that was
+ * buried inside step 1 of a setup, so the picker read as "pick your client" when it is
+ * really "pick your model". One tab strip over the whole dialog says what it is: six
+ * answers to one question, and only the chosen one is on screen.
+ *
+ * It opens on the answer that is live — Gemini when a key is what would run, the agent
+ * setup otherwise, since the reason to be reading this with no key is usually that the
+ * agent is not attached yet.
+ *
+ * ## Why the key is remembered without being asked
+ *
+ * The checkbox was a question with one sensible answer given three times an hour: nobody
+ * pastes a key in order to paste it again after a reload. What made it feel like a
+ * decision was not knowing where it goes, so the sentence that used to be a tooltip is
+ * now printed under the field — encrypted under a non-extractable key in IndexedDB, on
+ * this machine, never in `localStorage` and never through a server of ours. **forget**
+ * is the undo, and it is one click, which is what the checkbox was really protecting.
  *
  * ## Why this is a checklist and not a paragraph
  *
@@ -40,7 +62,7 @@
  * someone who wants a bridge outliving the client, which is not the person reading this
  * dialog for the first time.
  *
- * ## Why a picker and not one config blob
+ * ## Why a tab per client and not one config blob
  *
  * The generic `mcpServers` JSON is correct everywhere and the shortest path nowhere:
  * two of the four clients people actually use install a server with a single shell
@@ -58,18 +80,19 @@
  *
  * These blocks are not illustrations — each one is meant to end up in a terminal or a
  * config file verbatim, and a mis-transcribed `--stdio` fails in a way that looks like
- * the bridge is broken. `Copy agent prompt` in the footer is the same idea one level
- * up: pasted into Claude Code or Codex it does the registering itself, and carries the
- * loopback-HTTP route for the agent that cannot restart to pick a config up. Its text
- * is `bridgeOnboardingPrompt` from `@txt2sfx/agent`, the same string
- * `txt2sfx-bridge doctor` prints, so instructions cannot differ by where they were
- * copied from.
+ * the bridge is broken.
+ *
+ * There is no longer a `Copy agent prompt` beside them. It copied a paragraph of
+ * instructions for an agent that is not attached yet — which is to say, for an agent that
+ * cannot be pasted into from this dialog anyway — and it sat in the footer looking like
+ * the primary action of a dialog whose primary action is the one command in the tab above
+ * it. The same text still ships where it is reachable without a browser:
+ * `txt2sfx-bridge doctor` prints it.
  *
  * @packageDocumentation
  */
 
 import { useState } from 'react';
-import { bridgeOnboardingPrompt } from '@txt2sfx/agent';
 import { GEMINI_DEFAULT_MODEL, GEMINI_KEY_SOURCE, type ProviderKind } from '../lib/agent.js';
 import { copy } from '../lib/download.js';
 import { canRemember } from '../lib/keystore.js';
@@ -89,11 +112,9 @@ export interface BridgeDialogProps {
   readonly onSettingsChange: (settings: ProviderSettings) => void;
   /** Who answers right now, as `chooseProvider` decided. `null` means nobody can. */
   readonly model: ProviderKind | null;
-  /** True when a key is remembered on this machine, so the checkbox reflects reality. */
+  /** True when a key is stored on this machine, so **forget** appears only when it undoes something. */
   readonly keyStored: boolean;
   readonly onForgetKey: () => void;
-  /** Whether there is a B side to fit against; without one the toggle means nothing. */
-  readonly hasReference: boolean;
 }
 
 /** How one client is told about the bridge. */
@@ -235,7 +256,6 @@ export function BridgeDialog({
   model,
   keyStored,
   onForgetKey,
-  hasReference,
 }: BridgeDialogProps): React.JSX.Element {
   /* Subscribed for the re-render only. The strings come from the module-level `t`, which
      is also what `clientRecipes` above has to use — it is not a component and cannot hold
@@ -245,7 +265,11 @@ export function BridgeDialog({
   const [checking, setChecking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [url, setUrl] = useState(status.url);
-  const [client, setClient] = useState('claude');
+  /* Opened on the answer that is live. `'gemini'` only when a key is what would actually
+     run: with no key and no agent the reader's problem is almost always the agent, and
+     `'claude'` is the shortest path out of that. Read once — retargeting the bridge from
+     the tab you are on must not move you to a different one. */
+  const [tab, setTab] = useState(model === 'gemini' ? 'gemini' : 'claude');
 
   const live = status.state === 'live';
   const health = status.health;
@@ -259,20 +283,11 @@ export function BridgeDialog({
   })();
 
   const recipes = clientRecipes(port);
-  const recipe = recipes.find((candidate) => candidate.id === client) ?? recipes[0]!;
+  const recipe = recipes.find((candidate) => candidate.id === tab) ?? recipes[0]!;
 
-  /* Built at click time from the port the user is actually pointing at, so a
-     bridge moved with --port does not hand out instructions for 4455. */
-  const agentPrompt = (): string =>
-    bridgeOnboardingPrompt({ port: Number(port), playgroundUrl: window.location.origin });
-
+  /* The daemon is checked too, and is the first row on screen — it is not in this list
+     because its value is an address the reader can edit rather than a fact to report. */
   const checks: readonly { key: Key; label: string; value: string; ok: boolean }[] = [
-    {
-      key: 'dialog.checkDaemon',
-      label: t('dialog.checkDaemon'),
-      value: live ? new URL(status.url).host : (status.error ?? t('dialog.noResponse')),
-      ok: live,
-    },
     {
       key: 'dialog.checkProtocol',
       label: t('dialog.checkProtocol'),
@@ -347,164 +362,171 @@ export function BridgeDialog({
           )}
         </p>
 
-        <div className="dialog-section">
-          <div className="step-title">{t('dialog.keyTitle')}</div>
-          <div className="model-fields">
-            <label className="field wide">
-              {t('dialog.key')}
-              <input
-                type="password"
-                name="api-key"
-                /* `off` is advisory and Chrome ignores it on password fields: it offered a
-                   saved website password for this box. `new-password` is the hint browsers
-                   honour, and an API key is closer to a new secret than to a stored login. */
-                autoComplete="new-password"
-                spellCheck={false}
-                placeholder={t('dialog.keyPlaceholder')}
-                value={settings.apiKey}
-                onChange={(event) => onSettingsChange({ ...settings, apiKey: event.target.value })}
-              />
-            </label>
-            <label className="field wide">
-              {t('dialog.modelId')}
-              <input
-                type="text"
-                name="model-id"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={GEMINI_DEFAULT_MODEL}
-                value={settings.model}
-                onChange={(event) => onSettingsChange({ ...settings, model: event.target.value })}
-              />
-            </label>
-          </div>
-          {canRemember ? (
-            <label className="toggle" title={t('dialog.rememberTitle')}>
-              <input
-                type="checkbox"
-                name="remember-key"
-                checked={settings.remember}
-                onChange={(event) => onSettingsChange({ ...settings, remember: event.target.checked })}
-              />
-              {t('dialog.remember')}
-              {keyStored ? (
-                <button
-                  type="button"
-                  className="link"
-                  onClick={() => {
-                    onForgetKey();
-                    onSettingsChange({ ...settings, apiKey: '', remember: false });
-                  }}
-                >
-                  {t('dialog.forget')}
-                </button>
-              ) : null}
-            </label>
-          ) : null}
-          <p className="step-note">
-            {t('dialog.keyNote', { source: GEMINI_KEY_SOURCE })}
-            {model === 'agent' ? ` ${t('dialog.keyIdle')}` : ''}
-          </p>
-
-          <label className="toggle" title={hasReference ? '' : t('dialog.matchTitle')}>
-            <input
-              type="checkbox"
-              name="match-reference"
-              checked={settings.matchReference && hasReference}
-              disabled={!hasReference}
-              onChange={(event) => onSettingsChange({ ...settings, matchReference: event.target.checked })}
-            />
-            {t('dialog.match')}
-          </label>
-        </div>
-
-        <p className="dialog-lede">
-          {live
-            ? t('dialog.bridgeLedeLive')
-            : t('dialog.bridgeLedeDead', { host: new URL(status.url).host })}
-        </p>
-
-        <div className="checks">
-          {checks.map((check) => (
-            <div className="check" key={check.key}>
-              <span className={`mark ${check.ok ? 'good' : 'bad'}`}>{check.ok ? '✓' : '✕'}</span>
-              <span className="check-label">{check.label}</span>
-              <span className="mono faint">{check.value}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="steps">
-          <div className="step">
-            <span className="step-n">1</span>
-            <div className="step-body">
-              <div className="step-title">{t('dialog.step1')}</div>
-              <nav className="segmented small wrap" aria-label={t('dialog.agentAria')}>
-                {recipes.map((candidate) => (
-                  <button
-                    key={candidate.id}
-                    type="button"
-                    className={candidate.id === client ? 'selected cyan' : ''}
-                    aria-current={candidate.id === client}
-                    onClick={() => setClient(candidate.id)}
-                  >
-                    {candidate.label}
-                  </button>
-                ))}
-              </nav>
-              {recipe.file === undefined ? null : <div className="step-file mono">{recipe.file}</div>}
-              <CodeBlock code={recipe.code} what={t('dialog.setupOf', { client: recipe.label })} onCopied={say} />
-              <div className="step-note">{recipe.note}</div>
-              {recipe.extra === undefined ? null : (
-                <>
-                  <div className="step-title">{recipe.extra.title}</div>
-                  <CodeBlock code={recipe.extra.code} what={recipe.extra.what} onCopied={say} />
-                  <div className="step-note">{recipe.extra.note}</div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="step">
-            <span className="step-n">2</span>
-            <div className="step-body">
-              <div className="step-title">{t('dialog.step2')}</div>
-              {/* Not translated: it is a prompt, and the agent reading it was configured
-                  in English by the command one step above. */}
-              <CodeBlock
-                code={'call sfx_contract, then design a "wet bubble pop" and audition it'}
-                what={t('dialog.firstAsk')}
-                onCopied={say}
-              />
-              <div className="step-note">{t('dialog.step2note')}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="dialog-foot">
+        {/* One strip over the whole dialog: six answers to "who holds a model", and
+            only the chosen one below it. Gemini takes the violet accent because it is
+            the one answer that is not a coding agent. */}
+        <nav className="segmented small wrap dialog-tabs" aria-label={t('dialog.tabsAria')}>
           <button
             type="button"
-            className="primary"
-            onClick={() => void copy(agentPrompt(), t('dialog.agentPrompt')).then(say)}
-            title={t('dialog.copyPromptTitle')}
+            className={tab === 'gemini' ? 'selected violet' : ''}
+            aria-current={tab === 'gemini'}
+            onClick={() => setTab('gemini')}
           >
-            {t('dialog.copyPrompt')}
+            Gemini
           </button>
-          <button type="button" onClick={recheck} disabled={checking}>
-            {checking ? t('dialog.checking') : t('dialog.recheck')}
-          </button>
-          <label className="field">
-            {t('dialog.daemon')}
-            <input
-              type="text"
-              name="bridge-url"
-              value={url}
-              aria-label={t('dialog.daemonAria')}
-              onChange={(event) => setUrl(event.target.value)}
-              onBlur={() => url !== status.url && onUrlChange(url.trim())}
-            />
-          </label>
-          <div className="spacer" />
+          {recipes.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              className={candidate.id === tab ? 'selected cyan' : ''}
+              aria-current={candidate.id === tab}
+              onClick={() => setTab(candidate.id)}
+            >
+              {candidate.label}
+            </button>
+          ))}
+        </nav>
+
+        {tab === 'gemini' ? (
+          /* `bare`: on this tab the section is the whole page, and rules above and below
+             the only thing on screen read as a divider between nothing and nothing. */
+          <div className="dialog-section bare">
+            <div className="step-title">{t('dialog.keyTitle')}</div>
+            <div className="model-fields">
+              <label className="field wide">
+                {t('dialog.key')}
+                <input
+                  type="password"
+                  name="api-key"
+                  /* `off` is advisory and Chrome ignores it on password fields: it offered a
+                     saved website password for this box. `new-password` is the hint browsers
+                     honour, and an API key is closer to a new secret than to a stored login. */
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  placeholder={t('dialog.keyPlaceholder')}
+                  value={settings.apiKey}
+                  onChange={(event) => onSettingsChange({ ...settings, apiKey: event.target.value })}
+                />
+              </label>
+              <label className="field wide">
+                {t('dialog.modelId')}
+                <input
+                  type="text"
+                  name="model-id"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={GEMINI_DEFAULT_MODEL}
+                  value={settings.model}
+                  onChange={(event) => onSettingsChange({ ...settings, model: event.target.value })}
+                />
+              </label>
+            </div>
+            <p className="step-note">{t('dialog.keyNote', { source: GEMINI_KEY_SOURCE })}</p>
+            {/* Its own line, not appended: the sentence above ends in a bare URL, and
+                anything glued to that reads as part of the address. */}
+            {model === 'agent' ? <p className="step-note">{t('dialog.keyIdle')}</p> : null}
+            {/* Where it is kept, printed rather than tucked into a tooltip on a checkbox
+                nobody wanted to tick: the worry the checkbox was answering is "does this
+                leave my machine", and that is a sentence, not a decision. */}
+            <p className="step-note">
+              {canRemember ? t('dialog.keyStorage') : t('dialog.keyStorageNone')}
+              {canRemember && keyStored ? (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => {
+                      onForgetKey();
+                      onSettingsChange({ ...settings, apiKey: '' });
+                    }}
+                  >
+                    {t('dialog.forget')}
+                  </button>
+                </>
+              ) : null}
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="dialog-lede">
+              {live
+                ? t('dialog.bridgeLedeLive')
+                : t('dialog.bridgeLedeDead', { host: new URL(status.url).host })}
+            </p>
+
+            <div className="checks">
+              {/* The address *is* this check's value, so it is edited in place instead of
+                  being repeated in a second field at the foot of the dialog — and Re-check
+                  sits beside it because it asks exactly this row's question again. */}
+              <div className="check check-daemon">
+                <span className={`mark ${live ? 'good' : 'bad'}`}>{live ? '✓' : '✕'}</span>
+                <span className="check-label">{t('dialog.checkDaemon')}</span>
+                <input
+                  type="text"
+                  className="mono check-url"
+                  name="bridge-url"
+                  value={url}
+                  aria-label={t('dialog.daemonAria')}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) => setUrl(event.target.value)}
+                  onBlur={() => url !== status.url && onUrlChange(url.trim())}
+                />
+                <button type="button" className="check-action" onClick={recheck} disabled={checking}>
+                  {checking ? t('dialog.checking') : t('dialog.recheck')}
+                </button>
+              </div>
+              {checks.map((check) => (
+                <div className="check" key={check.key}>
+                  <span className={`mark ${check.ok ? 'good' : 'bad'}`}>{check.ok ? '✓' : '✕'}</span>
+                  <span className="check-label">{check.label}</span>
+                  <span className="mono faint">{check.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Why the first row is a cross, when the row itself now holds an input and
+                has no room left to say so. */}
+            {live ? null : <p className="step-note bad">{status.error ?? t('dialog.noResponse')}</p>}
+
+            <div className="steps">
+              <div className="step">
+                <span className="step-n">1</span>
+                <div className="step-body">
+                  <div className="step-title">{t('dialog.step1')}</div>
+                  {recipe.file === undefined ? null : <div className="step-file mono">{recipe.file}</div>}
+                  <CodeBlock code={recipe.code} what={t('dialog.setupOf', { client: recipe.label })} onCopied={say} />
+                  <div className="step-note">{recipe.note}</div>
+                  {recipe.extra === undefined ? null : (
+                    <>
+                      <div className="step-title">{recipe.extra.title}</div>
+                      <CodeBlock code={recipe.extra.code} what={recipe.extra.what} onCopied={say} />
+                      <div className="step-note">{recipe.extra.note}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="step">
+                <span className="step-n">2</span>
+                <div className="step-body">
+                  <div className="step-title">{t('dialog.step2')}</div>
+                  {/* Not translated: it is a prompt, and the agent reading it was configured
+                      in English by the command one step above. */}
+                  <CodeBlock
+                    code={'call sfx_contract, then design a "wet bubble pop" and audition it'}
+                    what={t('dialog.firstAsk')}
+                    onCopied={say}
+                  />
+                  <div className="step-note">{t('dialog.step2note')}</div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="dialog-foot">
           {note === null ? (
             <a className="mono faint" href="https://www.npmjs.com/package/txt2sfx-bridge" target="_blank" rel="noreferrer">
               docs/BRIDGE.md
