@@ -36,6 +36,16 @@ corepack pnpm build
 # The seed is idempotent by name and cheap, and it is what makes a fresh box useful
 # rather than empty. Not --strict: `helicopter` is knowingly out of contract and is
 # loaded with its error reported, which is the documented behaviour.
+#
+# The environment has to come with it. Without TXT2SFX_DB the seeder writes to the
+# package default — a file inside the checkout, which `git clean` deletes on the next
+# deploy — and the service, which reads /srv/txt2sfx/data, stays empty while the seeder
+# reports success. That is the failure this line exists to prevent, and it was found by
+# doing it wrong once.
+set -a
+# shellcheck disable=SC1091
+. /srv/txt2sfx/env
+set +a
 corepack pnpm --filter @txt2sfx/server seed || echo "seed reported problems; continuing"
 
 sudo /bin/systemctl restart txt2sfx-bank

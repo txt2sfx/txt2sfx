@@ -84,6 +84,9 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
       mode: github === undefined ? 'solo' : 'github',
       ...(github === undefined ? {} : { github }),
       adminToken: env['TXT2SFX_ADMIN_TOKEN'] ?? '',
+      /* Solo *and* told its own public URL: someone is running this behind a proxy
+         with sign-in not yet configured, and writes have to wait for it. */
+      publicWithoutSignIn: github === undefined && publicUrl !== '',
     },
     allowOpen: env['TXT2SFX_ALLOW_OPEN'] === '1',
   };
@@ -130,8 +133,11 @@ async function main(): Promise<void> {
   );
   if (config.auth.mode === 'solo') {
     app.log.warn(
-      'no identity provider configured — every write is attributed to the built-in `local` account. ' +
-        'Set GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET and PUBLIC_URL to run this as a public bank.',
+      config.auth.publicWithoutSignIn === true
+        ? 'PUBLIC_URL is set but no identity provider is: serving reads and refusing every write. ' +
+            'Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET to open this bank for writing.'
+        : 'no identity provider configured — every write is attributed to the built-in `local` account. ' +
+            'Set GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET and PUBLIC_URL to run this as a public bank.',
     );
   }
   if (config.auth.adminToken === '') {

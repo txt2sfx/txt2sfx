@@ -45,6 +45,20 @@ export interface AuthContext {
   readonly github?: GitHubConfig;
   /** The shared secret that unlocks the moderation routes, or `''` when there is none. */
   readonly adminToken: string;
+  /**
+   * This bank is solo *and* published — so it serves reads and refuses writes.
+   *
+   * `assertSafeBinding` checks the bind address, and a reverse proxy walks straight
+   * past that check: the socket is on loopback and nginx is what makes it public. The
+   * one thing that distinguishes "a bank on a laptop" from "a bank on the internet
+   * that has not finished being configured" is that the second one has been told its
+   * own public URL, so that is what this reads. Found by deploying it wrong once and
+   * watching an anonymous `POST /api/recipes` get as far as a parse error.
+   *
+   * Reads stay open, which is deliberate: the gallery, `/api/llms.txt` and retrieval
+   * are the parts other people depend on, and there is nothing to protect in them.
+   */
+  readonly publicWithoutSignIn?: boolean;
 }
 
 /** The `Authorization: Bearer <token>` value, or `''`. */
@@ -74,7 +88,21 @@ export type AuthResult = { readonly actor: Actor } | { readonly failure: AuthFai
  * calls this for a read.
  */
 export function writerOf(request: FastifyRequest, context: AuthContext, identity: IdentityStore): AuthResult {
-  if (context.mode === 'solo') return { actor: soloActor(identity) };
+  if (context.mode === 'solo') {
+    if (context.publicWithoutSignIn === true) {
+      return {
+        failure: {
+          status: 503,
+          error: 'sign-in-not-configured',
+          message:
+            'This bank is published but has no identity provider yet, so it is read-only: an anonymous write here ' +
+            'would be attributed to a built-in account and could not be moderated. Set GITHUB_CLIENT_ID and ' +
+            'GITHUB_CLIENT_SECRET to open it for writing.',
+        },
+      };
+    }
+    return { actor: soloActor(identity) };
+  }
 
   const token = bearerOf(request);
   if (token === '') {

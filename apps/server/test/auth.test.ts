@@ -18,6 +18,7 @@ import {
   ephemeral,
   passesAgeGate,
 } from '../src/identity.js';
+import { configFromEnv } from '../src/index.js';
 import { allowedReturn } from '../src/routes/auth.js';
 import { openDatabase } from '../src/schema.js';
 import { type Store, storeOver } from '../src/store.js';
@@ -297,6 +298,30 @@ describe('solo mode', () => {
   });
 
   /**
+   * The hole `assertSafeBinding` cannot see, found by deploying it wrong once.
+   *
+   * A reverse proxy walks straight past a loopback check: the socket is private and
+   * nginx is what makes it public. So a bank that has been told its own public URL and
+   * has no identity provider serves reads and refuses every write — an anonymous write
+   * there would be attributed to a built-in account and could not be moderated.
+   */
+  it('serves reads and refuses writes when it is published without a sign-in', async () => {
+    await build(stubFetch(), { mode: 'solo', adminToken: '', publicWithoutSignIn: true });
+
+    expect((await app.inject({ method: 'GET', url: '/api/recipes' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/llms.txt' })).statusCode).toBe(200);
+
+    const write = await app.inject({
+      method: 'POST',
+      url: '/api/recipes',
+      payload: { name: 'tick', prompt: 'ui tick', soundline: VALID },
+    });
+    expect(write.statusCode).toBe(503);
+    expect(write.json().error).toBe('sign-in-not-configured');
+    expect(write.json().message).toContain('GITHUB_CLIENT_ID');
+  });
+
+  /**
    * An anonymous writable bank on a public interface is not a configuration anyone
    * chose deliberately, so it has to be said out loud.
    */
@@ -305,6 +330,49 @@ describe('solo mode', () => {
     expect(() => assertSafeBinding('github', '0.0.0.0', false)).not.toThrow();
     expect(() => assertSafeBinding('solo', '0.0.0.0', true)).not.toThrow();
     expect(() => assertSafeBinding('solo', '0.0.0.0', false)).toThrow(/TXT2SFX_ALLOW_OPEN/);
+  });
+});
+
+describe('what the environment decides', () => {
+  const env = (over: Record<string, string>): NodeJS.ProcessEnv => ({ ...over });
+
+  it('runs solo, and privately, with nothing configured', () => {
+    const config = configFromEnv(env({}));
+    expect(config.auth.mode).toBe('solo');
+    expect(config.auth.publicWithoutSignIn).toBe(false);
+    expect(config.host).toBe('127.0.0.1');
+  });
+
+  it('is published-but-read-only with a public URL and no app', () => {
+    const config = configFromEnv(env({ PUBLIC_URL: 'https://txt2sfx.pix3.dev' }));
+    expect(config.auth.mode).toBe('solo');
+    expect(config.auth.publicWithoutSignIn).toBe(true);
+  });
+
+  /** The callback is derived, never configured: two settings that must agree are one. */
+  it('derives the callback from the public URL, trailing slash and all', () => {
+    const config = configFromEnv(
+      env({
+        GITHUB_CLIENT_ID: 'id',
+        GITHUB_CLIENT_SECRET: 'secret',
+        PUBLIC_URL: 'https://txt2sfx.pix3.dev/',
+        ALLOWED_ORIGINS: 'https://txt2sfx.github.io, http://localhost:5173',
+      }),
+    );
+    expect(config.auth.mode).toBe('github');
+    expect(config.auth.publicWithoutSignIn).toBe(false);
+    expect(config.auth.github?.callbackUrl).toBe('https://txt2sfx.pix3.dev/api/auth/github/callback');
+    expect(config.auth.github?.allowedRedirects).toEqual([
+      'https://txt2sfx.github.io',
+      'http://localhost:5173',
+      'https://txt2sfx.pix3.dev',
+    ]);
+  });
+
+  /** Half a GitHub app is no GitHub app; guessing at the missing half is worse. */
+  it('ignores a half-configured provider', () => {
+    expect(configFromEnv(env({ GITHUB_CLIENT_ID: 'id', PUBLIC_URL: 'https://x.example' })).auth.mode).toBe('solo');
+    expect(configFromEnv(env({ GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 's' })).auth.mode).toBe('solo');
   });
 });
 
