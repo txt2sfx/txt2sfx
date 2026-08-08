@@ -11,10 +11,12 @@
  *   by a token requirement.
  * - `/pair` is gated on `Origin` because loopback is not a boundary in a
  *   browser — same-origin policy does not apply to WebSockets, so any page
- *   could open `ws://127.0.0.1:4455` if the token were free to fetch. A
- *   request *without* an `Origin` header is allowed: browsers always attach
- *   one to cross-origin fetches, so its absence means curl or Node, which can
- *   read the token file anyway.
+ *   could open `ws://127.0.0.1:4455` if the token were free to fetch. The list
+ *   is localhost, {@link PLAYGROUND_ORIGIN} and whatever `--allow-origin`
+ *   adds; each is argued for where it is defined. A request *without* an
+ *   `Origin` header is allowed: browsers always attach one to cross-origin
+ *   fetches, so its absence means curl or Node, which can read the token file
+ *   anyway.
  * - `/agent/*` takes the token in `x-txt2sfx-token`: these are called by local
  *   processes that read `~/.txt2sfx/bridge.json`, and origin means nothing to
  *   them.
@@ -81,16 +83,52 @@ export interface BridgeServerOptions {
 }
 
 /**
+ * The published playground, allowed to pair without a flag.
+ *
+ * ## Why the default list is not only localhost
+ *
+ * The argument for this daemon is "code that must run on the human's machine,
+ * reached from a page that may be served from anywhere". For almost everyone the
+ * page served from anywhere is *this* one — and until it was on this list, the
+ * advertised path failed by default: a visitor got a 403 from `/pair`, and the
+ * sentence explaining which flag fixes it was two clicks deep, inside the bridge
+ * dialog. A default that makes the documented workflow fail is a bug in the
+ * default, not a lesson for the user.
+ *
+ * ## What it grants, stated plainly
+ *
+ * Everything pairing grants: this origin can read the token from `/pair`, open
+ * the WebSocket, and drive the playground methods — render, audition, measure,
+ * fit, and write into whatever `--allow-write` was given. That is the same trust
+ * already implied by running `npx txt2sfx-bridge` and opening this page, which is
+ * the only reason the daemon is running at all.
+ *
+ * What it is *not* is a blanket "any https page": one exact origin, compared whole,
+ * with no port and no wildcard. Every other origin still needs `--allow-origin`.
+ *
+ * ## The residual risk, because it is worth writing down
+ *
+ * This is a `*.github.io` host, and GitHub serves every repository of the same
+ * owner from it — an organization site at `/` and any project site at `/<repo>/`.
+ * Today `/` is the whole origin: Pages is off on the source repository and the
+ * site repository holds nothing but the built playground. But a future repository
+ * in that organization could publish a page there and inherit this trust, which is
+ * exactly the argument for moving to a domain the project owns end to end.
+ */
+export const PLAYGROUND_ORIGIN = 'https://txt2sfx.github.io';
+
+/**
  * Is this `Origin` allowed to pair?
  *
  * `http://localhost:*` and `http://127.0.0.1:*` on any port, because the
- * playground's dev port is Vite's choice, not ours. Extras are matched
- * verbatim — a user who passes `--allow-origin https://sfx.example.com` meant
- * exactly that string, and prefix-matching user input is how allowlists grow
- * holes.
+ * playground's dev port is Vite's choice, not ours; {@link PLAYGROUND_ORIGIN},
+ * for the reasons above. Extras are matched verbatim — a user who passes
+ * `--allow-origin https://sfx.example.com` meant exactly that string, and
+ * prefix-matching user input is how allowlists grow holes.
  */
 export function originAllowed(origin: string | undefined, extra: readonly string[]): boolean {
   if (origin === undefined) return true; // not a browser; see the module note
+  if (origin === PLAYGROUND_ORIGIN) return true;
   if (extra.includes(origin)) return true;
   let url: URL;
   try {
@@ -191,7 +229,7 @@ export function createBridgeServer(options: BridgeServerOptions): Server {
       if (!originAllowed(origin, allowOrigins)) {
         sendJson(response, 403, {
           error: 'forbidden-origin',
-          message: `${origin ?? 'this origin'} may not pair — the bridge pairs with localhost pages, or origins passed via --allow-origin`,
+          message: `${origin ?? 'this origin'} may not pair — the bridge pairs with localhost pages, with ${PLAYGROUND_ORIGIN}, and with origins passed via --allow-origin`,
         });
         return;
       }

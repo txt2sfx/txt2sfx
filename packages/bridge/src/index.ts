@@ -93,7 +93,7 @@ export type { ClaudeOptions, ClaudeWorkerOptions, CommandResult, CommandRunner }
 export { Hub, NoPlaygroundError, localToolHub } from './hub.js';
 export type { HubOptions, ModelPort, PlaygroundPort, SamplingFulfiller, ToolHub } from './hub.js';
 
-export { createBridgeServer, originAllowed, remoteToolHub } from './http.js';
+export { PLAYGROUND_ORIGIN, createBridgeServer, originAllowed, remoteToolHub } from './http.js';
 export type { BridgeServerOptions } from './http.js';
 
 export {

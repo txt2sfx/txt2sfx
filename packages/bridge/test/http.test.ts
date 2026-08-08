@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { remoteToolHub } from '../src/index.js';
+import { PLAYGROUND_ORIGIN, remoteToolHub } from '../src/index.js';
 import type { Frame, HealthPayload, PlaygroundPort } from '../src/index.js';
 import { startTestBridge, type TestBridge } from './helpers/bridge.js';
 
@@ -73,6 +73,32 @@ describe('GET /pair', () => {
     expect(response.status).toBe(403);
     const body = (await response.json()) as { message: string };
     expect(body.message).toContain('--allow-origin');
+  });
+
+  /* The published playground is on the default list, and that is the whole point
+     of the daemon: the page served from anywhere is ours, and a default that made
+     the documented workflow answer 403 was a bug in the default. */
+  it('serves the published playground without a flag', async () => {
+    bridge = await startTestBridge();
+    const response = await fetch(url('/pair'), { headers: { origin: PLAYGROUND_ORIGIN } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ token: bridge.token, protocol: 1 });
+  });
+
+  /* One exact origin, compared whole. Every neighbour on that host and every
+     look-alike beside it stays refused — a default entry that behaved like a
+     pattern would be a much larger grant than the one being made. */
+  it('does not extend that to look-alikes or to neighbours on the same host', async () => {
+    bridge = await startTestBridge();
+    for (const origin of [
+      'https://txt2sfx.github.io.evil.example',
+      'https://evil.txt2sfx.github.io',
+      'http://txt2sfx.github.io', // the plain-http twin of the allowed origin
+      'https://txt2sfx.github.io:8443',
+    ]) {
+      const response = await fetch(url('/pair'), { headers: { origin } });
+      expect(response.status, origin).toBe(403);
+    }
   });
 
   it('honours --allow-origin verbatim', async () => {

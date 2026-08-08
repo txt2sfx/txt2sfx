@@ -287,8 +287,20 @@ Honest, because the alternative is a security claim nobody checked:
 - **A token, because loopback is not a boundary in a browser.** Same-origin policy does
   not apply to WebSockets, so any page you visit could open `ws://127.0.0.1:4455` if the
   socket took anonymous clients. The upgrade requires a token, and the token is only
-  served by `GET /pair`, which checks `Origin` against localhost and whatever
+  served by `GET /pair`, which checks `Origin` against localhost, against
+  `https://txt2sfx.github.io` — the published playground — and against whatever
   `--allow-origin` adds.
+- **Why the published playground is on that list by default.** Because the whole argument
+  for this daemon is code that must run on your machine, reached from a page served from
+  anywhere; for almost everyone that page is this one, and a default that answered it with
+  403 made the documented workflow fail out of the box. It grants that origin exactly what
+  pairing grants — the token, the socket, the playground methods, and `sfx_export` still
+  bounded by `--allow-write` — which is the trust already implied by running `npx
+  txt2sfx-bridge` and opening the page. It is one exact origin, compared whole: no
+  wildcard, no port, and `http://txt2sfx.github.io` is not it. The residual risk is worth
+  naming rather than burying: GitHub serves every repository of that owner from the same
+  host, so a future project site there would inherit this — which is the argument for a
+  domain the project owns end to end.
 - **The tool routes widen nothing.** `POST /tools/<name>` takes the same token as
   `/agent/*` and answers without CORS headers, so a page cannot read a result even if it
   guessed the token; and what it can reach is what `--stdio` could already reach — the

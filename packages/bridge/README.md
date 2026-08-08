@@ -190,9 +190,12 @@ itself, once per Generate.
 - **The threat model is loopback plus a token.** The listener binds `127.0.0.1`. The
   WebSocket requires a token because same-origin policy does not protect loopback sockets
   from hostile pages; the token is served only by `GET /pair`, which checks `Origin`
-  against localhost (plus `--allow-origin`). Any process running as you can read the
-  token file — the same trust boundary as your SSH keys, and pretending otherwise would
-  be theatre.
+  against localhost, against `https://txt2sfx.github.io` (the published playground — that
+  page is the reason this daemon exists, and a default that answered it with 403 made the
+  documented workflow fail out of the box) and against anything `--allow-origin` adds.
+  Each is one exact origin, compared whole: no wildcards, and `http://txt2sfx.github.io`
+  is a different string. Any process running as you can read the token file — the same
+  trust boundary as your SSH keys, and pretending otherwise would be theatre.
 - **`sfx_export` writes where you let it.** Relative paths land under the bridge's
   working directory; anything outside it is refused unless you started the bridge with
   `--allow-write <dir>`.
@@ -240,7 +243,7 @@ rename the workflow and the release fails until npm's package settings are updat
 | --- | --- | --- |
 | `--port <n>` | `4455` | port to serve or probe |
 | `--bank <url>` | `http://127.0.0.1:8787` | recipe bank origin (also `TXT2SFX_BANK`) |
-| `--allow-origin <o>` | — | extra `Origin` allowed to pair; repeatable |
+| `--allow-origin <o>` | localhost, `https://txt2sfx.github.io` | extra `Origin` allowed to pair, matched verbatim; repeatable |
 | `--allow-write <dir>` | — | extra directory `sfx_export` may write into; repeatable |
 | `--claude-bin <path>` | `claude` | `claude` mode: the executable (also `TXT2SFX_CLAUDE_BIN`) |
 | `--model <id>` | the CLI's own | `claude` mode: model for those completions |

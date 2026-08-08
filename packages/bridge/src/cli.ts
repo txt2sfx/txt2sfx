@@ -42,7 +42,7 @@ import {
   runCommand,
 } from './claude.js';
 import { Hub, localToolHub, type ToolHub } from './hub.js';
-import { createBridgeServer, remoteToolHub } from './http.js';
+import { PLAYGROUND_ORIGIN, createBridgeServer, remoteToolHub } from './http.js';
 import { log } from './log.js';
 import { createMcpServer } from './mcp.js';
 import { PROTOCOL_VERSION, looksLikeBridge, type HealthPayload } from './protocol.js';
@@ -79,7 +79,8 @@ usage:
 options:
   --port <n>            port to serve or probe (default ${String(DEFAULT_PORT)})
   --bank <url>          recipe bank origin (default ${DEFAULT_BANK}; also TXT2SFX_BANK)
-  --allow-origin <o>    extra Origin allowed to pair; repeatable
+  --allow-origin <o>    extra Origin allowed to pair, matched verbatim; repeatable
+                        (localhost and ${PLAYGROUND_ORIGIN} already pair)
   --allow-write <dir>   extra directory sfx_export may write into; repeatable
   --claude-bin <path>   claude mode: the executable (default ${CLAUDE_DEFAULT_BIN}; also TXT2SFX_CLAUDE_BIN)
   --model <id>          claude mode: model for those completions (default: the CLI's own)
