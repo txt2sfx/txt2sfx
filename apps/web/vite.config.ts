@@ -10,12 +10,15 @@ const r = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
 /**
  * Where the built playground is served from.
  *
- * GitHub Pages puts a project site under a subdirectory (`/txt2sfx/`), so every
- * emitted asset URL needs that prefix or the page loads a blank body. The prefix
- * is read from the environment rather than hard-coded, because
- * `actions/configure-pages` derives it from the repository's Pages settings: a
- * custom domain publishes at the root and this file needs no edit for it.
- * Unset — `vite dev`, `vite preview`, any local `pnpm build:web` — means root.
+ * The root, in every case that matters today: the site is published as the
+ * organization site `https://txt2sfx.github.io/`, out of its own repository, so
+ * there is no subdirectory prefix to bake into asset URLs — and the build CI
+ * publishes is byte-for-byte the one a developer gets from `pnpm build:web`.
+ *
+ * The override survives because the failure it prevents is silent and ugly: a
+ * playground served from a subdirectory without it loads a blank body, every
+ * asset 404. Anyone hosting this under a path (a fork's project site, a staging
+ * prefix behind a proxy) sets `PAGES_BASE_PATH` and needs no patch here.
  */
 const configured = process.env['PAGES_BASE_PATH']?.trim() ?? '';
 // Normalised here rather than left to Vite's own fixup so the value is

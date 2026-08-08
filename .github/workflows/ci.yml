@@ -7,8 +7,8 @@ on:
 
 # One run per branch: a force-push while CI is running should not leave two
 # answers about the same code. Only pull requests are cancelled, though — a run
-# on `main` ends in a Pages deployment, and cancelling that mid-flight would
-# abandon a deployment rather than supersede it.
+# on `main` ends by publishing the site, and cancelling that mid-push would leave
+# the front door half-written rather than superseded.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -79,11 +79,30 @@ jobs:
   # sufficient bar when the typecheck, the tests and the bench are what say the
   # generator still works.
   #
-  # This job builds the playground a second time rather than reusing an artifact
-  # from the matrix above, because the asset prefix differs: a project site is
-  # served from `/txt2sfx/`, and that path is only known after
-  # `configure-pages` has read the repository's Pages settings. `verify`'s build
-  # stays a root-relative build, which is what a developer gets locally.
+  # ## Why the site lives in another repository
+  #
+  # `https://txt2sfx.github.io/` — no subdirectory — is served by exactly one
+  # repository, the one named `txt2sfx.github.io`, and it is not this one. So this
+  # job builds here, where the tests are, and pushes the built tree there, where
+  # the origin is. The alternative was renaming this repository to
+  # `txt2sfx.github.io`, which would have made a monorepo that is also the source
+  # of an npm package answer to a hostname, and would have broken npm's trusted
+  # publisher until its settings were changed to match.
+  #
+  # The cost is a stored credential, and it is the narrowest one that does the
+  # job: `GITHUB_TOKEN` is scoped to this repository alone and OIDC
+  # (`deploy-pages`) can only deploy to the repository running the workflow, so a
+  # cross-repository push needs its own key. `PAGES_DEPLOY_KEY` is a deploy key —
+  # write access to that one repository and nothing else, no expiry, and its whole
+  # blast radius is overwriting a public static site, which is what this job does
+  # on purpose. A fine-grained PAT would have been broader (scoped to a person)
+  # and would have needed rotating.
+  #
+  # The build is not reused from `verify` above: that job is a two-Node matrix, so
+  # reusing its output would mean choosing which Node's build the world sees, and
+  # there is no good answer to that. It is now the *same* build a developer gets
+  # locally, though — an organization site is served from the root, so there is no
+  # asset prefix to pass any more, and `configure-pages` is gone with it.
   #
   # Nothing server-side ships here. The playground is static by construction: the
   # write-back and Stable Audio endpoints are `apply: 'serve'` dev plugins, the
@@ -95,13 +114,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
-      pages: write
-      id-token: write # `deploy-pages` authenticates with OIDC, not a token.
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: read # the push is authenticated by the deploy key, not by this
 
     steps:
       - uses: actions/checkout@v5
@@ -115,22 +128,60 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Configure Pages
-        id: pages
-        uses: actions/configure-pages@v5
-
-      # `base_path` is `/txt2sfx` for a project site and empty for a custom
-      # domain; `vite.config.ts` normalises both. Passing it rather than
-      # hard-coding it means a domain change needs no commit here.
-      - name: Build the playground for Pages
+      # No `PAGES_BASE_PATH`: an organization site is served from the root, which
+      # is `vite.config.ts`'s default. See the note there.
+      - name: Build the playground
         run: pnpm build:web
+
+      # The guard is the point. The next step is `rsync --delete` over the live
+      # site, so a build that silently produced nothing would publish an empty
+      # front door rather than fail. Cheap, and it fails where the reason is.
+      - name: Refuse to publish an empty build
+        run: |
+          test -f apps/web/dist/index.html || { echo "no dist/index.html — not publishing"; exit 1; }
+          echo "built $(find apps/web/dist -type f | wc -l) files"
+
+      - name: Publish to txt2sfx/txt2sfx.github.io
         env:
-          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+          SITE: git@github.com:txt2sfx/txt2sfx.github.io.git
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_KEY" || { echo "PAGES_DEPLOY_KEY is not set"; exit 1; }
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/web/dist
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          # GitHub's own host keys, over TLS, rather than `ssh-keyscan` — which
+          # trusts whatever answers on port 22. This also survives the key
+          # rotations `ssh-keyscan` would silently accept.
+          curl -fsS https://api.github.com/meta \
+            | jq -r '.ssh_keys[] | "github.com \(.)"' >> ~/.ssh/known_hosts
+
+          git clone --depth 1 "$SITE" site
+
+          # `--delete` so a file that left the build leaves the site; `.git`
+          # excluded, or the clone would delete its own history.
+          rsync -a --delete --exclude .git apps/web/dist/ site/
+          # Pages runs Jekyll over a branch-served tree unless told not to, and
+          # Jekyll drops paths beginning with an underscore.
+          touch site/.nojekyll
+
+          # Read out of the checkout, never interpolated with `${{ }}`: a commit
+          # subject is author-controlled text, and `${{ }}` would splice it into
+          # the shell before bash ever saw it as data.
+          subject=$(git -C "$GITHUB_WORKSPACE" log -1 --pretty=%s)
+
+          cd site
+          git add -A
+          if git diff --cached --quiet; then
+            echo "the built site is byte-identical to what is published — nothing to do"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "deploy: ${GITHUB_SHA:0:8} ${subject}" \
+                     -m "From ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          git push origin HEAD:main
+          echo "published to https://txt2sfx.github.io/"
