@@ -1,0 +1,16 @@
+; Install as /etc/systemd/system/txt2sfx-corpus.timer, then `systemctl enable --now`.
+
+[Unit]
+Description=Dump the txt2sfx recipe bank daily
+
+[Timer]
+OnCalendar=daily
+; The box is shared and every timer on it defaults to midnight. A random hour of skew
+; keeps four services from waking up together on one core.
+RandomizedDelaySec=1h
+; A box that was off at the appointed time should still produce a dump, rather than
+; skipping a day silently.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

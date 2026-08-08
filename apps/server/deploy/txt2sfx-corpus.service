@@ -1,0 +1,26 @@
+; Install as /etc/systemd/system/txt2sfx-corpus.service, with the timer beside it.
+;
+; The dump is what makes the bank disposable: canonical .soundline files plus a JSONL
+; index with the measured profiles, the likes and the attribution. If this host goes
+; away the sounds do not, and nginx serves the result at /corpus/ so the claim can be
+; checked with a browser rather than believed.
+
+[Unit]
+Description=Dump the txt2sfx recipe bank to files
+After=txt2sfx-bank.service
+
+[Service]
+Type=oneshot
+User=txt2sfx
+Group=txt2sfx
+WorkingDirectory=/srv/txt2sfx/app
+EnvironmentFile=/srv/txt2sfx/env
+ExecStart=/usr/bin/corepack pnpm --filter @txt2sfx/server dump /srv/txt2sfx/corpus
+
+; The dump opens the same SQLite file the service is writing to. WAL makes that a
+; consistent read rather than a lock fight, which is why no stop-start is needed here.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/txt2sfx/corpus /srv/txt2sfx/data /srv/txt2sfx/app
