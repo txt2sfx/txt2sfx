@@ -53,9 +53,12 @@ worth preserving. Concretely:
   stack. `Float32Array.from(...)` on the way out.
 - **TypeScript strict**, no `any` in public APIs, exported types carry TSDoc.
 - **`.gitattributes` forces LF.** Without it the byte-exact round-trip tests fail on Windows.
-- **No `localStorage` in the playground.** State lives in React state; persistence goes
-  through the bank's API. A pasted API key lives in tab memory and travels only in requests
-  the user started.
+- **`localStorage` in the playground holds preferences and unsaved work, never a secret.**
+  State lives in React state, and a recipe someone decided to keep goes through `examples/`
+  or the bank's API. The exception is the recipes a tab generated and has not saved yet
+  (`apps/web/src/lib/session.ts`): they exist nowhere else, and each one cost a model call
+  and a fit. A pasted API key never goes there — it lives in tab memory and travels only in
+  requests the user started.
 - **Secrets come from the environment or from the caller**, never from a checked-in file.
   See `.env.example`.
 

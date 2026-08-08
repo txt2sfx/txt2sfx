@@ -37,12 +37,42 @@
  * warm render takes thirty seconds. The child process says which is happening — pip's
  * resolver, a download bar, "loaded in 10.1s on cpu" — and a spinner in place of those
  * lines would hide the download, the licence gate and every other reason a run is slow.
- * That is also the argument that makes an install button acceptable here at all.
+ * That is also the argument that makes an install button acceptable here at all. The
+ * spinner beside the Stop button is the other half of it, not a replacement: the first
+ * line of output can be twenty seconds away, and until it lands the log cannot say that
+ * anything is happening at all.
+ *
+ * ## Why the caption is a field and not a hidden step
+ *
+ * The checkpoint conditions on **t5-base**, which reads English and at most 64 tokens.
+ * A Russian prompt does not arrive slightly degraded, it arrives with holes in it —
+ * `packages/agent/src/caption.ts` has the tokenizer output — and the render then answers
+ * a sentence nobody wrote. So pressing Render captions the prompt first: one cheap model
+ * call, one line of concrete English acoustics, and *then* the subprocess.
+ *
+ * That caption is shown in an editable field rather than computed on the way past,
+ * because on a diffusion model the caption is the instrument. It is the difference
+ * between a render and a different render, so hiding it would be the same mistake as
+ * hiding the download behind a spinner — and the panel would have no answer to "why did
+ * it make that?". It is written once per prompt and reused, so tuning the length or the
+ * seed does not spend another call.
+ *
+ * ## Why the prompt row can drive this panel
+ *
+ * The row above the tabs is one control over three modes, and the sentence in it is the
+ * same sentence either engine is asked. Pressing it on this tab has exactly one sensible
+ * meaning — render *this* prompt with the model — so {@link ModelPanelProps.controls}
+ * hands the run and the abort upward and {@link ModelPanelProps.onBusy} reports what is
+ * in flight, and the button up there stops being about the recipe while this tab is open.
+ * A ref rather than lifted state: the render owns a child process, a log and an
+ * `AbortController`, and moving all of that into the screen to expose one verb would put
+ * the subprocess's lifetime a long way from the panel that shows it.
  *
  * @packageDocumentation
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react';
+import { CAPTION_LIMIT, captionIssue } from '@txt2sfx/agent';
 import { Bars } from './Bars.js';
 import { FormatMenu } from './FormatMenu.js';
 import { bars, ghostBars } from '../lib/layers.js';
@@ -57,7 +87,7 @@ import {
   type ModelStatus,
   type RenderEvent,
 } from '../lib/stable-audio.js';
-import type { Format } from '../lib/download.js';
+import { AUDIO_FORMATS, type Format } from '../lib/download.js';
 
 /** Bars across the model's waveform. */
 const BAR_COUNT = 96;
@@ -80,18 +110,76 @@ const STAGE_KEY = {
   ready: 'model.stage.ready',
 } as const;
 
+/**
+ * Render length to tell the captioning model about when the far end has not said.
+ *
+ * The real default is `status.defaults.seconds`, reported by the bridge, and the render
+ * form does not exist until there is a status to read it from. This covers the one path
+ * that reaches `run` without one — the prompt row holds this panel's controls whichever
+ * screen the panel is showing — where the caption is written before the render fails for
+ * want of a daemon. It matches the bridge's own default so the two never disagree in a
+ * log line.
+ */
+const FALLBACK_SECONDS = 2;
+
+/** What the deterministic caption check reports, in one sentence each. */
+const CAPTION_ISSUE_KEY = {
+  script: 'model.captionScript',
+  length: 'model.captionLength',
+} as const;
+
+/**
+ * Ask a model for an English caption describing the prompt.
+ *
+ * Handed in rather than built here so this component knows nothing about API keys,
+ * pickers or the bridge — the same division that keeps the render itself behind
+ * `lib/stable-audio.ts`. `null` when nothing on the page can write one; the panel then
+ * says so and sends whatever is in the field.
+ */
+export type CaptionWriter = (input: {
+  readonly prompt: string;
+  readonly seconds: number;
+  readonly signal: AbortSignal;
+}) => Promise<{ readonly text: string; readonly source: 'model' | 'prompt'; readonly note?: string }>;
+
 export interface ModelPanelProps {
   readonly prompt: string;
   /** The last model render, decoded — the same object Compare uses as B. */
   readonly render: { readonly name: string; readonly buffer: AudioBuffer } | null;
   readonly onRendered: (file: File) => void;
   readonly onCompare: () => void;
+  /**
+   * This tab's own remembered format, not the recipe's.
+   *
+   * Audio only, and separate from the Download button on the Sound tab: what comes out of
+   * here is a render with no recipe behind it, so `js` and `soundline` would export the
+   * editor's current recipe under the model's file name. `lib/download.ts` argues it out.
+   */
   readonly formatId: string;
   readonly onFormat: (id: string) => void;
   readonly onDownload: (format: Format) => Promise<unknown> | void;
   readonly seed: number;
+  /**
+   * How the prompt becomes something t5-base can read. Null when no model can.
+   *
+   * Which provider that is belongs to the prompt row's picker, not to this panel —
+   * see `lib/agent.ts`'s `captionProviderFor`.
+   */
+  readonly writeCaption: CaptionWriter | null;
   /** Told when an install finishes, so the rest of the app stops saying "missing". */
   readonly onReady?: (ready: boolean) => void;
+  /** Filled with the two verbs the prompt row needs while this tab is the one showing. */
+  readonly controls?: RefObject<ModelControls | null>;
+  /** True while a render or an install is in flight, including through an unmount. */
+  readonly onBusy?: (busy: boolean) => void;
+}
+
+/** What this panel lets the screen above it do. */
+export interface ModelControls {
+  /** Render the current prompt. Says so in the panel if there is no prompt yet. */
+  readonly run: () => void;
+  /** Abort whatever is in flight — a render or an install. */
+  readonly stop: () => void;
 }
 
 export function ModelPanel({
@@ -103,7 +191,10 @@ export function ModelPanel({
   onFormat,
   onDownload,
   seed,
+  writeCaption,
   onReady,
+  controls,
+  onBusy,
 }: ModelPanelProps): React.JSX.Element {
   const { t } = useI18n();
   const [status, setStatus] = useState<ModelStatus | null>(null);
@@ -113,6 +204,14 @@ export function ModelPanel({
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [seconds, setSeconds] = useState<number | null>(null);
+  /* The caption, and the prompt it was written for. The second one is what makes this
+     one call per prompt rather than one per render: a caption is rewritten when it is
+     empty or when the prompt it describes has moved, and changing the length or the
+     seed does neither. `hand` is remembered so an edit is not reported as the model's. */
+  const [caption, setCaption] = useState('');
+  const [captionFor, setCaptionFor] = useState('');
+  const [captionBy, setCaptionBy] = useState<'model' | 'hand' | null>(null);
+  const [captioning, setCaptioning] = useState(false);
   /* Both live in component state and nowhere else. The token is a credential and
      `lib/keystore.ts` sets the rule; the repo id is not, but it belongs to the same
      form and is one field to retype. */
@@ -209,6 +308,43 @@ export function ModelPanel({
       });
   }, [repo, token, onEvent, onReady, refresh]);
 
+  /**
+   * Get the caption this render should use, asking a model when there is one to ask.
+   *
+   * Returns the text rather than relying on the state it also sets: `setCaption` will
+   * not have landed by the time the render needs the string, and reading the stale
+   * value would send the previous prompt's caption.
+   */
+  const captionFrom = useCallback(
+    async (text: string, length: number, signal: AbortSignal, force = false): Promise<string> => {
+      const current = caption.trim();
+      const fresh = current !== '' && captionFor === text;
+      if (writeCaption === null || (fresh && !force)) return current === '' ? text : current;
+
+      setCaptioning(true);
+      try {
+        const written = await writeCaption({ prompt: text, seconds: length, signal });
+        if (signal.aborted) return written.text;
+        setCaption(written.text);
+        setCaptionBy(written.source === 'model' ? 'model' : null);
+        /* Only a caption a model actually wrote counts as written *for* this prompt. A
+           failed call leaves the field stale on purpose, so the next Render retries
+           rather than sending the untranslated prompt for the rest of the session. */
+        if (written.source === 'model') setCaptionFor(text);
+        setLines((lines) => [
+          ...lines,
+          written.source === 'model'
+            ? `✎ ${written.text}`
+            : `✎ ${t('model.captionFailed', { reason: written.note ?? '' })}`,
+        ]);
+        return written.text;
+      } finally {
+        setCaptioning(false);
+      }
+    },
+    [caption, captionFor, writeCaption, t],
+  );
+
   const run = useCallback(() => {
     if (prompt.trim() === '') {
       setError(t('model.promptFirst'));
@@ -220,23 +356,32 @@ export function ModelPanel({
     setError(null);
     setLines([]);
 
-    void renderTarget(
-      {
-        prompt,
-        seed,
-        ...(seconds === null ? {} : { seconds }),
-        ...(repo.trim() === '' ? {} : { repo: repo.trim() }),
-      },
-      {
-        signal: controller.signal,
-        onEvent: (event: RenderEvent) => {
-          onEvent(event);
-          if (event.type === 'done') {
-            setLines((current) => [...current, `${event.name} · ${size(event.bytes)} in ${ms(event.ms)}`]);
-          }
-        },
-      },
-    )
+    /* Captioning and rendering are one run and share one abort: Stop pressed during the
+       model call must not be followed, twenty seconds later, by a subprocess nobody is
+       waiting for any more. */
+    void captionFrom(prompt.trim(), seconds ?? status?.defaults.seconds ?? FALLBACK_SECONDS, controller.signal)
+      .then((text) => {
+        /* Thrown rather than returned, to skip the render without a second nullable step
+           in the chain. Never shown: the `catch` below returns first on an abort. */
+        if (controller.signal.aborted) throw new Error('aborted');
+        return renderTarget(
+          {
+            prompt: text,
+            seed,
+            ...(seconds === null ? {} : { seconds }),
+            ...(repo.trim() === '' ? {} : { repo: repo.trim() }),
+          },
+          {
+            signal: controller.signal,
+            onEvent: (event: RenderEvent) => {
+              onEvent(event);
+              if (event.type === 'done') {
+                setLines((current) => [...current, `${event.name} · ${size(event.bytes)} in ${ms(event.ms)}`]);
+              }
+            },
+          },
+        );
+      })
       .then((file) => {
         /* The render came down in the answer and was never written to `out/`, so
            there is nothing to fetch — a target is used once and should not leave a
@@ -251,7 +396,25 @@ export function ModelPanel({
         if (abort.current === controller) abort.current = null;
         setRunning(null);
       });
-  }, [prompt, seed, seconds, repo, onEvent, onRendered, t]);
+  }, [prompt, seed, seconds, repo, status, captionFrom, onEvent, onRendered, t]);
+
+  /** Rewrite the caption on its own, without spending a render on finding out. */
+  const rewrite = useCallback(() => {
+    if (writeCaption === null || prompt.trim() === '' || captioning) return;
+    const controller = new AbortController();
+    abort.current = controller;
+    setError(null);
+    /* `force`, because pressing this is the user saying the caption in the field is not
+       the one they want — including a perfectly fresh one. */
+    void captionFrom(prompt.trim(), seconds ?? status?.defaults.seconds ?? FALLBACK_SECONDS, controller.signal, true)
+      .catch((failure: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(failure instanceof Error ? failure.message : String(failure));
+      })
+      .finally(() => {
+        if (abort.current === controller) abort.current = null;
+      });
+  }, [writeCaption, prompt, captioning, captionFrom, seconds, status]);
 
   const play = useCallback(() => {
     playback.current?.stop();
@@ -266,6 +429,17 @@ export function ModelPanel({
   }, [render, playing]);
 
   const stop = useCallback(() => abort.current?.abort(), []);
+
+  useImperativeHandle(controls, () => ({ run, stop }), [run, stop]);
+
+  /* The cleanup is the load-bearing half: leaving this tab aborts the render (see the
+     unmount effect above), and a prompt row still offering to Stop something that is no
+     longer running would be a button that does nothing. `onBusy` must be a stable
+     function — `setState` is — or this fires on every render of the screen. */
+  useEffect(() => {
+    onBusy?.(running !== null);
+    return () => onBusy?.(false);
+  }, [running, onBusy]);
 
   const logBlock =
     lines.length === 0 && error === null ? null : (
@@ -369,7 +543,8 @@ export function ModelPanel({
           <div className="transport">
             {installing ? (
               <button type="button" onClick={stop}>
-                ■ {t('model.stop')}
+                <span className="spinner" aria-hidden="true" />
+                {t('model.stop')}
               </button>
             ) : (
               <button
@@ -409,14 +584,38 @@ export function ModelPanel({
           <input
             type="number"
             name="model-seconds"
-            min={1}
-            max={12}
+            /* The bounds the bridge enforces, not a rounder pair: it refuses anything
+               outside 0.25–11, and an input that offered 12 answered a typed 12 with a
+               rejection from the far end. 11 s is the model's window (`sample_size /
+               sample_rate`), and quarter-second steps are what a one-shot needs. */
+            min={0.25}
+            max={11}
+            step={0.25}
             value={seconds ?? status.defaults.seconds}
-            onChange={(event) => setSeconds(Math.max(1, Math.min(12, event.target.valueAsNumber || 1)))}
+            onChange={(event) =>
+              setSeconds(Math.max(0.25, Math.min(11, event.target.valueAsNumber || status.defaults.seconds)))
+            }
           />
         </label>
         <span className="faint">{t('model.seed', { value: seed })}</span>
       </div>
+
+      <Caption
+        value={caption}
+        prompt={prompt}
+        by={captionBy}
+        writing={captioning}
+        canWrite={writeCaption !== null}
+        disabled={rendering}
+        onChange={(next) => {
+          setCaption(next);
+          /* An edit is a caption for *this* prompt, however it got there — otherwise the
+             next Render would overwrite what was just typed. */
+          setCaptionFor(prompt.trim());
+          setCaptionBy(next.trim() === '' ? null : 'hand');
+        }}
+        onRewrite={rewrite}
+      />
 
       <div className="model-wave">
         <Bars
@@ -435,7 +634,8 @@ export function ModelPanel({
         </button>
         {rendering ? (
           <button type="button" onClick={stop}>
-            ■ {t('model.stop')}
+            <span className="spinner" aria-hidden="true" />
+            {t('model.stop')}
           </button>
         ) : (
           <button type="button" onClick={run} disabled={status.busy}>
@@ -448,6 +648,7 @@ export function ModelPanel({
           onDownload={onDownload}
           disabled={render === null}
           className="amber"
+          formats={AUDIO_FORMATS}
         />
         <div className="spacer" />
         <button type="button" onClick={onCompare} disabled={render === null}>
@@ -460,6 +661,67 @@ export function ModelPanel({
       {logBlock}
 
       <Facts status={status} />
+    </div>
+  );
+}
+
+/**
+ * The one string the model actually reads.
+ *
+ * Its own component because the interesting part is not the input, it is the two lines
+ * underneath: how long the caption is against what t5-base can hold, who wrote it, and
+ * the deterministic complaint when the text will not survive the tokenizer. The check
+ * runs on what *will be sent* — the field, or the prompt when the field is empty — so an
+ * untranslated prompt is flagged before the thirty seconds of CPU, not after.
+ */
+function Caption(props: {
+  readonly value: string;
+  readonly prompt: string;
+  readonly by: 'model' | 'hand' | null;
+  readonly writing: boolean;
+  readonly canWrite: boolean;
+  readonly disabled: boolean;
+  readonly onChange: (next: string) => void;
+  readonly onRewrite: () => void;
+}): React.JSX.Element {
+  const { t } = useI18n();
+  const sent = (props.value.trim() === '' ? props.prompt : props.value).trim();
+  const issue = sent === '' ? null : captionIssue(sent);
+
+  return (
+    <div className="model-caption">
+      <label className="field wide">
+        {t('model.captionLabel')}
+        <input
+          type="text"
+          name="model-caption"
+          autoComplete="off"
+          spellCheck={false}
+          /* The prompt as placeholder, because that is literally what an empty field
+             sends — a placeholder that said "caption…" would hide the default. */
+          placeholder={props.writing ? t('model.captionWriting') : props.prompt}
+          value={props.value}
+          onChange={(event) => props.onChange(event.target.value)}
+          disabled={props.disabled || props.writing}
+        />
+      </label>
+      <button
+        type="button"
+        className="amber"
+        onClick={props.onRewrite}
+        disabled={!props.canWrite || props.writing || props.disabled || props.prompt.trim() === ''}
+      >
+        {props.writing ? <span className="spinner" aria-hidden="true" /> : '✎ '}
+        {t('model.captionRewrite')}
+      </button>
+      <p className="caption">
+        {props.canWrite ? t('model.captionHint', { limit: CAPTION_LIMIT }) : t('model.captionNoProvider')}
+      </p>
+      <p className="caption mono faint">
+        {t('model.captionCount', { count: sent.length, limit: CAPTION_LIMIT })}
+        {props.by === null ? '' : ` · ${t(props.by === 'model' ? 'model.captionByModel' : 'model.captionByHand')}`}
+      </p>
+      {issue === null ? null : <p className="caption warn">{t(CAPTION_ISSUE_KEY[issue], { limit: CAPTION_LIMIT })}</p>}
     </div>
   );
 }

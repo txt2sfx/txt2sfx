@@ -95,16 +95,44 @@ and are byte-identical, though the licence still governs what you do with the au
 
 ```bash
 python test/stable-audio/run.py "wooden crate smashing" --count 3      # three variations
-python test/stable-audio/run.py "sci-fi door whoosh" --seconds 2       # trim the render
+python test/stable-audio/run.py "sci-fi door whoosh" --seconds 11      # the model's full window
 python test/stable-audio/run.py "coin pickup" --seed 42                # reproducible
 python test/stable-audio/run.py "rain on a tin roof" --steps 16        # more steps
 python test/stable-audio/run.py "coin pickup" --format wav             # uncompressed
 python test/stable-audio/run.py "coin pickup" --stdout > target.mp3    # nothing in out/
 ```
 
+### The prompt has to be English, and short
+
+The `small` checkpoint conditions on **t5-base** with `max_length: 64` — both read out of
+its own `model_config.json`. t5-base's SentencePiece vocabulary is English, and every other
+script disintegrates in it. Measured with the cached tokenizer:
+
+```
+"магическое заклинание леденая стрела"
+  → 26 tokens: ▁ ма <unk> и <unk> е ско е ▁ <unk> а к ли на ни е ▁ ле де на <unk> ▁ ст ре ла </s>
+  → decodes back as "ма<unk>и<unk>еское <unk>аклинание ледена<unk> стрела"
+```
+
+So the render answers a sentence with holes in it, which is what a result that sounds like
+nothing you asked for actually is. There is no encoding to fix: the prompt reaches `sys.argv`
+intact and is destroyed by the tokenizer.
+
+The 64-token window is the other half. Over ten realistic SFX captions the worst rate measured
+was 3.28 characters per token, so **about 200 characters** — roughly 34 words — is all the
+model reads; the rest is dropped in silence. Write the caption the way the training data is
+captioned: source and material, action, attack and decay, then how it was recorded.
+
+```
+ice magic spell cast, frozen arrow whoosh, crystalline shatter, sharp attack, dry close-up
+```
+
+The playground writes that for you and shows it in an editable field — one model call, in
+`packages/agent/src/caption.ts`. From a terminal it is yours to write.
+
 | flag | default | note |
 | --- | --- | --- |
-| `--seconds` | `11` | the model always renders its full 11 s window; this trims the tail |
+| `--seconds` | `2` | the model always *samples* its full 11 s window; this decides how much of it is decoded and kept, and is what `seconds_total` conditioning is told |
 | `--steps` | `8` | from the model card — ARC post-training makes it a few-step model |
 | `--cfg` | `1.0` | ditto: the distilled model is CFG-free, higher values are a knob to play with |
 | `--sampler` | `pingpong` | `dpmpp-3m-sde`, `euler`, `rk4` also exist |
@@ -157,9 +185,9 @@ Measured on an RTX 3080 (10 GB, sm_86, driver 591.74), `torch 2.7.1+cu128`:
 
 ```
 loaded in 9.5s on cuda
-sample 1.0s + decode 0.3s = 1.3s   peak 2.27 GiB   # first render of the process
-sample 0.3s + decode 0.1s = 0.5s   peak 2.28 GiB   # every one after it
-sample 0.3s + decode 0.0s = 0.3s   peak 2.05 GiB   # --seconds 2
+sample 1.0s + decode 0.3s = 1.3s   peak 2.27 GiB   # --seconds 11, first render of the process
+sample 0.3s + decode 0.1s = 0.5s   peak 2.28 GiB   # --seconds 11, every one after it
+sample 0.3s + decode 0.0s = 0.3s   peak 2.05 GiB   # --seconds 2, the default
 ```
 
 So ~0.5 s against the 22 s of the CPU baseline below, and the shape of the cost changes with
@@ -190,8 +218,8 @@ Measured on a Snapdragon X Plus (8 cores, 16 GB), CPU only:
 
 ```
 loaded in 10.1s on cpu
-sample 8.1s + decode 13.9s = 22.0s     # 11 s of 44.1 kHz stereo
-sample 8.8s + decode  3.0s = 11.8s     # --seconds 2
+sample 8.1s + decode 13.9s = 22.0s     # --seconds 11: the model's full window
+sample 8.8s + decode  3.0s = 11.8s     # --seconds 2, the default
 ```
 
 Two things get you there, both in `run.py`:
@@ -203,7 +231,9 @@ Two things get you there, both in `run.py`:
   more RAM. The diffusion transformer was fp32 already, which is why sampling looked fine
   while the decode did not.
 - **Only the kept latents are decoded.** The model always samples its full 11 s window, but
-  the decode is linear in length and is the expensive half, so `--seconds 2` decodes 2 s.
+  the decode is linear in length and is the expensive half, so the default `--seconds 2`
+  decodes 2 s. That is most of why 2 s is the default: a reference target is one sound effect,
+  and the other ten seconds cost more than the sampling does.
 
 ## Notes
 

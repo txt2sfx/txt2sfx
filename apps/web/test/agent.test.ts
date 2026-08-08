@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { ANTHROPIC_DEFAULT_MODEL, GEMINI_DEFAULT_MODEL, type FetchLike } from '@txt2sfx/agent';
 import {
   ALL_PROVIDER_OPTIONS,
+  captionProviderFor,
   demoProvider,
   describeEvent,
   keyedProvider,
@@ -22,6 +23,8 @@ import {
   providerOptions,
   rankDemoRecipes,
   recipeName,
+  type ProviderChoice,
+  type ProviderKind,
 } from '../src/lib/agent.js';
 
 /** Capture the one request a provider makes, and answer it. */
@@ -123,6 +126,43 @@ describe('provider picker', () => {
   });
 });
 
+/*
+ * Who writes the reference model's caption.
+ *
+ * Worth its own block because the answer is not "whatever the picker says". The mock
+ * answers with a soundline, which is not a caption in any language; a keyed provider with
+ * no key throws; and a bridge with nothing attached to it parks the request until it times
+ * out. Each of those is a *null* the panel can explain, and getting one of them wrong
+ * would show up as a render that quietly used the untranslated prompt.
+ */
+describe('caption provider', () => {
+  const choice = (kind: ProviderKind, apiKey = '', model = ''): ProviderChoice => ({ kind, apiKey, model });
+
+  it('sends the mock to the attached agent, because a soundline is not a caption', () => {
+    expect(captionProviderFor(choice('mock'), true)?.name).toBe('agent');
+    expect(captionProviderFor(choice('mock'), false)).toBeNull();
+  });
+
+  it('needs an agent actually attached, not merely a daemon running', () => {
+    expect(captionProviderFor(choice('agent'), true)?.name).toBe('agent');
+    expect(captionProviderFor(choice('agent'), false)).toBeNull();
+  });
+
+  /* A blank key is "you have not pasted one yet", which the panel says in a sentence.
+     Building the provider anyway would turn it into a failed render instead. */
+  it('answers null for a keyed provider with no key rather than throwing', () => {
+    expect(captionProviderFor(choice('gemini'), false)).toBeNull();
+    expect(captionProviderFor(choice('anthropic', '   '), false)).toBeNull();
+    expect(captionProviderFor(choice('gemini', 'AIza-secret'), false)?.name).toBe('gemini');
+  });
+
+  it('honours the model override the picker carries', () => {
+    expect(captionProviderFor(choice('gemini', 'AIza-secret', 'gemini-3-flash'), false)?.model).toBe(
+      'gemini-3-flash',
+    );
+  });
+});
+
 describe('mock provider', () => {
   it('ranks a name match above a body match', () => {
     const ranked = rankDemoRecipes('a bright laser zap', RECIPES);
@@ -174,20 +214,46 @@ describe('mock provider', () => {
 });
 
 describe('recipe naming', () => {
-  it('slugs a prompt down to a file name', () => {
-    expect(recipeName('A heavy metal door slamming shut in a corridor', [])).toBe('a-heavy-metal-door');
-    expect(recipeName('Coin pickup!', [])).toBe('coin-pickup');
+  const splash = 'sound "stone splash" 700ms impact\n  body: noise white | gain 0.6 decay 400ms\n';
+
+  /* The model named the sound it built and chose the category it is judged against; both
+     travel in the header. Filing it under a slug of the request threw that away. */
+  it('takes the name out of the recipe the model wrote', () => {
+    expect(recipeName(splash, 'большой камень плюхнулся в озеро', [])).toBe('stone-splash');
+  });
+
+  /**
+   * The bug this fixes, stated as a test.
+   *
+   * `slug` keeps ASCII, so before the header was consulted every request written in a
+   * non-Latin script produced the same name — a rail of `sound`, `sound-2`, `sound-3`
+   * with nothing to tell them apart.
+   */
+  it('does not fall back to the prompt when the prompt has no Latin letters', () => {
+    expect(recipeName(splash, 'лязг ржавой калитки', [])).not.toBe('sound');
+  });
+
+  it('slugs a prompt down to a file name when there is no recipe to read', () => {
+    expect(recipeName('', 'A heavy metal door slamming shut in a corridor', [])).toBe('a-heavy-metal-door');
+    expect(recipeName('', 'Coin pickup!', [])).toBe('coin-pickup');
+  });
+
+  /* A reply the parser rejects is never filed under a name anyway, so this only has to
+     avoid throwing on the way to the fallback. */
+  it('falls back to the prompt when the reply does not parse', () => {
+    expect(recipeName('not a soundline at all', 'Coin pickup!', [])).toBe('coin-pickup');
   });
 
   it('falls back rather than producing an empty name', () => {
-    expect(recipeName('!!! ???', [])).toBe('sound');
+    expect(recipeName('', '!!! ???', [])).toBe('sound');
   });
 
   /* Two runs of "laser" are two candidates to compare; overwriting the first would
      throw away the comparison the user was in the middle of making. */
   it('never collides with a name already shown', () => {
-    expect(recipeName('laser', ['laser'])).toBe('laser-2');
-    expect(recipeName('laser', ['laser', 'laser-2'])).toBe('laser-3');
+    expect(recipeName('', 'laser', ['laser'])).toBe('laser-2');
+    expect(recipeName('', 'laser', ['laser', 'laser-2'])).toBe('laser-3');
+    expect(recipeName(splash, '', ['stone-splash'])).toBe('stone-splash-2');
   });
 });
 

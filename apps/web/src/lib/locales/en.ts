@@ -119,7 +119,12 @@ export const en = {
   'prompt.matchTitle': 'load a reference in Compare A / B first',
   'prompt.stop': 'Stop',
   'prompt.stopping': 'stopping…',
-  'prompt.regenerate': 'Regenerate',
+  'prompt.make': 'Make sound',
+  /* The button runs whichever tab is open, so what it will do is said on hover rather
+     than guessed from the accent colour. */
+  'prompt.runsSoundline': 'writes a new recipe for this prompt and fits its numbers',
+  'prompt.runsModel': 'renders this prompt with the diffusion model, on this machine',
+  'prompt.modelMissing': 'the model is not installed yet — the Model tab has the button',
   'prompt.noteMock':
     'answers from the recipes in the catalog — no network, no key, and the validator, render, optimizer and export all still run',
   'prompt.noteAgentReady':
@@ -255,6 +260,20 @@ export const en = {
   'model.caption':
     'Rendered audio from the same prompt — no recipe, nothing to tune, and one to two megabytes where the recipe is under a kilobyte. It is here to be a target: A/B it, and tick “fit the numbers to the reference” to point the optimizer at it.',
   'model.promptFirst': 'type a prompt first — the model answers the same sentence our loop does',
+  'model.captionLabel': 'caption',
+  'model.captionRewrite': 'Rewrite',
+  'model.captionHint':
+    'What this model actually reads: English, and at most 64 t5 tokens — about {limit} characters. Written from your prompt when you press Render, and yours to edit.',
+  'model.captionWriting': 'writing the caption…',
+  'model.captionNoProvider':
+    'No model here can write one: pick Gemini or Anthropic in the prompt row, or attach your coding agent over the bridge. Until then the prompt is sent as written.',
+  'model.captionCount': '{count}/{limit} characters',
+  'model.captionByModel': 'written by the model',
+  'model.captionByHand': 'edited by hand',
+  'model.captionFailed': 'no caption written ({reason}) — sending the prompt as it is',
+  'model.captionScript':
+    'This model reads no script but Latin — every other one tokenizes into holes and renders as noise. Write the caption in English.',
+  'model.captionLength': 'Past {limit} characters the text encoder drops the rest without saying so.',
 
   /* --- the compare view --------------------------------------------------- */
 

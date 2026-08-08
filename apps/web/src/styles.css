@@ -242,6 +242,34 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/*
+ * "Still working", on the control that was pressed.
+ *
+ * The run strip below says *what* is happening, and it is the better answer — but it can
+ * only speak once a stage reports, and a model render is half a minute of subprocess
+ * before its first line. Between the click and that line the button is the only thing on
+ * screen that can say the click landed, so Stop carries a spinner.
+ *
+ * `currentColor` rather than an accent: this appears on the hue button, whose colour is
+ * the tab's, and on the model panel's plain buttons. Borrowing the text colour is the
+ * only version that is correct in all of them. The `:has()` rule is what keeps the
+ * markup to one span — a button with a spinner in it becomes a flex row on its own.
+ */
+.spinner {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+button:has(> .spinner) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -1776,6 +1804,31 @@ input[type='range'] {
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+/*
+ * The caption, on the same raised ground as the install form.
+ *
+ * A grid rather than a row of flex children because the field and the Rewrite button
+ * share the first line while the three notes underneath run the full width — and the
+ * button has to sit on the *input*, not on the label above it, which `align-items: end`
+ * on a two-column grid gives for free.
+ */
+.model-caption {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 7px 9px;
+  padding: 11px 12px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.model-caption > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.model-caption > button {
+  height: 32px;
+}
 /* The install screen. A card rather than loose rows, because it is a form with
    consequences — a few gigabytes of somebody's disk — and it should read as one
    decision rather than as controls scattered through a panel. */
@@ -1805,19 +1858,61 @@ input[type='range'] {
 .model-fields {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 11px;
 }
+/*
+ * Raised, and deliberately lighter than the card it sits on.
+ *
+ * The default `label.field input` is `oklch(0.17 …)` and this card is `--panel-3`,
+ * `oklch(0.175 …)` — the same colour to any eye, leaving `--line` to do all the work of
+ * saying where the field is. That works on the studio's panels, where a field sits on
+ * something lighter than itself; here it disappears.
+ *
+ * Cutting the well *darker* was the first attempt and it was the wrong direction: these
+ * are the only two things on the screen the reader is asked to type into, and a darker
+ * hole on a dark card reads as a gap in the layout rather than as an invitation. So the
+ * field is lifted above the card instead, with a border bright enough to hold the shape
+ * on its own. The label goes to `--ink-2` for the same reason — `--ink-3` files these
+ * two under caption.
+ */
 .field.wide {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: 5px;
   font-size: 11.5px;
+  color: var(--ink-2);
 }
 .field.wide input {
   width: 100%;
+  height: 32px;
+  padding: 0 10px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
+  color: var(--ink);
+  background: oklch(0.245 0.014 265);
+  border: 1px solid oklch(0.4 0.018 265);
+  border-radius: 7px;
+}
+.field.wide input:hover:not(:disabled) {
+  background: oklch(0.27 0.015 265);
+  border-color: oklch(0.47 0.02 265);
+}
+/* `:focus`, not only `:focus-visible`: the global outline covers the keyboard case, and
+   a click into a text field should also say which one now has the caret. */
+.field.wide input:focus {
+  background: oklch(0.28 0.016 265);
+  border-color: var(--accent);
+}
+/* A placeholder as bright as a value is a field that looks already filled — which is
+   exactly what `stabilityai/stable-audio-open-small` did in the repo box. Dimmed, but
+   not past the point of being readable: it is the default, and worth reading. */
+.field.wide input::placeholder {
+  color: oklch(0.56 0.012 265);
+}
+.field.wide input:disabled {
+  background: oklch(0.2 0.012 265);
+  border-color: var(--line);
 }
 
 /* Where the gigabytes went. Monospace and dim: it is a receipt, not a control. */

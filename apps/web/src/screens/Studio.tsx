@@ -13,7 +13,11 @@
  *
  * The prompt row above them stays put across all three, and takes its accent hue from
  * whichever is active — so the colour of the page says which mode you are in without a
- * label for it.
+ * label for it. It also *acts* on whichever is active: Make sound runs the loop on
+ * `Soundline` and the diffusion model on `Model`, which is why this screen holds a handle
+ * on the model panel and a flag for what it is doing. The panel keeps its own Render
+ * button — the row is a second door to the same run, not a replacement — and the two
+ * cannot disagree, because both call through the one handle.
  *
  * ## Why the recipe stays editable while a run is going
  *
@@ -25,17 +29,20 @@
  * @packageDocumentation
  */
 
+import { audioCaption } from '@txt2sfx/agent';
 import { declaredDurationMs, type CodegenResult, type RenderResult, type SoundlineError } from '@txt2sfx/core';
 import type { SoundAST, ValidationIssue } from '@txt2sfx/shared';
+import { useMemo, useRef, useState } from 'react';
 import { ComparePanel, type BKind } from '../components/ComparePanel.js';
 import { ExportCard } from '../components/ExportCard.js';
-import { ModelPanel } from '../components/ModelPanel.js';
+import { ModelPanel, type CaptionWriter, type ModelControls } from '../components/ModelPanel.js';
 import { PromptRow, type StudioView } from '../components/PromptRow.js';
 import { Rail, type RailMode } from '../components/Rail.js';
 import { RunStrip } from '../components/RunStrip.js';
 import { SlotsCard } from '../components/SlotsCard.js';
 import { SoundPanel } from '../components/SoundPanel.js';
 import { SoundlineCard } from '../components/SoundlineCard.js';
+import { captionProviderFor } from '../lib/agent.js';
 import { catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
@@ -90,6 +97,9 @@ export interface StudioProps {
   readonly onLoop: () => void;
   readonly formatId: string;
   readonly onFormat: (id: string) => void;
+  /** The Model tab keeps its own — audio only, and remembered separately. */
+  readonly modelFormatId: string;
+  readonly onModelFormat: (id: string) => void;
   readonly onDownload: (format: Format) => Promise<unknown> | void;
   readonly onShare: () => void;
 
@@ -120,6 +130,28 @@ export function Studio(props: StudioProps): React.JSX.Element {
   const current = props.items.find((item) => item.name === props.selected);
   const layerNames = props.ast?.layers.map((layer) => layer.name) ?? [];
 
+  /* The Model tab's run, reachable from the prompt row. Null whenever that tab is not
+     mounted, which is also when nothing can ask for it. `setModelBusy` goes down as-is
+     rather than wrapped: the panel reports on every change and on unmount, and a fresh
+     closure each render would make that fire in a loop. */
+  const modelControls = useRef<ModelControls | null>(null);
+  const [modelBusy, setModelBusy] = useState(false);
+  const toModel = props.view === 'model';
+
+  /**
+   * Who writes the reference model's caption.
+   *
+   * Built here rather than in the panel because *which* model answers is the prompt
+   * row's decision, and the row is on this screen. Null when the picker's choice cannot
+   * translate — the panel then says so instead of pretending.
+   */
+  const writeCaption = useMemo<CaptionWriter | null>(() => {
+    const provider = captionProviderFor(props.settings, props.agentReady);
+    if (provider === null) return null;
+    return ({ prompt, seconds, signal }) => audioCaption({ prompt, provider, seconds, signal });
+  }, [props.settings, props.agentReady]);
+  const running = toModel ? modelBusy : props.generation.running;
+
   return (
     <div className="screen screen-studio">
       <Rail
@@ -147,11 +179,20 @@ export function Studio(props: StudioProps): React.JSX.Element {
             onLoadKey={props.generation.loadKey}
             hasReference={props.b !== null}
             agentReady={props.agentReady}
-            running={props.generation.running}
-            stopping={props.generation.stopping}
+            running={running}
+            /* The model's abort is immediate — it kills a subprocess — so there is no
+               "stopping…" state to report for it. */
+            stopping={toModel ? false : props.generation.stopping}
             view={props.view}
-            onRun={() => props.generation.start(props.prompt.trim(), props.settings)}
-            onStop={props.generation.cancel}
+            modelReady={props.modelAvailable}
+            onRun={() => {
+              if (toModel) modelControls.current?.run();
+              else props.generation.start(props.prompt.trim(), props.settings);
+            }}
+            onStop={() => {
+              if (toModel) modelControls.current?.stop();
+              else props.generation.cancel();
+            }}
           />
 
           <RunStrip
@@ -235,10 +276,14 @@ export function Studio(props: StudioProps): React.JSX.Element {
                   props.onBKind('model');
                   props.onView('compare');
                 }}
-                formatId={props.formatId}
-                onFormat={props.onFormat}
+                formatId={props.modelFormatId}
+                onFormat={props.onModelFormat}
                 onDownload={props.onDownload}
                 seed={props.seed}
+                writeCaption={writeCaption}
+                onReady={props.onModelReady}
+                controls={modelControls}
+                onBusy={setModelBusy}
               />
             ) : null}
 

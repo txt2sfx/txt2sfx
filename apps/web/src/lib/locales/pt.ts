@@ -86,7 +86,7 @@ export const pt: Partial<Readonly<Record<Key, string>>> = {
   'prompt.matchTitle': 'carregue antes uma referência em “Comparar A / B”',
   'prompt.stop': 'Parar',
   'prompt.stopping': 'parando…',
-  'prompt.regenerate': 'Gerar de novo',
+  'prompt.make': 'Criar som',
   'prompt.noteMock':
     'responde com as receitas do catálogo — sem rede e sem chave, e o validador, o render, o otimizador e a exportação continuam rodando',
   'prompt.noteAgentReady':

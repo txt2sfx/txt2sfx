@@ -234,6 +234,16 @@ A `token` is used for the one call it arrives on and is never written down. It t
 the child's environment rather than in its argv, which is echoed back in a `start` event
 and is visible to every other user on the machine in the process list.
 
+`model.render`'s `prompt` is **the caption the checkpoint reads, not the human's
+request**. It conditions on t5-base with a 64-token window: English only, about 200
+characters, and any other script tokenizes into `<unk>` holes — measured, in
+`packages/agent/src/caption.ts`, which is where the playground turns a request in any
+language into one. The daemon does not translate on the caller's behalf; it would need a
+language model of its own to do it, and the caller already has one. It passes the string
+through and echoes it back, so what was sent is never in doubt. `defaults.seconds` is 2,
+not the model's 11 — a reference target is one sound effect, and the decode is linear in
+length and is the longer half on a CPU.
+
 There is no deadline on these calls at the hub. The child owns its own — ten minutes for
 a render, two hours for an install — and a second, shorter one here would turn a slow
 download into a mystery abort.

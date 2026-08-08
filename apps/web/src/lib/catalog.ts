@@ -10,8 +10,10 @@
  *   source of the few-shot examples the agent gets; a recipe goes there to be
  *   published, not to be edited in place.
  * - **`session`** — generated a moment ago by the prompt bar, or renamed here. It
- *   exists only in this tab until it is saved to `examples/` or published to the
- *   bank, and the gallery says so rather than pretending it is stored.
+ *   belongs to this browser and nowhere else until it is saved to `examples/` or
+ *   published to the bank, and the gallery says so rather than pretending it is
+ *   stored. It does survive a reload — `lib/session.ts` argues why work that exists
+ *   in one place only is worth persisting even though a shared store is not involved.
  *
  * Session entries win over stored ones with the same name. A generated recipe is
  * given a non-colliding name (`recipeName`), so this only bites when the user

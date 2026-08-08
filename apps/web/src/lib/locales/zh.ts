@@ -86,7 +86,7 @@ export const zh: Partial<Readonly<Record<Key, string>>> = {
   'prompt.matchTitle': '请先在“A / B 对比”里加载一个参考',
   'prompt.stop': '停止',
   'prompt.stopping': '正在停止…',
-  'prompt.regenerate': '重新生成',
+  'prompt.make': '生成声音',
   'prompt.noteMock': '用库中的配方作答 —— 不联网、不需要密钥，而校验器、渲染、优化器和导出照常运行',
   'prompt.noteAgentReady': '请求经本地桥接发给你的编码智能体 —— 不需要密钥，也不会离开这台机器',
   'prompt.noteAgentMissing': '桥接上还没有接入智能体 —— 点开顶栏的徽标可以看到那两条命令',

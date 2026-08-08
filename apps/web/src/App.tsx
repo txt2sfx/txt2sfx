@@ -62,12 +62,13 @@ import { bankClient, DEFAULT_BANK_URL, type BankHealth } from './lib/bank.js';
 import { bridge } from './lib/bridge.js';
 import { bridgeClient, type BridgeStatus } from './lib/bridge-client.js';
 import { bankEntries, exampleEntries, mergeCatalog, type Entry } from './lib/catalog.js';
-import { download, formatById, type Format } from './lib/download.js';
+import { download, loadFormat, saveFormat, type Format } from './lib/download.js';
 import { playBuffer, playLive, render, type Playback } from './lib/engine.js';
 import { bundledRecipes, canSave, fetchRecipes, saveRecipe } from './lib/examples.js';
 import { useI18n } from './lib/i18n.js';
 import { renderLayers } from './lib/layers.js';
 import { loadLibrary, saveLibrary, type Library } from './lib/library.js';
+import { loadSession, saveSession } from './lib/session.js';
 import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
 import { modelStatus, renderTarget } from './lib/stable-audio.js';
@@ -78,6 +79,16 @@ const RENDER_DEBOUNCE_MS = 140;
 
 /** How long to wait after the last edit before an auto-play retrigger. */
 const AUTOPLAY_DEBOUNCE_MS = 260;
+
+/**
+ * How long to wait after the last edit before writing this tab's unsaved recipes down.
+ *
+ * The write is a `JSON.stringify` of the whole unsaved working set, and a slider drag
+ * produces an edit per frame; half a second means a drag costs one write instead of sixty.
+ * Losing the last half-second of typing to a reload is invisible next to losing the recipe,
+ * which is what persisting it at all is for.
+ */
+const SESSION_SAVE_DEBOUNCE_MS = 500;
 
 /**
  * Budget for a fit started by hand.
@@ -110,8 +121,16 @@ export function App(): React.JSX.Element {
   /* --- the catalog -------------------------------------------------------- */
 
   const [examples, setExamples] = useState<readonly Entry[]>(() => exampleEntries(bundledRecipes()));
-  /** Recipes that exist only in this tab: generated, shared in, or not yet saved. */
-  const [session, setSession] = useState<readonly Entry[]>([]);
+  /**
+   * Recipes that exist only in this tab: generated, shared in, or not yet saved.
+   *
+   * Restored from `localStorage`, which is the one place in the playground where content
+   * rather than a preference is persisted — see `lib/session.ts` for why unsaved work is
+   * the exception to that rule.
+   */
+  const [session, setSession] = useState<readonly Entry[]>(() =>
+    loadSession().map((recipe) => ({ ...recipe, origin: 'session' as const })),
+  );
   const [bankList, setBankList] = useState<readonly Entry[]>([]);
   const [bankUrl] = useState(DEFAULT_BANK_URL);
   const [bankHealth, setBankHealth] = useState<BankHealth | null>(null);
@@ -138,7 +157,11 @@ export function App(): React.JSX.Element {
   const [renderError, setRenderError] = useState<string | null>(null);
   const [playingName, setPlayingName] = useState<string | null>(null);
   const [looping, setLooping] = useState(false);
-  const [formatId, setFormatId] = useState('js');
+  /* Two menus, two memories, both read from `localStorage` on the way in — the argument
+     for keeping them apart, and for MP3 rather than the JavaScript as the default, is in
+     `lib/download.ts`. */
+  const [formatId, setFormatId] = useState(() => loadFormat('sound'));
+  const [modelFormatId, setModelFormatId] = useState(() => loadFormat('model'));
   const [status, setStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<ProviderSettings>(DEFAULT_PROVIDER);
 
@@ -553,6 +576,26 @@ export function App(): React.JSX.Element {
 
   /* --- persistence -------------------------------------------------------- */
 
+  /* Keep this tab's unsaved recipes across a reload. A generated recipe cost a model call
+     and a population of renders per generation of the fit, and until it is saved to
+     `examples/` or published it exists nowhere else — a reload used to take all of them.
+     The editor buffer is folded into the entry rather than stored beside it: a session
+     recipe has no stored version anywhere, so what the editor shows *is* the recipe. Runs
+     on mount too, which rewrites what was just read — harmless, and cheaper than a flag
+     whose only job is to skip one write. */
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      saveSession(
+        session.map((entry) => ({
+          name: entry.name,
+          source: edits[entry.name] ?? entry.source,
+          prompt: entry.prompt ?? '',
+        })),
+      );
+    }, SESSION_SAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [session, edits]);
+
   const save = useCallback(() => {
     void saveRecipe(selected, source)
       .then((path) => {
@@ -661,6 +704,19 @@ export function App(): React.JSX.Element {
           : null;
 
   /* --- downloading -------------------------------------------------------- */
+
+  /* Choosing is what gets remembered, not downloading: a format picked and then not
+     downloaded — because nothing was rendered yet — is still the answer to "what do you
+     want next time". */
+  const chooseFormat = useCallback((id: string): void => {
+    setFormatId(id);
+    saveFormat('sound', id);
+  }, []);
+
+  const chooseModelFormat = useCallback((id: string): void => {
+    setModelFormatId(id);
+    saveFormat('model', id);
+  }, []);
 
   /* Returns the promise rather than firing and forgetting: MP3 and M4A are encoded, and
      the split button needs to know when that has finished so it can say so and refuse a
@@ -1046,7 +1102,9 @@ export function App(): React.JSX.Element {
           onPlay={play}
           onLoop={loop}
           formatId={formatId}
-          onFormat={setFormatId}
+          onFormat={chooseFormat}
+          modelFormatId={modelFormatId}
+          onModelFormat={chooseModelFormat}
           onDownload={onDownload}
           onShare={() => setScreen('share')}
           b={b}
@@ -1086,7 +1144,7 @@ export function App(): React.JSX.Element {
           onPlay={play}
           onBack={() => setScreen('studio')}
           formatId={formatId}
-          onFormat={setFormatId}
+          onFormat={chooseFormat}
           onDownload={onDownload}
         />
       ) : null}

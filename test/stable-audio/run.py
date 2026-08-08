@@ -19,6 +19,13 @@ LAME offers. `--format wav` gives the bit-exact render back, and `--stdout` writ
 the encoded bytes to stdout instead of the directory — that is how the playground
 gets a render without leaving a file behind.
 
+Prompts must be English. The `small` checkpoint conditions on t5-base, whose vocabulary
+holds no other script: "магическое заклинание леденая стрела" tokenizes to
+"ма<unk>и<unk>еское <unk>аклинание ледена<unk> стрела" — measured with the cached
+tokenizer — and the render answers a sentence with holes in it. The same encoder reads at
+most 64 tokens, about 34 words. The playground writes that caption for you (see
+`packages/agent/src/caption.ts`); from a terminal it is yours to write.
+
 The weights are gated: accept the Stability Community License at
 https://huggingface.co/stabilityai/stable-audio-open-small and put a read token in
 HF_TOKEN (or run `huggingface-cli login`) before the first run.
@@ -116,7 +123,12 @@ PRESETS = {
         "steps": 8,
         "cfg": 1.0,
         "sampler": "pingpong",
-        "seconds": 11.0,
+        # Two seconds rather than the model's eleven, because what this script is for is a
+        # reference target: one sound effect, not ten further seconds of whatever the model
+        # decided to do after it. It is also the cheaper number — seconds_total conditioning
+        # makes the model compose a short event, and the decode is linear in length and is
+        # the longer half on a CPU. `--seconds 11` is the old default, one flag away.
+        "seconds": 2.0,
         "note": "341M params, ~1.7 GB of weights, 44.1 kHz stereo, 11 s maximum.",
         "experimental": False,
     },
@@ -129,7 +141,7 @@ PRESETS = {
         "steps": 8,
         "cfg": 1.0,
         "sampler": "pingpong",
-        "seconds": 11.0,
+        "seconds": 2.0,  # same reasoning as above
         "note": "experimental: ships its own t5gemma text encoder, recipe unverified.",
         "experimental": True,
     },

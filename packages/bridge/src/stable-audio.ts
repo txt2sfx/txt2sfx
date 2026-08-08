@@ -119,8 +119,18 @@ const REPO_RE = /^[A-Za-z0-9][\w.-]{0,95}\/[A-Za-z0-9][\w.-]{0,95}$/;
 /** An `hf_…` read token, loosely — enough to refuse a pasted URL or a whole curl line. */
 const TOKEN_RE = /^[A-Za-z0-9_-]{8,200}$/;
 
-/** Mirrors `run.py`'s `small` preset. Two numbers, so the panel can draw a form. */
-const DEFAULTS = { seconds: 11, steps: 8 } as const;
+/**
+ * Mirrors `run.py`'s `small` preset. Two numbers, so the panel can draw a form.
+ *
+ * Two seconds, not the model's eleven. A reference target here is one sound effect —
+ * an impact, a click, a whoosh — and eleven seconds of it is ten seconds of whatever
+ * the model decided to do next, which the distance metric then has to be told to
+ * ignore. It is also the cheaper number twice over: `seconds_total` conditioning makes
+ * the model compose a short event rather than a loop, and the decode is linear in
+ * length and is the longer half on a CPU (measured: 11.8 s of sampling against 18.8 s
+ * of decode for an 11 s render). Anything longer is one field away.
+ */
+const DEFAULTS = { seconds: 2, steps: 8 } as const;
 
 /** The two files a workspace is made of. Copied out of the package when packed. */
 const ASSETS = ['run.py', 'requirements.txt'] as const;
@@ -954,6 +964,14 @@ export class StableAudio {
       env: {
         ...this.env,
         PYTHONUNBUFFERED: '1',
+        /* Both streams are read as UTF-8 here, so the child has to write it. Without
+           this, Python picks the locale encoding for a pipe — cp1251 on a Russian
+           Windows install — and the line that echoes the prompt back arrives as
+           replacement characters. That looked exactly like a prompt that had been
+           corrupted on the way in, which it was not: argv reaches `sys.argv` intact
+           (CreateProcessW carries UTF-16), and only the echo was ever wrong. The audio
+           is unaffected either way — `claim_stdout()` reopens fd 1 in binary. */
+        PYTHONIOENCODING: 'utf-8',
         ...(token === undefined || token === '' ? {} : { HF_TOKEN: token }),
       },
     });

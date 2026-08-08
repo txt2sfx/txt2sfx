@@ -31,18 +31,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { generateSound, type GenerateResult, type RecipeSource } from '@txt2sfx/agent';
 import {
-  demoProvider,
   describeEvent,
-  keyedProvider,
   needsKey,
+  providerFor,
   recipeName,
   renderSignalFor,
   targetFromBuffer,
   type DemoRecipe,
   type ProviderKind,
 } from './agent.js';
-import { agentProvider, bridgeClient } from './bridge-client.js';
-import { bridge } from './bridge.js';
 import { canRemember, keystore } from './keystore.js';
 
 /**
@@ -177,14 +174,7 @@ export function useGenerate(deps: GenerateDeps): Generation {
     setError(null);
     setBest(null);
 
-    const provider =
-      settings.kind === 'mock'
-        ? demoProvider({ prompt, recipes })
-        : settings.kind === 'agent'
-          ? agentProvider(bridgeClient)
-          : settings.kind === 'bridge'
-            ? bridge.provider()
-            : keyedProvider(settings.kind, settings.apiKey, { model: settings.model.trim() });
+    const provider = providerFor(settings, { prompt, recipes });
 
     /* Persist on use, not on every keystroke: a key that was actually sent to a vendor
        is one the user meant, while a half-pasted one is not worth storing. */
@@ -249,7 +239,14 @@ export function useGenerate(deps: GenerateDeps): Generation {
            valid but 0.3 from the target is the starting point for the sliders, and
            throwing it away would waste the run. */
         if (outcome.soundline !== '' && !taken.current) {
-          onGenerated({ name: recipeName(prompt, takenNames), source: outcome.soundline, prompt });
+          onGenerated({
+            /* The name comes out of the recipe's own header, not out of the prompt: the
+               model named the thing it built and chose its category, and both are already
+               validated. See `recipeName`. */
+            name: recipeName(outcome.soundline, prompt, takenNames),
+            source: outcome.soundline,
+            prompt,
+          });
         }
       })
       .catch((failure: unknown) => {
@@ -291,7 +288,7 @@ export function useGenerate(deps: GenerateDeps): Generation {
       if (best === null) return;
       taken.current = true;
       live.current.onGenerated({
-        name: recipeName(prompt, live.current.takenNames),
+        name: recipeName(best.source, prompt, live.current.takenNames),
         source: best.source,
         prompt,
       });

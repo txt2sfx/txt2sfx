@@ -194,6 +194,12 @@ a diffusion render used as the *target*, not as the output — the shipped artif
 recipe. It needs the one-time provisioning in [test/stable-audio/README.md](test/stable-audio/README.md),
 and nothing about it exists in a static build.
 
+That model reads English through a 64-token t5 encoder, so the prompt is captioned before it
+is sent: one model call turns a request in any language into one line of concrete acoustics,
+and the caption is shown in an editable field because on a diffusion model it *is* the
+instrument. Any other script tokenizes into holes — the measurement is in
+[test/stable-audio/README.md](test/stable-audio/README.md).
+
 The recipe bank runs as its own process and needs no native build — it uses Node's built-in
 `node:sqlite`:
 

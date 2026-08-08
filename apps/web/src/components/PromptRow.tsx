@@ -15,6 +15,26 @@
  * free local answer and a paid remote one, and finding that out by pressing Generate
  * is not acceptable.
  *
+ * ## One button, whichever engine the tab is about
+ *
+ * The row sits above the tabs and stays put across all three, so the sentence in it is
+ * the one thing both engines are asked. Pressing it therefore runs *the tab you are
+ * looking at*: the loop on `Soundline`, the diffusion model on `Model`. The alternative —
+ * one button that always meant the recipe — put the model's own Render button a scroll
+ * away from the prompt it renders, and left the row's accent hue saying `Model` while the
+ * button meant something else. The label is `Make sound` for the same reason: it is the
+ * one verb that is true of both engines, where `Regenerate` described only the loop.
+ *
+ * What follows from that: on `Model` the provider and the key are not consulted at all
+ * (nothing here goes to a vendor — the render happens on this machine through the
+ * bridge), so what blocks the button there is the model not being installed yet, not an
+ * empty key field. `Compare A / B` has no engine of its own and keeps the recipe's.
+ *
+ * The button also grows a spinner while a run is in flight. It is the smallest honest
+ * signal there is: the stage list below says *what* is happening once a run reports
+ * something, and until it does — a model render is ~30 s before its first line — the
+ * only thing on screen that can say "yes, it started" is the control that was pressed.
+ *
  * ## The key
  *
  * Unchanged in substance from the old panel, because the reasoning was right: a
@@ -55,6 +75,9 @@ export interface PromptRowProps {
   readonly running: boolean;
   readonly stopping: boolean;
   readonly view: StudioView;
+  /** Whether the diffusion model is installed — what gates the button on the Model tab. */
+  readonly modelReady: boolean;
+  /** Runs whichever engine `view` is about; the screen decides which. */
   readonly onRun: () => void;
   readonly onStop: () => void;
 }
@@ -72,6 +95,7 @@ export function PromptRow({
   running,
   stopping,
   view,
+  modelReady,
   onRun,
   onStop,
 }: PromptRowProps): React.JSX.Element {
@@ -82,7 +106,11 @@ export function PromptRow({
   const options = providerOptions(import.meta.env.DEV);
   const option = options.find((entry) => entry.kind === settings.kind);
   const wantsKey = option?.needsKey === true;
-  const blocked = prompt.trim() === '' || (wantsKey && settings.apiKey.trim() === '');
+  /* Which engine this press means. Only the Model tab has one of its own; Compare has
+     no engine and regenerating from it is regenerating the recipe. */
+  const toModel = view === 'model';
+  const blocked =
+    prompt.trim() === '' || (toModel ? !modelReady : wantsKey && settings.apiKey.trim() === '');
 
   /* Fill the field from storage when the provider changes to one that has a key. Never
      overwrites something already typed — a key in the box is the user's most recent
@@ -247,11 +275,21 @@ export function PromptRow({
 
         {running ? (
           <button type="button" className="hue-button" onClick={onStop} disabled={stopping}>
+            <span className="spinner" aria-hidden="true" />
             {stopping ? t('prompt.stopping') : t('prompt.stop')}
           </button>
         ) : (
-          <button type="submit" className="hue-button" disabled={blocked}>
-            {t('prompt.regenerate')}
+          <button
+            type="submit"
+            className="hue-button"
+            disabled={blocked}
+            /* Which engine will answer, in the tooltip rather than in the label: the
+               label is the verb and it does not change, and a button whose text moves
+               under the cursor as tabs are switched is harder to aim at than one whose
+               meaning is stated on hover. */
+            title={t(toModel ? (modelReady ? 'prompt.runsModel' : 'prompt.modelMissing') : 'prompt.runsSoundline')}
+          >
+            {t('prompt.make')}
           </button>
         )}
       </form>

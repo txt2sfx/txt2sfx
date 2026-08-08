@@ -86,7 +86,7 @@ export const ja: Partial<Readonly<Record<Key, string>>> = {
   'prompt.matchTitle': '先に「A / B 比較」でリファレンスを読み込んでください',
   'prompt.stop': '停止',
   'prompt.stopping': '停止中…',
-  'prompt.regenerate': '再生成',
+  'prompt.make': 'サウンドを作る',
   'prompt.noteMock':
     'カタログのレシピから答えます —— ネットワークもキーも不要で、バリデータ・レンダリング・オプティマイザ・エクスポートはそのまま動きます',
   'prompt.noteAgentReady':

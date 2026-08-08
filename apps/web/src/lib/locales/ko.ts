@@ -86,7 +86,7 @@ export const ko: Partial<Readonly<Record<Key, string>>> = {
   'prompt.matchTitle': '먼저 “A / B 비교”에서 레퍼런스를 불러오세요',
   'prompt.stop': '정지',
   'prompt.stopping': '정지 중…',
-  'prompt.regenerate': '다시 생성',
+  'prompt.make': '사운드 만들기',
   'prompt.noteMock':
     '카탈로그의 레시피로 답합니다 —— 네트워크도 키도 필요 없고, 검증기·렌더링·최적화·내보내기는 그대로 동작합니다',
   'prompt.noteAgentReady':

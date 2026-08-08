@@ -115,6 +115,11 @@ sound "<name>" <duration> [<category>] [loop]
   <layer>: ...
 \`\`\`
 
+- The header name is how the sound is filed: it becomes the catalog entry and the file
+  name, and nothing downstream renames it. Write **two to four English words naming the
+  event and its material** — \`ui click\`, \`stone splash\`, \`rusty gate\`, \`coin\` —
+  whatever the language of the request. Not a sentence, not the request translated word
+  for word, not a description of how it was made.
 - Layers are indented by exactly two spaces and named; the name appears in error
   messages and in every diff, so name it after its job (\`body\`, \`snap\`, \`tail\`).
 - \`>>\` chains effects. \`|\` starts the amplitude envelope.

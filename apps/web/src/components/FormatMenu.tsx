@@ -4,15 +4,17 @@
  * The shape is deliberate. Exporting the same format twenty times in a row is the
  * normal case while iterating on one sound, and a menu that must be opened for each of
  * them is twenty extra clicks; a plain button with no menu means the one time you want
- * WAV instead of JS you have to go looking for a different control. The split solves
- * both: the wide half repeats, the narrow half chooses, and the current choice is
- * printed on the wide half so it never has to be remembered.
+ * the JavaScript instead of an MP3 you have to go looking for a different control. The
+ * split solves both: the wide half repeats, the narrow half chooses, and the current
+ * choice is printed on the wide half so it never has to be remembered.
  *
- * What the menu offers is argued out in `lib/download.ts`. Two of the six entries — MP3
- * and M4A — have to be *encoded*, which takes long enough to notice on a two-second
- * sound and long enough to click twice on a slow machine. So the button reports that it
- * is working and refuses a second press while it is: a download that silently produces
- * two files is a worse outcome than one that takes a moment.
+ * What the menu offers is argued out in `lib/download.ts` — including why the caller
+ * passes the list rather than the menu reading a global one, and why the choice outlives
+ * the tab. Two of the six entries — MP3 and M4A — have to be *encoded*, which takes long
+ * enough to notice on a two-second sound and long enough to click twice on a slow
+ * machine. So the button reports that it is working and refuses a second press while it
+ * is: a download that silently produces two files is a worse outcome than one that takes
+ * a moment.
  *
  * @packageDocumentation
  */
@@ -29,6 +31,8 @@ export interface FormatMenuProps {
   readonly disabled?: boolean;
   /** Extra class for the hue variants — the model view's copy is amber. */
   readonly className?: string;
+  /** What this menu offers; defaults to everything. The Model tab passes audio only. */
+  readonly formats?: readonly Format[];
 }
 
 export function FormatMenu({
@@ -37,13 +41,14 @@ export function FormatMenu({
   onDownload,
   disabled = false,
   className = '',
+  formats = FORMATS,
 }: FormatMenuProps): React.JSX.Element {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const host = useRef<HTMLDivElement | null>(null);
   const alive = useRef(true);
-  const format = formatById(formatId);
+  const format = formatById(formatId, formats);
 
   /* The assignment on the way *in* is the load-bearing half. Without it, React's
      development double-invoke (mount → cleanup → mount) leaves `alive` false for the rest
@@ -112,19 +117,22 @@ export function FormatMenu({
 
       {open ? (
         <div className="menu" role="menu">
-          {FORMATS.map((entry) => (
+          {formats.map((entry) => (
             <button
               type="button"
               key={entry.id}
               role="menuitem"
-              className={`menu-item${entry.id === formatId ? ' selected' : ''}`}
+              /* Against the *resolved* format, not the prop: a choice remembered from a
+                 menu that offers more than this one falls back, and the tick has to
+                 agree with what the wide half says it will download. */
+              className={`menu-item${entry.id === format.id ? ' selected' : ''}`}
               onClick={() => {
                 onFormat(entry.id);
                 setOpen(false);
               }}
             >
               {entry.label}
-              <span>{entry.id === formatId ? '✓' : ''}</span>
+              <span>{entry.id === format.id ? '✓' : ''}</span>
             </button>
           ))}
         </div>

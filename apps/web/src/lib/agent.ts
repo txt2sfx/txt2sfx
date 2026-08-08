@@ -25,6 +25,7 @@
  */
 
 import type { SoundAST } from '@txt2sfx/shared';
+import { parseWithDiagnostics } from '@txt2sfx/core';
 import { extractProfile } from '@txt2sfx/analyzer';
 import type { RenderFn, Target } from '@txt2sfx/optimizer';
 import {
@@ -37,6 +38,8 @@ import {
   type FetchLike,
   type LLMProvider,
 } from '@txt2sfx/agent';
+import { agentProvider, bridgeClient } from './bridge-client.js';
+import { bridge } from './bridge.js';
 import { render } from './engine.js';
 
 /**
@@ -237,6 +240,74 @@ ${recipe.soundline.trimEnd()}
   });
 }
 
+/* --- choosing one ------------------------------------------------------------- */
+
+/**
+ * The picker's state, reduced to what choosing a provider needs.
+ *
+ * Declared here rather than imported from `useGenerate.ts`, which owns the full
+ * `ProviderSettings`: that module imports this one, and a type flowing back the other
+ * way would be a cycle for the sake of three fields.
+ */
+export interface ProviderChoice {
+  readonly kind: ProviderKind;
+  readonly apiKey: string;
+  /** Empty means "whatever the provider's default is". */
+  readonly model: string;
+}
+
+/** What the mock provider needs to answer at all. */
+export interface DemoContext {
+  readonly prompt: string;
+  readonly recipes: readonly DemoRecipe[];
+}
+
+/**
+ * Build the provider the picker is pointing at.
+ *
+ * One place, because there are now two callers — the generate loop and the Model tab's
+ * captioning step — and the second one arrived at exactly the moment a duplicate of
+ * this `switch` would have started drifting.
+ */
+export function providerFor(choice: ProviderChoice, demo: DemoContext): LLMProvider {
+  switch (choice.kind) {
+    case 'mock':
+      return demoProvider(demo);
+    case 'agent':
+      return agentProvider(bridgeClient);
+    case 'bridge':
+      return bridge.provider();
+    default:
+      return keyedProvider(choice.kind, choice.apiKey, { model: choice.model.trim() });
+  }
+}
+
+/**
+ * A provider that can write an English caption, or null when none can.
+ *
+ * Two departures from {@link providerFor}, both because captioning is translation
+ * rather than sound design:
+ *
+ * - **The mock cannot do it.** It answers with the nearest local recipe, which is a
+ *   soundline, not a sentence about ice. So when a bridge is live the attached coding
+ *   agent is used instead — it already holds a language model, needs no key, and is on
+ *   this machine for the same reason the reference model is. Failing that, null: the
+ *   panel says so and leaves the field editable, which is better than a caption that
+ *   is secretly a recipe.
+ * - **A blank key is null, not an error.** The keyed providers throw on one, and
+ *   throwing here would turn "you have not pasted a key" into a failed render.
+ *
+ * @param attached Whether a coding agent is attached to the bridge right now — not
+ *   merely whether the daemon is up. A request parked on a bridge nobody is holding
+ *   waits for its timeout, and a caption is not worth that. Passed in rather than read,
+ *   so this stays a pure function — the same reason {@link providerOptions} takes `dev`.
+ */
+export function captionProviderFor(choice: ProviderChoice, attached: boolean): LLMProvider | null {
+  if (choice.kind === 'mock' || choice.kind === 'agent') return attached ? agentProvider(bridgeClient) : null;
+  if (choice.kind === 'bridge') return bridge.provider();
+  return choice.apiKey.trim() === '' ? null : keyedProvider(choice.kind, choice.apiKey, { model: choice.model.trim() });
+}
+
 /**
  * How a candidate becomes audio, for the loop and the optimizer.
  *
@@ -271,27 +342,56 @@ export function targetFromBuffer(buffer: AudioBuffer): Target {
   return { profile: extractProfile(signal), signal };
 }
 
-/** Kebab-case a prompt into something that can be a file name. */
-function slug(prompt: string): string {
-  const cleaned = prompt
+/**
+ * Kebab-case a phrase into something that can be a file name.
+ *
+ * Returns an empty string rather than a placeholder when nothing survives, because the
+ * caller has a better fallback than any placeholder this could invent.
+ */
+function slug(phrase: string): string {
+  return phrase
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .split('-')
     .slice(0, 4)
     .join('-');
-  return cleaned === '' ? 'sound' : cleaned;
 }
+
+/** Used when neither the recipe nor the request yields a single usable character. */
+const FALLBACK_NAME = 'sound';
 
 /**
  * A recipe name for a generated sound, never colliding with one already shown.
  *
+ * **The model names its own sound.** Every soundline header carries `sound "<name>"`,
+ * written by the model that decided what it was building, right next to the category it
+ * chose to be judged against — and the catalog used to throw that name away and file the
+ * recipe under a slug of the request instead. The fallback is worse than it looks: `slug`
+ * keeps ASCII, so a request in any non-Latin script collapsed to `sound`, `sound-2`,
+ * `sound-3`, and a session of Russian prompts produced a rail of numbered nothings. The
+ * prompt is still the fallback, for a reply whose header name is unusable.
+ *
+ * The header name is slugged rather than taken verbatim: `sound "ui click"` is legal and
+ * this name is also a file name under `examples/`. That is the convention the reference set
+ * already follows — `ui-click.soundline` holds `sound "ui click"`.
+ *
+ * With the **mock** provider the reply *is* an existing recipe, so its header name collides
+ * and comes back suffixed. That is the truth about what was returned, and more useful than
+ * a fresh name on a recipe that is already in the catalog.
+ *
  * Collisions get a numeric suffix instead of overwriting: two runs of "laser" are
  * two candidates to compare, and silently replacing the first would throw away the
  * comparison the user was in the middle of making.
+ *
+ * @param soundline The recipe as the model wrote it. Empty or unparseable falls back to
+ *   the prompt — a candidate that does not parse is never filed under a name anyway.
  */
-export function recipeName(prompt: string, taken: readonly string[]): string {
-  const base = slug(prompt);
+export function recipeName(soundline: string, prompt: string, taken: readonly string[]): string {
+  const ast = soundline.trim() === '' ? null : parseWithDiagnostics(soundline).ast;
+  const fromHeader = ast === null ? '' : slug(ast.name);
+  const fromPrompt = slug(prompt);
+  const base = fromHeader !== '' ? fromHeader : fromPrompt !== '' ? fromPrompt : FALLBACK_NAME;
   if (!taken.includes(base)) return base;
   for (let n = 2; n < 1000; n++) {
     const candidate = `${base}-${String(n)}`;

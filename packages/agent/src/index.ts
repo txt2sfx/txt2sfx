@@ -59,6 +59,9 @@ export type { RecipeSource, RetrievedRecipes } from './bank.js';
 export { parseKeywords, searchQuery } from './query.js';
 export type { SearchQueryOptions } from './query.js';
 
+export { CAPTION_LIMIT, audioCaption, captionIssue, parseCaption } from './caption.js';
+export type { AudioCaptionOptions, Caption, CaptionIssue } from './caption.js';
+
 export { extractSoundline, initialMessage, repairMessage, systemPrompt } from './prompts.js';
 export type { Failure, InitialMessageOptions, SystemPromptOptions } from './prompts.js';
 
