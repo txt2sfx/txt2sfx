@@ -110,6 +110,16 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   /* Про английские слова сказано честно: таблица ключевых слов читает только их. */
   'loop.hintNew': 'пресет задаёт палитру; английские слова в описании двигают темп, плотность и яркость',
   'loop.hintAdd': 'готовые дорожки не меняются — приходят одна-две новые, чтобы их послушать',
+  'loop.hintNewModel':
+    '{model} пишет партитуру — темп, тональность, партии и каждую ноту; пресет здесь только точка отсчёта',
+  'loop.hintAddModel': '{model} читает то, что уже звучит, и отвечает на него — готовые дорожки не меняются',
+  'loop.writing': 'пишу партитуру…',
+  'loop.writingLanes': 'пишу новые партии…',
+  'loop.byModel': 'сочинила {model} · заходов к модели: {attempts}',
+  'loop.bySeed': 'сочинил встроенный сеяный композитор',
+  'loop.fellBack': 'партитура модели не подошла ({reason}) — этот дубль сочинил встроенный композитор',
+  'loop.authorModel': 'сочинила модель',
+  'loop.authorSeed': 'сеяный композитор',
   'loop.presets': 'ПРЕСЕТЫ',
   'loop.meta': '{bars} тактов · петля {length} · дорожек: {lanes}',
   'loop.play': 'Играть петлю',
@@ -158,20 +168,11 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
 
   'prompt.placeholder': 'тяжёлая металлическая дверь захлопывается в коридоре',
   'prompt.describeAria': 'опишите звук',
-  'prompt.providerTitle': 'какая модель отвечает и по какому ключу',
-  'prompt.noAgentDot': 'агент не подключён',
-  'prompt.model': 'модель',
-  'prompt.modelId': 'id модели',
-  'prompt.modelIdAria': 'id модели',
-  'prompt.key': 'ключ',
-  'prompt.keyPlaceholder': 'ваш ключ {provider} — только в этой вкладке',
-  'prompt.keyAria': 'API-ключ {provider}',
-  'prompt.remember': 'запомнить ключ',
-  'prompt.rememberTitle':
-    'Шифруется неизвлекаемым ключом в IndexedDB, а не в localStorage. Любой скрипт на этом origin всё ещё сможет им воспользоваться: см. lib/keystore.ts.',
-  'prompt.forget': 'забыть',
-  'prompt.match': 'подгонять числа под референс',
-  'prompt.matchTitle': 'сначала загрузите референс во вкладке «Сравнить A / B»',
+  'prompt.viaAgent': 'через вашего агента',
+  'prompt.viaGemini': 'через Gemini',
+  'prompt.modelTitle': 'кто отвечает на этот запрос — нажмите, чтобы поменять',
+  'prompt.noModel': 'нет модели',
+  'prompt.noModelTitle': 'подключите кодового агента или вставьте ключ Gemini — нажмите, чтобы настроить',
   'prompt.stop': 'Стоп',
   'prompt.stopping': 'останавливаю…',
   'prompt.make': 'Создать звук',
@@ -180,15 +181,9 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'prompt.modelMissing': 'модель ещё не установлена — кнопка на вкладке «Модель»',
   'prompt.runsSearch': 'поищет запись этого звука на freesound.org',
   'prompt.searchMissing': 'сначала вставьте ключ freesound.org во вкладке «Поиск»',
-  'prompt.noteMock':
-    'отвечает рецептами из каталога — без сети и без ключа, при этом валидатор, рендер, оптимизатор и экспорт работают как обычно',
-  'prompt.noteAgentReady':
-    'запрос уходит вашему кодовому агенту через локальный мост — ключ не нужен, и ничего не покидает эту машину',
-  'prompt.noteAgentMissing':
-    'к мосту пока не подключён агент — откройте значок в шапке, там две команды',
-  'prompt.noteBridge': 'запрос ждёт window.txt2sfx.reply(id, text) в devtools — без сети',
-  'prompt.noteKey': 'ключ живёт только в этой вкладке и уходит только в {provider}',
-  'prompt.noteKeySource': ' · получить его можно на {url}',
+
+  'run.noModel':
+    'Отвечать пока некому. Подключите кодового агента к мосту или вставьте ключ Gemini — значок в шапке открывает и то и другое.',
 
   'run.accepted': 'принято',
   'run.notAccepted': 'не принято — {outcome}',
@@ -426,7 +421,25 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
 
   'dialog.bridgeAria': 'локальный мост для агента',
   'dialog.close': 'закрыть',
-  'dialog.bridgeTitle': 'Локальный мост для агента',
+  'dialog.bridgeTitle': 'Модель',
+  'dialog.answersAgent':
+    'Отвечает ваш кодовый агент ({client}) через локальный мост. Ключ не нужен, и ничего не покидает эту машину.',
+  'dialog.answersGemini':
+    'Отвечает Gemini по вашему ключу, модель {model}. Подключите ниже кодового агента — и отвечать будет он.',
+  'dialog.answersNobody':
+    'Отвечать на запросы пока некому. Подключите к мосту кодового агента — шаги ниже — или вставьте ключ Gemini.',
+  'dialog.keyTitle': 'Ключ Gemini, на случай когда агент не подключён',
+  'dialog.key': 'ключ',
+  'dialog.keyPlaceholder': 'ваш ключ Gemini — только в этой вкладке',
+  'dialog.modelId': 'id модели',
+  'dialog.remember': 'запомнить ключ',
+  'dialog.rememberTitle':
+    'Шифруется неизвлекаемым ключом в IndexedDB, а не в localStorage. Любой скрипт на этом origin всё ещё сможет им воспользоваться: см. lib/keystore.ts.',
+  'dialog.forget': 'забыть',
+  'dialog.keyNote': 'Ключ живёт только в этой вкладке и уходит только в Google · получить его можно на {source}',
+  'dialog.keyIdle': 'Сейчас он не используется: подключённый агент всегда важнее.',
+  'dialog.match': 'подгонять числа под референс',
+  'dialog.matchTitle': 'сначала загрузите референс во вкладке «Сравнить A / B»',
   'dialog.bridgeLedeLive':
     'Мост работает на вашей машине и позволяет кодовому агенту проектировать, рендерить, прослушивать и экспортировать звуки прямо здесь — без API-ключа, потому что модель у агента уже есть. Он же может отвечать на кнопку «Сгенерировать» в этой песочнице.',
   'dialog.bridgeLedeDead':

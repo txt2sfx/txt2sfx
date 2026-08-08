@@ -59,7 +59,7 @@ import { Gallery, type GalleryItem } from './screens/Gallery.js';
 import { Loop } from './screens/Loop.js';
 import { Share } from './screens/Share.js';
 import { Studio } from './screens/Studio.js';
-import { renderSignalFor, targetFromBuffer } from './lib/agent.js';
+import { chooseProvider, providerFor, renderSignalFor, targetFromBuffer } from './lib/agent.js';
 import { decodeAudioFile, metricsOf, signalOf, type Reference } from './lib/analysis.js';
 import { useAccount } from './lib/account.js';
 import { BankError, bankClient, DEFAULT_BANK_URL, type BankHealth } from './lib/bank.js';
@@ -77,7 +77,7 @@ import { loadSession, saveSession } from './lib/session.js';
 import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
 import { modelStatus, renderTarget } from './lib/stable-audio.js';
-import { DEFAULT_PROVIDER, useGenerate, type ProviderSettings } from './lib/useGenerate.js';
+import { DEFAULT_SETTINGS, useGenerate, type ProviderSettings } from './lib/useGenerate.js';
 import { useLoop } from './lib/useLoop.js';
 import { useSearch } from './lib/useSearch.js';
 
@@ -186,7 +186,7 @@ export function App(): React.JSX.Element {
      lie the two existing menus are kept apart to avoid. */
   const [loopFormatId, setLoopFormatId] = useState(() => loadFormat('loop'));
   const [status, setStatus] = useState<string | null>(null);
-  const [settings, setSettings] = useState<ProviderSettings>(DEFAULT_PROVIDER);
+  const [settings, setSettings] = useState<ProviderSettings>(DEFAULT_SETTINGS);
 
   /* --- comparison --------------------------------------------------------- */
 
@@ -200,6 +200,24 @@ export function App(): React.JSX.Element {
   const [layerBuffers, setLayerBuffers] = useState<readonly (AudioBuffer | null)[]>([]);
   const [modelAvailable, setModelAvailable] = useState(false);
   const [libraryLoaded, setLibraryLoaded] = useState(false);
+
+  /* --- who answers -------------------------------------------------------- */
+
+  /* Declared before the screens that read it, because *every* screen reads it: the
+     prompt row's label, the soundtrack composer, the captioning step and the dialog all
+     ask the same question, and the answer is derived rather than chosen. */
+  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(() => bridgeClient.current());
+
+  /**
+   * Who answers a prompt in this tab, decided in one place.
+   *
+   * The prompt row's label, the button's disabled state, the dialog's headline, the
+   * captioning step and NeurosLoop's composer all read this one value — the alternative
+   * is five copies of the same `if`, and the day they disagree the interface is lying
+   * about which model is about to be spent.
+   */
+  const agentReady = bridgeStatus.health?.agent.connected === true;
+  const model = chooseProvider(settings, agentReady);
 
   /* --- the library -------------------------------------------------------- */
 
@@ -215,17 +233,17 @@ export function App(): React.JSX.Element {
      buffer are minutes of composing and a few hundred offline renders, and losing them
      to a tab switch would make the screen unusable next to the other two. It shares the
      session seed, so a soundtrack and a sound effect auditioned in the same sitting are
-     drawn from the same noise. */
-  const loopState = useLoop({ seed });
+     drawn from the same noise.
+
+     The provider is handed in as a factory rather than as an object: the key can be
+     pasted while the screen is open, and a provider built at mount would carry the key
+     the tab started with — which was empty. */
+  const loopState = useLoop({ seed, model, provider: () => providerFor(settings, agentReady) });
 
   /* --- fitting ------------------------------------------------------------ */
 
   const [fitting, setFitting] = useState<string | null>(null);
   const [fitRunning, setFitRunning] = useState(false);
-
-  /* --- bridge ------------------------------------------------------------- */
-
-  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(() => bridgeClient.current());
 
   const playback = useRef<Playback | null>(null);
   const fitAbort = useRef<AbortController | null>(null);
@@ -689,14 +707,9 @@ export function App(): React.JSX.Element {
     [stop, touch],
   );
 
-  const demoRecipes = useMemo(
-    () => entries.map((entry) => ({ name: entry.name, soundline: entry.source })),
-    [entries],
-  );
   const takenNames = useMemo(() => entries.map((entry) => entry.name), [entries]);
 
   const generation = useGenerate({
-    recipes: demoRecipes,
     bank: bankHealth === null ? null : bank.recipes,
     seed,
     reference: b,
@@ -704,15 +717,30 @@ export function App(): React.JSX.Element {
     onGenerated,
   });
 
+  /* A key remembered on a previous visit, put back in the field. Never overwrites a key
+     already typed — what is in the box is the user's most recent intent, and what is in
+     the store is history. Once, at mount: the keystore is the only source and it does not
+     change behind the tab's back. */
+  useEffect(() => {
+    let cancelled = false;
+    void generation.loadKey().then((secret) => {
+      if (cancelled || secret === null) return;
+      setSettings((current) => (current.apiKey === '' ? { ...current, apiKey: secret, remember: true } : current));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /** From the gallery: put the prompt in the studio and start immediately. */
   const generateFromGallery = useCallback(
     (text: string) => {
       setPrompt(text);
       setScreen('studio');
       setView('sound');
-      generation.start(text, settings);
+      generation.start(text, settings, { attached: agentReady });
     },
-    [generation, settings],
+    [agentReady, generation, settings],
   );
 
   /* --- persistence -------------------------------------------------------- */
@@ -1081,10 +1109,13 @@ export function App(): React.JSX.Element {
       system: () => bridge.system(),
       reply: (id: number, text: string) => bridge.reply(id, text),
       fail: (id: number, message: string) => bridge.fail(id, message),
+      /* The one caller of the provider override: the request is parked on this object
+         for whoever is holding devtools, which is a debugging instrument and therefore
+         reachable from nowhere in the interface. */
       run: (nextPrompt: string) => {
         setPrompt(nextPrompt);
         setScreen('studio');
-        generation.start(nextPrompt, { ...settings, kind: 'bridge' });
+        generation.start(nextPrompt, settings, { attached: false, provider: bridge.provider() });
       },
       recipe: () => live.current.source,
       setRecipe: (text: string) => actions.current.setSource(text),
@@ -1245,9 +1276,10 @@ export function App(): React.JSX.Element {
           prompt={prompt}
           onPromptChange={setPrompt}
           settings={settings}
-          onSettingsChange={setSettings}
+          model={model}
+          onOpenSettings={() => setBridgeOpen(true)}
           generation={generation}
-          agentReady={bridgeStatus.health?.agent.connected === true}
+          agentReady={agentReady}
           search={search}
           onUseSound={useSound}
           onStatus={setStatus}
@@ -1343,6 +1375,12 @@ export function App(): React.JSX.Element {
           onClose={() => setBridgeOpen(false)}
           onRecheck={() => bridgeClient.recheck()}
           onUrlChange={(url) => bridgeClient.retarget(url)}
+          settings={settings}
+          onSettingsChange={setSettings}
+          model={model}
+          keyStored={generation.storedKeys.length > 0}
+          onForgetKey={generation.forgetKey}
+          hasReference={b !== null}
         />
       ) : null}
 

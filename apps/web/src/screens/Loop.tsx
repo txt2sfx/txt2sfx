@@ -176,6 +176,7 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                 onChange={(event) => state.setPrompt(event.target.value)}
               />
               <button type="submit" className="hue-button" disabled={busy}>
+                {busy ? <span className="spinner" aria-hidden="true" /> : null}
                 {busy
                   ? t(state.composing?.verb === 'extend' ? 'loop.adding' : 'loop.composing')
                   : t(state.mode === 'new' ? 'loop.compose' : 'loop.add')}
@@ -200,7 +201,15 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                 {t('loop.modeAdd')}
               </button>
             </div>
-            <span className="hint">{t(state.mode === 'new' ? 'loop.hintNew' : 'loop.hintAdd')}</span>
+            {/* The hint is different in kind, not in wording, depending on who composes:
+                with a model the prompt is read as a brief, and with none it moves three
+                knobs through an English keyword table. Promising the first while doing
+                the second is the one thing this line must never do. */}
+            <span className="hint">
+              {state.model === null
+                ? t(state.mode === 'new' ? 'loop.hintNew' : 'loop.hintAdd')
+                : t(state.mode === 'new' ? 'loop.hintNewModel' : 'loop.hintAddModel', { model: state.model })}
+            </span>
           </div>
 
           <div className="presets">
@@ -234,6 +243,8 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                     length: ms(loopSeconds(track) * 1000),
                     lanes: track.lanes.length,
                   })}
+                  {' · '}
+                  {t(track.composedBy === 'model' ? 'loop.authorModel' : 'loop.authorSeed')}
                 </span>
               </div>
               <p className="loop-prompt">“{track.prompt}”</p>
@@ -279,15 +290,32 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                     className="dot dot-breathing"
                     style={{ color: `oklch(0.8 0.12 ${String(state.composing.hue)})` }}
                   />
+                  {/* The model's own sentence about the part it wrote, when it wrote one.
+                      It costs nothing — the caption arrived inside the score — and these
+                      are the seconds in which the user finds out whether the thing being
+                      built is the thing they asked for. The fixed table stays for the
+                      seeded composer, which has nothing to say about its own lanes. */}
                   <span className="mono">
-                    {t(LANE_MESSAGE[state.composing.lane] ?? 'loop.msg.generic', { lane: state.composing.lane })}
+                    {state.composing.writing
+                      ? t(state.composing.verb === 'compose' ? 'loop.writing' : 'loop.writingLanes')
+                      : (state.composing.caption ??
+                        t(LANE_MESSAGE[state.composing.lane] ?? 'loop.msg.generic', {
+                          lane: state.composing.lane,
+                        }))}
                   </span>
                   <div className="spacer" />
-                  <span className="mono faint">
-                    {t('loop.progress', { done: state.composing.done, total: state.composing.total })}
-                  </span>
+                  {state.composing.writing ? null : (
+                    <span className="mono faint">
+                      {t('loop.progress', { done: state.composing.done, total: state.composing.total })}
+                    </span>
+                  )}
                 </div>
               )}
+
+              {/* Who composed this, and why it was not the model when it was not. A
+                  soundtrack that quietly came from the PRNG after a model was asked for
+                  would put every later one under suspicion. */}
+              {state.note === null ? null : <p className="loop-facts faint">{state.note}</p>}
 
               {/* The three facts about the mixdown that a listener cannot derive: how many
                   distinct recipes it is made of, how many times they fire, and whether the

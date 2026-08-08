@@ -186,19 +186,24 @@ topology, which is the last thing a cancelled run should pay for.
 
 ## In the playground
 
-The prompt bar is this loop with a form in front of it (`apps/web/src/lib/agent.ts`,
-`components/PromptBar.tsx`). What the browser adds is small and specific:
+The prompt row is this loop with a form in front of it (`apps/web/src/lib/agent.ts`,
+`components/PromptRow.tsx`). What the browser adds is small and specific:
 
-- **The key is React state**, passed to the provider factory when Generate is pressed and
-  held nowhere else — no `localStorage`, no module-level cache. Closing the tab forgets it.
-- **Anthropic needs `anthropic-dangerous-direct-browser-access: true`** or the API refuses
-  a request from a page, and the failure arrives as an opaque CORS error with no body to
-  explain it. That header is a browser fact rather than a provider fact, so it is added by
-  the `fetch` the app injects instead of being baked into a package that also runs in Node.
-- **The mock answers from the recipes on the page**, ranked against the prompt, handing back
-  the next-best candidate on each call so the repair path is exercised rather than stubbed.
-  When the candidates run out it says so in one sentence — which this loop reads as a
-  refusal and reports verbatim, and which is the correct end to a scripted conversation.
+- **Nobody picks a provider.** `chooseProvider` decides: an attached coding agent if there
+  is one — it holds a model already and needs no key — otherwise the user's Gemini key,
+  otherwise nothing, said before the button is pressed rather than after. One pure
+  function, read by the button, the label beside it, the dialog, the captioning step and
+  NeurosLoop's composer, so none of them can claim a different model than the one called.
+  The playground offers no other vendor: a choice between five ways to answer the same
+  question was work the user had no way to do well.
+- **The key is React state**, passed to the provider factory when a run starts and held
+  nowhere else — no `localStorage`, no module-level cache. Closing the tab forgets it,
+  unless **remember** was ticked, which encrypts it into IndexedDB under a non-extractable
+  key (`lib/keystore.ts`).
+- **The devtools provider is reachable from nowhere in the interface.** It is passed to
+  the run as an explicit override by `window.txt2sfx.run`, which exists only under
+  `vite dev` — an escape hatch nobody can click has no business in a table the interface
+  reads.
 - **The optimizer runs smaller than in the benchmark** (16 × 44 rather than 24 × 60): every
   generation is a population's worth of offline renders on the UI thread, and a search that
   takes a minute reads as a hang. When a result is close but not close enough, the Slots
@@ -244,9 +249,11 @@ that did.
 
 ## Being the model yourself
 
-Under `vite dev` the picker offers a fourth provider, **bridge**, whose model is whoever is
-holding the debugger, and the page installs `window.txt2sfx` (`apps/web/src/lib/bridge.ts`).
-The request is parked, you answer it by hand, and everything downstream runs unchanged.
+Under `vite dev` the page installs `window.txt2sfx` (`apps/web/src/lib/bridge.ts`), whose
+model is whoever is holding the debugger. `txt2sfx.run` hands that provider to the run
+directly rather than selecting it — it is a debugging instrument and has no entry anywhere
+in the interface. The request is parked, you answer it by hand, and everything downstream
+runs unchanged.
 
 ```js
 await txt2sfx.loadReference('/@fs/C:/repo/.refs/splash.wav')  // or use the file picker

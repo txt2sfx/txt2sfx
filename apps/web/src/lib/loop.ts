@@ -14,21 +14,25 @@
  * So this module owns exactly two things a sound effect does not need: **when** a voice
  * fires, and **at what pitch**. Everything downstream is existing machinery.
  *
- * ## The composer is a function, not a model
+ * ## The composer here is a function; the model is in `lib/score.ts`
  *
- * Pressing Compose does not call a language model, and the interface never claims it
- * does. What it does is deterministic: the preset names the palette (tempo, key, bars,
- * which lanes exist), {@link knobsFor} reads a handful of keywords out of the prompt,
- * and everything else falls out of one seeded PRNG per lane. Same preset plus same
- * prompt plus same salt gives the same arrangement, byte for byte, forever.
+ * This file used to open by arguing that a model has no business composing, because a
+ * melody cannot be validated the way a soundline can — there is no "physics of a chord
+ * progression" for a validator to check. That reasoning was half right, and the half
+ * that was wrong is now `lib/score.ts`: a *score* has plenty of checkable physics short
+ * of taste, and when a model is connected it writes one and the rules in that file judge
+ * it. Everything below the note events is unchanged and unaware of who wrote them.
  *
- * That is a deliberate trade and it is worth stating plainly. A model would write better
- * melodies. But this screen would then need a key, a network round trip and a repair
- * loop for a result that cannot be validated the way a soundline can — there is no
- * "physics of a chord progression" for a validator to check. A seeded composer is honest
- * about being a generator of *plausible* arrangements, is instant, is free, works
- * offline, and — the part that actually matters — produces the note events that the
- * MIDI and JavaScript exports need. Someone who wants a better melody has the MIDI.
+ * What survives here is the **fallback, and it is not a consolation prize**. With no
+ * model connected the screen is exactly what it always was: the preset names the palette
+ * (tempo, key, bars, which lanes exist), {@link knobsFor} reads a handful of keywords out
+ * of the prompt, and everything else falls out of one seeded PRNG per lane. Same preset
+ * plus same prompt plus same salt gives the same arrangement, byte for byte, forever —
+ * which is why the three tracks a first visit opens on cost nothing and why a tab with no
+ * key still has a working soundtrack screen rather than a dead button asking for one.
+ *
+ * The interface says which of the two it got. A user who asked for a model composition
+ * and quietly received a PRNG one would have every later composition under suspicion.
  *
  * ## Velocity lives in the recipe
  *
@@ -410,6 +414,23 @@ export interface LoopLane {
   readonly proposed?: boolean;
   /** What produced it — kept so ↻ can recompose exactly this lane. */
   readonly salt: string;
+  /**
+   * The model's own one-line description of this part.
+   *
+   * Shown while the lane's audio is being built, in place of the fixed sentence in
+   * `LANE_MESSAGE`. It costs nothing — the caption is already in the score — and it is
+   * the one moment where the screen can answer "is this what I asked for" before the
+   * first note exists. Absent on a seeded lane, which is why the table stays.
+   */
+  readonly caption?: string;
+  /**
+   * The `lane` block that produced it, verbatim.
+   *
+   * Kept for two reasons and neither is display: it is what the next request shows the
+   * model so an added lane answers what is already playing, and it is what a reload
+   * restores from. See `lib/score.ts`.
+   */
+  readonly score?: string;
 }
 
 /** A soundtrack. */
@@ -421,6 +442,8 @@ export interface LoopTrack {
   readonly bars: number;
   readonly key: string;
   readonly prompt: string;
+  /** Who wrote the notes. The screen says so, rather than letting the user assume. */
+  readonly composedBy: 'model' | 'seed';
   readonly lanes: readonly LoopLane[];
 }
 
@@ -665,6 +688,7 @@ export function composeTrack(id: string, preset: LoopPreset, prompt: string, nam
     bars: preset.bars,
     key: preset.key,
     prompt,
+    composedBy: 'seed' as const,
   };
   const wanted = preset.lanes.filter((lane) => !knobs.without.includes(lane));
   /* Refuse to compose nothing. "no drums" on a drums-only preset is a mistake worth

@@ -12,8 +12,14 @@
       The two typefaces the design is drawn in. Both are optional: the stacks in
       `styles.css` fall back to system faces, so the playground is fully usable with
       no network — which matters, because "nothing is proxied through a service" is a
-      claim this project makes about itself and a font request is the one place it
-      would otherwise reach out. Delete these three lines to make that absolute.
+      claim this project makes about itself and a font request is the one place this
+      file reaches out. Delete these three lines to make that absolute.
+
+      One request can be added from outside this file: a build run with
+      `YANDEX_METRIKA_ID` set injects a Yandex.Metrika counter, which is how the
+      published site counts visitors. Unset — locally, in a fork, in CI's checks —
+      nothing is injected and the built page is exactly this one. What ships, and the
+      line of the stock snippet it does not use, is in `plugins/metrika.ts`.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

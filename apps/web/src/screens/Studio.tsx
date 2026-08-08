@@ -45,7 +45,7 @@ import { SlotsCard } from '../components/SlotsCard.js';
 import { SearchPanel } from '../components/SearchPanel.js';
 import { SoundPanel } from '../components/SoundPanel.js';
 import { SoundlineCard } from '../components/SoundlineCard.js';
-import { captionProviderFor } from '../lib/agent.js';
+import { captionProviderFor, type ProviderKind } from '../lib/agent.js';
 import { catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
@@ -91,7 +91,10 @@ export interface StudioProps {
   readonly prompt: string;
   readonly onPromptChange: (prompt: string) => void;
   readonly settings: ProviderSettings;
-  readonly onSettingsChange: (settings: ProviderSettings) => void;
+  /** Who answers, derived once in `App` so nothing on this screen can decide otherwise. */
+  readonly model: ProviderKind | null;
+  /** Opens the model dialog; the row and the header badge open the same one. */
+  readonly onOpenSettings: () => void;
   readonly generation: Generation;
   readonly agentReady: boolean;
 
@@ -170,9 +173,8 @@ export function Studio(props: StudioProps): React.JSX.Element {
    * Who writes the search query and reorders the answer.
    *
    * The same choice, and therefore the same function: both stages are *about words in
-   * English* rather than about sound design, which is exactly the set `captionProviderFor`
-   * describes — the mock answers with a recipe, so it is no more able to write keywords
-   * than a caption. Null is not a failure here: a search with no model runs on the prompt
+   * English* rather than about sound design, and there is only one model in this tab to
+   * ask either of. Null is not a failure here: a search with no model runs on the prompt
    * as typed and on the library's own relevance, which is a working search.
    */
   const searchProvider = useMemo(
@@ -202,13 +204,8 @@ export function Studio(props: StudioProps): React.JSX.Element {
           <PromptRow
             prompt={props.prompt}
             onPromptChange={props.onPromptChange}
-            settings={props.settings}
-            onSettingsChange={props.onSettingsChange}
-            storedKeys={props.generation.storedKeys}
-            onForgetKey={props.generation.forgetKey}
-            onLoadKey={props.generation.loadKey}
-            hasReference={props.b !== null}
-            agentReady={props.agentReady}
+            model={props.model}
+            onOpenSettings={props.onOpenSettings}
             running={running}
             /* The model's abort is immediate — it kills a subprocess — so there is no
                "stopping…" state to report for it. */
@@ -219,7 +216,7 @@ export function Studio(props: StudioProps): React.JSX.Element {
             onRun={() => {
               if (toModel) modelControls.current?.run();
               else if (toSearch) props.search.start(props.prompt.trim(), searchProvider);
-              else props.generation.start(props.prompt.trim(), props.settings);
+              else props.generation.start(props.prompt.trim(), props.settings, { attached: props.agentReady });
             }}
             onStop={() => {
               if (toModel) modelControls.current?.stop();

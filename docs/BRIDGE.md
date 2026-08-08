@@ -64,13 +64,20 @@ the reason is that *the agent is the model*. There is no key, no provider, no se
 LLM in the loop: a coding agent already holds a language model, and what it lacked was
 the validator, the renderer and the ear. It gets all three and pays for none.
 
-**Playground → agent.** The provider picker in the playground has an `agent` entry. Choose
-it, press Generate, and the request — the full contract as the system prompt, the
-conversation so far, the few-shot examples — is parked in the daemon. The agent picks it
-up with `sfx_next_request` and answers with `sfx_answer`. Everything downstream is
-untouched: extraction, validator, render, optimizer, the repair message on failure. It is
-the same `Bridge` provider that used to be answered by hand in devtools, answered over a
-socket instead.
+**Playground → agent.** Nothing has to be chosen: an attached agent *is* the playground's
+model, and pressing Make sound parks the request — the full contract as the system prompt,
+the conversation so far, the few-shot examples — in the daemon. The agent picks it up with
+`sfx_next_request` and answers with `sfx_answer`. Everything downstream is untouched:
+extraction, validator, render, optimizer, the repair message on failure. It is the same
+`Bridge` provider that used to be answered by hand in devtools, answered over a socket
+instead. A pasted Gemini key is the fallback for a tab with no agent, and goes idle the
+moment one attaches.
+
+The **NeurosLoop** screen uses the same connection for a different grammar: the agent
+writes a *score* — tempo, key, lanes and every note — which a deterministic checker judges
+before a note reaches the renderer (`apps/web/src/lib/score.ts`). Same repair loop, same
+"the model is asked again only when a check failed" rule, and the same fallback story: no
+agent, no key, and the seeded composer writes it instead.
 
 Where the MCP client advertises the `sampling` capability, direction B needs no polling:
 the daemon fulfils the request with `sampling/createMessage` and the human sees the recipe

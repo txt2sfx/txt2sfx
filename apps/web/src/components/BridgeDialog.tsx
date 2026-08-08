@@ -1,5 +1,25 @@
 /**
- * What the bridge badge opens: a diagnosis, then the fix.
+ * What the bridge badge opens: who answers, why not, and how to fix it.
+ *
+ * ## Why every model setting is in here
+ *
+ * Because they are all answers to one question — *who holds a language model for this
+ * tab* — and they used to be answered in two places. The prompt row carried a picker, a
+ * key field and a model id; this dialog carried the agent that made the picker's `agent`
+ * entry work. Someone whose agent was not attached had to notice a small amber dot in the
+ * row, open a dialog reached from the *header*, fix the daemon, and come back. Two
+ * surfaces, one subject, and the connection between them was a coloured dot.
+ *
+ * So the row now states the outcome and nothing else, and everything that *decides* that
+ * outcome is here: the agent checks, the Gemini key that takes over when there is no
+ * agent, and the model id. The headline says which of the two will answer the next press,
+ * computed by the same `chooseProvider` the button reads — there is no second copy of the
+ * rule that could disagree with the first.
+ *
+ * `Fit to reference` is here too, which is the one thing in this dialog that is not about
+ * *who* answers. It rides along because it is the other per-run setting that is set once
+ * and then left alone for an hour, and because the alternative was keeping a popover in
+ * the prompt row alive for a single checkbox.
  *
  * ## Why this is a checklist and not a paragraph
  *
@@ -50,15 +70,30 @@
 
 import { useState } from 'react';
 import { bridgeOnboardingPrompt } from '@txt2sfx/agent';
+import { GEMINI_DEFAULT_MODEL, GEMINI_KEY_SOURCE, type ProviderKind } from '../lib/agent.js';
 import { copy } from '../lib/download.js';
+import { canRemember } from '../lib/keystore.js';
 import { t, useI18n, type Key } from '../lib/i18n.js';
 import type { BridgeStatus } from '../lib/bridge-client.js';
+import type { ProviderSettings } from '../lib/useGenerate.js';
 
 export interface BridgeDialogProps {
   readonly status: BridgeStatus;
   readonly onClose: () => void;
   readonly onRecheck: () => Promise<unknown>;
   readonly onUrlChange: (url: string) => void;
+
+  /* --- the model settings, which is all of them --- */
+
+  readonly settings: ProviderSettings;
+  readonly onSettingsChange: (settings: ProviderSettings) => void;
+  /** Who answers right now, as `chooseProvider` decided. `null` means nobody can. */
+  readonly model: ProviderKind | null;
+  /** True when a key is remembered on this machine, so the checkbox reflects reality. */
+  readonly keyStored: boolean;
+  readonly onForgetKey: () => void;
+  /** Whether there is a B side to fit against; without one the toggle means nothing. */
+  readonly hasReference: boolean;
 }
 
 /** How one client is told about the bridge. */
@@ -190,7 +225,18 @@ function CodeBlock({
   );
 }
 
-export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: BridgeDialogProps): React.JSX.Element {
+export function BridgeDialog({
+  status,
+  onClose,
+  onRecheck,
+  onUrlChange,
+  settings,
+  onSettingsChange,
+  model,
+  keyStored,
+  onForgetKey,
+  hasReference,
+}: BridgeDialogProps): React.JSX.Element {
   /* Subscribed for the re-render only. The strings come from the module-level `t`, which
      is also what `clientRecipes` above has to use — it is not a component and cannot hold
      a hook, and having one half of this dialog read a different translator than the other
@@ -279,12 +325,97 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
         aria-label={t('dialog.bridgeAria')}
       >
         <div className="dialog-head">
-          <span className={`dot ${live ? 'dot-ok' : 'dot-bad'}`} />
+          <span className={`dot ${model === null ? 'dot-bad' : 'dot-ok'}`} />
           <h3>{t('dialog.bridgeTitle')}</h3>
           <div className="spacer" />
           <button type="button" className="icon" onClick={onClose} aria-label={t('dialog.close')}>
             ✕
           </button>
+        </div>
+
+        {/* The outcome first, in one sentence, because it is the only thing most people
+            open this for: the run they are about to start either has a model or it does
+            not. Everything below is why, and what to do about it. */}
+        <p className="dialog-lede">
+          {t(
+            model === 'agent'
+              ? 'dialog.answersAgent'
+              : model === 'gemini'
+                ? 'dialog.answersGemini'
+                : 'dialog.answersNobody',
+            { client: agent?.client ?? t('dialog.mcpClient'), model: settings.model.trim() || GEMINI_DEFAULT_MODEL },
+          )}
+        </p>
+
+        <div className="dialog-section">
+          <div className="step-title">{t('dialog.keyTitle')}</div>
+          <div className="model-fields">
+            <label className="field wide">
+              {t('dialog.key')}
+              <input
+                type="password"
+                name="api-key"
+                /* `off` is advisory and Chrome ignores it on password fields: it offered a
+                   saved website password for this box. `new-password` is the hint browsers
+                   honour, and an API key is closer to a new secret than to a stored login. */
+                autoComplete="new-password"
+                spellCheck={false}
+                placeholder={t('dialog.keyPlaceholder')}
+                value={settings.apiKey}
+                onChange={(event) => onSettingsChange({ ...settings, apiKey: event.target.value })}
+              />
+            </label>
+            <label className="field wide">
+              {t('dialog.modelId')}
+              <input
+                type="text"
+                name="model-id"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={GEMINI_DEFAULT_MODEL}
+                value={settings.model}
+                onChange={(event) => onSettingsChange({ ...settings, model: event.target.value })}
+              />
+            </label>
+          </div>
+          {canRemember ? (
+            <label className="toggle" title={t('dialog.rememberTitle')}>
+              <input
+                type="checkbox"
+                name="remember-key"
+                checked={settings.remember}
+                onChange={(event) => onSettingsChange({ ...settings, remember: event.target.checked })}
+              />
+              {t('dialog.remember')}
+              {keyStored ? (
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    onForgetKey();
+                    onSettingsChange({ ...settings, apiKey: '', remember: false });
+                  }}
+                >
+                  {t('dialog.forget')}
+                </button>
+              ) : null}
+            </label>
+          ) : null}
+          <p className="step-note">
+            {t('dialog.keyNote', { source: GEMINI_KEY_SOURCE })}
+            {model === 'agent' ? ` ${t('dialog.keyIdle')}` : ''}
+          </p>
+
+          <label className="toggle" title={hasReference ? '' : t('dialog.matchTitle')}>
+            <input
+              type="checkbox"
+              name="match-reference"
+              checked={settings.matchReference && hasReference}
+              disabled={!hasReference}
+              onChange={(event) => onSettingsChange({ ...settings, matchReference: event.target.checked })}
+            />
+            {t('dialog.match')}
+          </label>
         </div>
 
         <p className="dialog-lede">

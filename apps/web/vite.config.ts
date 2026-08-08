@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { examplesFs } from './plugins/examples-fs.js';
+import { metrika } from './plugins/metrika.js';
 import { stableAudio } from './plugins/stable-audio.js';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -27,13 +28,31 @@ const configured = process.env['PAGES_BASE_PATH']?.trim() ?? '';
 const base = configured === '' ? '/' : `/${configured.replace(/^\/+|\/+$/g, '')}/`;
 
 /**
+ * Audience measurement on the published site, and nowhere else.
+ *
+ * Same shape as `PAGES_BASE_PATH` above and for the same reason: a property of one
+ * deployment does not belong in files every fork and every `pnpm dev` inherits. Unset
+ * — which is the state locally, in CI's `verify` job and in any fork — the build is
+ * byte-for-byte the one that has no counter in it. `plugins/metrika.ts` explains what
+ * is injected, and the one line of the stock snippet it does not use.
+ *
+ * Not a secret: the id is readable in the page source of any site that runs a counter.
+ */
+const metrikaId = process.env['YANDEX_METRIKA_ID'];
+
+/**
  * The playground runs off TypeScript sources, not `dist/` — same choice as
  * `vitest.config.ts`, and for the same reason: editing a primitive and hearing
  * the result should not require a build step in between.
  */
 export default defineConfig({
   base,
-  plugins: [react(), examplesFs(r('../../examples')), stableAudio(r('../../test/stable-audio'))],
+  plugins: [
+    react(),
+    examplesFs(r('../../examples')),
+    stableAudio(r('../../test/stable-audio')),
+    metrika(metrikaId),
+  ],
   resolve: {
     alias: {
       '@txt2sfx/shared': r('../../packages/shared/src/index.ts'),

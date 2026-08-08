@@ -70,32 +70,9 @@ export const de: Partial<Readonly<Record<Key, string>>> = {
 
   'prompt.placeholder': 'eine schwere Metalltür knallt in einem Gang zu',
   'prompt.describeAria': 'den Sound beschreiben',
-  'prompt.providerTitle': 'welches Modell antwortet und mit welchem Schlüssel',
-  'prompt.noAgentDot': 'kein Agent verbunden',
-  'prompt.model': 'Modell',
-  'prompt.modelId': 'Modell-ID',
-  'prompt.modelIdAria': 'Modell-ID',
-  'prompt.key': 'Schlüssel',
-  'prompt.keyPlaceholder': 'dein {provider}-Schlüssel — nur in diesem Tab',
-  'prompt.keyAria': '{provider}-API-Schlüssel',
-  'prompt.remember': 'Schlüssel merken',
-  'prompt.rememberTitle':
-    'Verschlüsselt mit einem nicht extrahierbaren Schlüssel in IndexedDB — nicht in localStorage. Jedes Skript auf diesem Origin könnte ihn trotzdem benutzen: siehe lib/keystore.ts.',
-  'prompt.forget': 'vergessen',
-  'prompt.match': 'Zahlen an die Referenz anpassen',
-  'prompt.matchTitle': 'lade zuerst eine Referenz unter „A / B vergleichen“',
   'prompt.stop': 'Stopp',
   'prompt.stopping': 'stoppe…',
   'prompt.make': 'Sound erzeugen',
-  'prompt.noteMock':
-    'antwortet aus den Rezepten im Katalog — kein Netz, kein Schlüssel, und Validator, Render, Optimierer und Export laufen trotzdem',
-  'prompt.noteAgentReady':
-    'die Anfrage geht über die lokale Bridge an deinen Coding-Agenten — kein Schlüssel, und nichts verlässt diesen Rechner',
-  'prompt.noteAgentMissing':
-    'an der Bridge hängt noch kein Agent — öffne das Abzeichen im Kopfbereich, dort stehen die zwei Befehle',
-  'prompt.noteBridge': 'die Anfrage wartet auf window.txt2sfx.reply(id, text) in den Devtools — kein Netz',
-  'prompt.noteKey': 'der Schlüssel bleibt in diesem Tab und geht nirgendwo hin außer zu {provider}',
-  'prompt.noteKeySource': ' · zu bekommen unter {url}',
 
   'run.accepted': 'angenommen',
   'run.notAccepted': 'nicht angenommen — {outcome}',

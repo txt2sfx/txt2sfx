@@ -142,6 +142,17 @@ export const en = {
   'loop.describeAria': 'describe the soundtrack',
   'loop.hintNew': 'the preset names the palette; the words steer tempo, density and brightness',
   'loop.hintAdd': 'existing lanes stay frozen — one or two new ones arrive to audition',
+  /* With a model the prompt is a brief, not three keywords. Saying so is the difference
+     between "why did it ignore my words" and knowing what the words can do. */
+  'loop.hintNewModel': '{model} writes the score — tempo, key, parts and every note; the preset is only a starting point',
+  'loop.hintAddModel': '{model} reads what is already playing and answers it — existing lanes stay frozen',
+  'loop.writing': 'writing the score…',
+  'loop.writingLanes': 'writing the new parts…',
+  'loop.byModel': 'composed by {model} · {attempts} trip(s) through the model',
+  'loop.bySeed': 'composed by the built-in seeded composer',
+  'loop.fellBack': 'the model’s score was not usable ({reason}) — this take is the seeded composer’s',
+  'loop.authorModel': 'model-composed',
+  'loop.authorSeed': 'seeded',
   'loop.presets': 'PRESETS',
   'loop.meta': '{bars} bars · {length} loop · {lanes} lanes',
   'loop.play': 'Play loop',
@@ -192,24 +203,16 @@ export const en = {
   'studio.edited': ' · edited {when}',
   'studio.unsaved': ' · unsaved',
 
-  /* --- the prompt row and the provider popover ---------------------------- */
+  /* --- the prompt row ----------------------------------------------------- */
 
   'prompt.placeholder': 'a heavy metal door slamming shut in a corridor',
   'prompt.describeAria': 'describe the sound',
-  'prompt.providerTitle': 'which model answers, and with which key',
-  'prompt.noAgentDot': 'no agent attached',
-  'prompt.model': 'model',
-  'prompt.modelId': 'model id',
-  'prompt.modelIdAria': 'model id',
-  'prompt.key': 'key',
-  'prompt.keyPlaceholder': 'your {provider} key — this tab only',
-  'prompt.keyAria': '{provider} API key',
-  'prompt.remember': 'remember this key',
-  'prompt.rememberTitle':
-    'Encrypted with a non-extractable key in IndexedDB — not localStorage. Any script on this origin could still use it: see lib/keystore.ts.',
-  'prompt.forget': 'forget',
-  'prompt.match': 'fit the numbers to the reference',
-  'prompt.matchTitle': 'load a reference in Compare A / B first',
+  /* Not a picker — one word naming who answers, and a door to the one place it is set. */
+  'prompt.viaAgent': 'via your agent',
+  'prompt.viaGemini': 'via Gemini',
+  'prompt.modelTitle': 'who answers this prompt — click to change it',
+  'prompt.noModel': 'no model',
+  'prompt.noModelTitle': 'attach a coding agent or paste a Gemini key — click to set it up',
   'prompt.stop': 'Stop',
   'prompt.stopping': 'stopping…',
   'prompt.make': 'Make sound',
@@ -220,17 +223,11 @@ export const en = {
   'prompt.modelMissing': 'the model is not installed yet — the Model tab has the button',
   'prompt.runsSearch': 'searches freesound.org for a recording of this',
   'prompt.searchMissing': 'paste a freesound.org API key in the Search tab first',
-  'prompt.noteMock':
-    'answers from the recipes in the catalog — no network, no key, and the validator, render, optimizer and export all still run',
-  'prompt.noteAgentReady':
-    'the request goes to your coding agent over the local bridge — no key, and nothing leaves this machine',
-  'prompt.noteAgentMissing':
-    'no agent is attached to the bridge yet — open the badge in the header for the two commands',
-  'prompt.noteBridge': 'the request waits for window.txt2sfx.reply(id, text) in devtools — no network',
-  'prompt.noteKey': 'the key lives in this tab only and goes nowhere but {provider}',
-  'prompt.noteKeySource': ' · get one at {url}',
 
   /* --- the run strip ------------------------------------------------------ */
+
+  'run.noModel':
+    'Nothing here can answer that yet. Attach a coding agent to the bridge, or paste a Gemini key — the badge in the header opens both.',
 
   'run.accepted': 'accepted',
   'run.notAccepted': 'not accepted — {outcome}',
@@ -487,11 +484,28 @@ export const en = {
   'share.savedPng': 'saved {file}',
   'share.moreLines': '… {count} more line(s)',
 
-  /* --- the bridge dialog -------------------------------------------------- */
+  /* --- the model dialog --------------------------------------------------- */
 
-  'dialog.bridgeAria': 'local agent bridge',
+  'dialog.bridgeAria': 'model and local agent bridge',
   'dialog.close': 'close',
-  'dialog.bridgeTitle': 'Local agent bridge',
+  'dialog.bridgeTitle': 'Model',
+  /* The outcome first: whether the next press has a model, and which one. */
+  'dialog.answersAgent': 'Your coding agent ({client}) answers, over the local bridge. No key is involved and nothing leaves this machine.',
+  'dialog.answersGemini': 'Gemini answers, with your key, as {model}. Attach a coding agent below and it takes over instead.',
+  'dialog.answersNobody':
+    'Nothing can answer a prompt yet. Attach a coding agent to the bridge — the steps are below — or paste a Gemini key.',
+  'dialog.keyTitle': 'Gemini key, for when no agent is attached',
+  'dialog.key': 'key',
+  'dialog.keyPlaceholder': 'your Gemini key — this tab only',
+  'dialog.modelId': 'model id',
+  'dialog.remember': 'remember this key',
+  'dialog.rememberTitle':
+    'Encrypted with a non-extractable key in IndexedDB — not localStorage. Any script on this origin could still use it: see lib/keystore.ts.',
+  'dialog.forget': 'forget',
+  'dialog.keyNote': 'The key lives in this tab only and goes nowhere but Google · get one at {source}',
+  'dialog.keyIdle': 'It is idle right now: an attached agent always wins.',
+  'dialog.match': 'fit the numbers to the reference',
+  'dialog.matchTitle': 'load a reference in Compare A / B first',
   'dialog.bridgeLedeLive':
     'The bridge runs on your machine and lets a coding agent design, render, audition and export sounds here — with no API key, because the agent already has a model. It can also answer this playground’s own Generate button.',
   'dialog.bridgeLedeDead':

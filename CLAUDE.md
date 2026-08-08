@@ -84,6 +84,8 @@ The metric is scale-normalized and onset-aligned, so it cannot distinguish "this
 | add a model vendor | implement `LLMProvider` (one method) in `packages/agent`. Document the API version the request shape was written against and pin it in a test with an injected `fetch`. |
 | add a reference recipe | a file in `examples/` in canonical form (`serialize` decides), plus prompt and tags in the seeder's table. Several tests count the examples; `docs/ACOUSTIC_PROFILE.md` needs a `\| name \|` row. |
 | add a bench target | [bench/README.md](bench/README.md). Single-attempt targets must contain `~` slots; multi-attempt ones must actually differ between attempts — both enforced by tests. |
+| add a NeurosLoop lane | a row in `LANES` (`apps/web/src/lib/loop.ts`), a family in `loop-voice.ts` if it is new, a row in `LANE_MESSAGE` for the seeded path, and a role in `LANE_ROLE` (`lib/loop-agent.ts`). The model's lane table is *generated* from `LANES` — never write one into the prompt. |
+| add a scoreline rule | append to `SCORE_RULES` (`apps/web/src/lib/score.ts`) and enforce it in `validateScore`. Stable `rule` id, `hint` phrased as an imperative — same contract as `INVARIANTS`, same reason. |
 
 `test/docs.test.ts` also pins README wording (the honest size claim, the honesty-about-limits section) and checks every relative doc link resolves. If a change moves a measured number in `docs/`, update it in the same commit.
 

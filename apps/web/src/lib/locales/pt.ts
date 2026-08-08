@@ -70,32 +70,9 @@ export const pt: Partial<Readonly<Record<Key, string>>> = {
 
   'prompt.placeholder': 'uma pesada porta de metal batendo em um corredor',
   'prompt.describeAria': 'descreva o som',
-  'prompt.providerTitle': 'qual modelo responde e com qual chave',
-  'prompt.noAgentDot': 'nenhum agente conectado',
-  'prompt.model': 'modelo',
-  'prompt.modelId': 'id do modelo',
-  'prompt.modelIdAria': 'id do modelo',
-  'prompt.key': 'chave',
-  'prompt.keyPlaceholder': 'sua chave de {provider} — só nesta aba',
-  'prompt.keyAria': 'chave de API do {provider}',
-  'prompt.remember': 'lembrar esta chave',
-  'prompt.rememberTitle':
-    'Criptografada com uma chave não extraível no IndexedDB, não no localStorage. Qualquer script desta origem ainda poderia usá-la: veja lib/keystore.ts.',
-  'prompt.forget': 'esquecer',
-  'prompt.match': 'ajustar os números à referência',
-  'prompt.matchTitle': 'carregue antes uma referência em “Comparar A / B”',
   'prompt.stop': 'Parar',
   'prompt.stopping': 'parando…',
   'prompt.make': 'Criar som',
-  'prompt.noteMock':
-    'responde com as receitas do catálogo — sem rede e sem chave, e o validador, o render, o otimizador e a exportação continuam rodando',
-  'prompt.noteAgentReady':
-    'a requisição vai ao seu agente de código pela ponte local — sem chave, e nada sai desta máquina',
-  'prompt.noteAgentMissing':
-    'ainda não há agente conectado à ponte — abra o selo no cabeçalho para ver os dois comandos',
-  'prompt.noteBridge': 'a requisição espera window.txt2sfx.reply(id, text) no devtools — sem rede',
-  'prompt.noteKey': 'a chave vive só nesta aba e não vai a lugar nenhum além do {provider}',
-  'prompt.noteKeySource': ' · consiga uma em {url}',
 
   'run.accepted': 'aceito',
   'run.notAccepted': 'não aceito — {outcome}',

@@ -70,31 +70,9 @@ export const ko: Partial<Readonly<Record<Key, string>>> = {
 
   'prompt.placeholder': '복도에서 육중한 금속 문이 쾅 닫히는 소리',
   'prompt.describeAria': '소리를 설명하세요',
-  'prompt.providerTitle': '어떤 모델이 어떤 키로 답하는지',
-  'prompt.noAgentDot': '연결된 에이전트 없음',
-  'prompt.model': '모델',
-  'prompt.modelId': '모델 id',
-  'prompt.modelIdAria': '모델 id',
-  'prompt.key': '키',
-  'prompt.keyPlaceholder': '당신의 {provider} 키 —— 이 탭에서만',
-  'prompt.keyAria': '{provider} API 키',
-  'prompt.remember': '이 키 기억하기',
-  'prompt.rememberTitle':
-    'localStorage가 아니라 IndexedDB의 추출 불가능한 키로 암호화합니다. 같은 출처의 스크립트는 여전히 사용할 수 있습니다: lib/keystore.ts 참고.',
-  'prompt.forget': '잊기',
-  'prompt.match': '수치를 레퍼런스에 맞추기',
-  'prompt.matchTitle': '먼저 “A / B 비교”에서 레퍼런스를 불러오세요',
   'prompt.stop': '정지',
   'prompt.stopping': '정지 중…',
   'prompt.make': '사운드 만들기',
-  'prompt.noteMock':
-    '카탈로그의 레시피로 답합니다 —— 네트워크도 키도 필요 없고, 검증기·렌더링·최적화·내보내기는 그대로 동작합니다',
-  'prompt.noteAgentReady':
-    '요청은 로컬 브리지를 거쳐 당신의 코딩 에이전트로 갑니다 —— 키가 필요 없고, 이 컴퓨터 밖으로 나가는 것도 없습니다',
-  'prompt.noteAgentMissing': '아직 브리지에 연결된 에이전트가 없습니다 —— 헤더의 배지를 열면 두 개의 명령이 있습니다',
-  'prompt.noteBridge': '요청은 devtools에서 window.txt2sfx.reply(id, text)를 기다립니다 —— 네트워크 없음',
-  'prompt.noteKey': '키는 이 탭에만 있고 {provider} 외에는 어디로도 가지 않습니다',
-  'prompt.noteKeySource': ' · {url}에서 발급받을 수 있습니다',
 
   'run.accepted': '채택됨',
   'run.notAccepted': '채택 안 됨 —— {outcome}',

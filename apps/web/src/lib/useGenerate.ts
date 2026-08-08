@@ -29,18 +29,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { generateSound, type GenerateResult, type RecipeSource } from '@txt2sfx/agent';
+import { generateSound, type GenerateResult, type LLMProvider, type RecipeSource } from '@txt2sfx/agent';
 import {
+  chooseProvider,
   describeEvent,
-  needsKey,
   providerFor,
   recipeName,
   renderSignalFor,
   targetFromBuffer,
-  type DemoRecipe,
-  type ProviderKind,
 } from './agent.js';
 import { canRemember, keystore } from './keystore.js';
+import { t } from './i18n.js';
 
 /**
  * Optimizer budget for a run started from the browser.
@@ -73,9 +72,15 @@ const OPTIMIZER = { generations: 44, populationSize: 16, anchor: 0.25, initialSp
  */
 const MAX_ITERATIONS = 5;
 
-/** Which model answers, and with what. */
+/**
+ * Everything the model settings hold.
+ *
+ * No `kind`: who answers is *derived* from whether an agent is attached and whether a
+ * key has been pasted — see `chooseProvider` in `lib/agent.ts` for why that stopped
+ * being a question the user is asked.
+ */
 export interface ProviderSettings {
-  readonly kind: ProviderKind;
+  /** The user's Gemini key. Used only when no coding agent is attached. */
   readonly apiKey: string;
   /** Empty means "whatever the provider's default is". */
   readonly model: string;
@@ -83,20 +88,32 @@ export interface ProviderSettings {
   readonly matchReference: boolean;
 }
 
-/** The initial picker state: no key, no network, and the whole loop still runs. */
-export const DEFAULT_PROVIDER: ProviderSettings = {
-  kind: 'mock',
+/** The state a fresh tab starts in: no key, and whatever the bridge happens to hold. */
+export const DEFAULT_SETTINGS: ProviderSettings = {
   apiKey: '',
   model: '',
   remember: false,
   matchReference: false,
 };
 
+/** What a run needs to know that is not in the settings. */
+export interface RunContext {
+  /** Whether a coding agent is attached to the bridge right now. */
+  readonly attached: boolean;
+  /**
+   * Answer with this instead of the derived provider.
+   *
+   * The one caller is the dev-only devtools instrument (`window.txt2sfx.run`), which
+   * parks the request on the page for whoever is holding the console. It is deliberately
+   * *not* a provider kind: an escape hatch nobody can reach from the interface does not
+   * belong in a table the interface reads.
+   */
+  readonly provider?: LLMProvider;
+}
+
 /** What the hook needs from the app around it. */
 export interface GenerateDeps {
-  /** Recipes the mock provider may answer with — whatever the gallery is showing. */
-  readonly recipes: readonly DemoRecipe[];
-  /** Few-shot source for the real providers. `null` when no bank is reachable. */
+  /** Few-shot source for the model. `null` when no bank is reachable. */
   readonly bank: RecipeSource | null;
   readonly seed: number;
   readonly reference: { readonly name: string; readonly buffer: AudioBuffer } | null;
@@ -117,15 +134,26 @@ export interface Generation {
   readonly best: { readonly source: string; readonly distance: number } | null;
   readonly result: GenerateResult | null;
   readonly error: string | null;
-  /** Providers with a remembered key, so the checkbox reflects reality. */
+  /** Non-empty when a key is remembered on this machine, so the checkbox tells truth. */
   readonly storedKeys: readonly string[];
-  readonly start: (prompt: string, settings: ProviderSettings) => void;
+  readonly start: (prompt: string, settings: ProviderSettings, context: RunContext) => void;
   readonly cancel: () => void;
   /** Keep the fit's current leader and end the run. */
   readonly take: (prompt: string) => void;
-  readonly forgetKey: (kind: ProviderKind) => void;
-  readonly loadKey: (kind: ProviderKind) => Promise<string | null>;
+  readonly forgetKey: () => void;
+  readonly loadKey: () => Promise<string | null>;
 }
+
+/** The one name the keystore files a remembered key under. */
+const KEY_NAME = 'gemini';
+
+/**
+ * What a run says when nothing on this page can answer it.
+ *
+ * Read at call time rather than captured, so it is in the language the tab is showing
+ * now and not the one it started in.
+ */
+const NO_MODEL = (): string => t('run.noModel');
 
 export function useGenerate(deps: GenerateDeps): Generation {
   const [log, setLog] = useState<readonly string[]>([]);
@@ -162,8 +190,18 @@ export function useGenerate(deps: GenerateDeps): Generation {
     };
   }, []);
 
-  const start = useCallback((prompt: string, settings: ProviderSettings) => {
-    const { recipes, bank, seed, reference, takenNames, onGenerated } = live.current;
+  const start = useCallback((prompt: string, settings: ProviderSettings, context: RunContext) => {
+    const { bank, seed, reference, takenNames, onGenerated } = live.current;
+    const kind = chooseProvider(settings, context.attached);
+    const provider = context.provider ?? providerFor(settings, context.attached);
+    if (provider === null) {
+      /* Reported rather than thrown, and reported *here* rather than guarded at every
+         button: the three entry points into a run are the gallery's hero box, the
+         studio's row and the bridge, and only the first two can grey a button out. */
+      setError(NO_MODEL());
+      return;
+    }
+
     const controller = new AbortController();
     abort.current = controller;
     taken.current = false;
@@ -174,19 +212,11 @@ export function useGenerate(deps: GenerateDeps): Generation {
     setError(null);
     setBest(null);
 
-    const provider = providerFor(settings, { prompt, recipes });
-
     /* Persist on use, not on every keystroke: a key that was actually sent to a vendor
        is one the user meant, while a half-pasted one is not worth storing. */
-    if (
-      settings.remember &&
-      canRemember &&
-      settings.apiKey.trim() !== '' &&
-      (settings.kind === 'gemini' || settings.kind === 'anthropic')
-    ) {
-      const kind = settings.kind;
-      void keystore.save(kind, settings.apiKey.trim()).then(() => {
-        setStoredKeys((names) => (names.includes(kind) ? names : [...names, kind]));
+    if (settings.remember && canRemember && settings.apiKey.trim() !== '' && kind === 'gemini') {
+      void keystore.save(KEY_NAME, settings.apiKey.trim()).then(() => {
+        setStoredKeys((names) => (names.includes(KEY_NAME) ? names : [...names, KEY_NAME]));
       });
     }
 
@@ -201,11 +231,11 @@ export function useGenerate(deps: GenerateDeps): Generation {
       optimizer: OPTIMIZER,
       /* One cheap call turns "большой камень плюхнулся в озеро" into keywords the bank's
          FTS index can actually match. Without it retrieval silently falls back to
-         top-rated recipes and the model learns from unrelated examples. Only for the two
-         hosted providers: the mock answers from local recipes and has no idea what a
-         keyword is, and the two bridges would spend a whole agent turn on it — they
-         exist to debug the *recipe* half. */
-      rewriteQuery: settings.kind === 'gemini' || settings.kind === 'anthropic',
+         top-rated recipes and the model learns from unrelated examples. Gemini only: a
+         call to a hosted model is a hundred milliseconds, where the same question put to
+         an attached coding agent spends a whole turn of somebody's session on picking
+         three search words. */
+      rewriteQuery: kind === 'gemini' && context.provider === undefined,
       ...(bank === null ? {} : { bank }),
       ...(target === undefined ? {} : { target }),
       onEvent: (event) => {
@@ -297,15 +327,14 @@ export function useGenerate(deps: GenerateDeps): Generation {
     [best, cancel],
   );
 
-  const forgetKey = useCallback((kind: ProviderKind) => {
-    void keystore.forget(kind).then(() => {
-      setStoredKeys((names) => names.filter((name) => name !== kind));
+  const forgetKey = useCallback(() => {
+    void keystore.forget(KEY_NAME).then(() => {
+      setStoredKeys((names) => names.filter((name) => name !== KEY_NAME));
     });
   }, []);
 
   const loadKey = useCallback(
-    async (kind: ProviderKind): Promise<string | null> =>
-      canRemember && needsKey(kind) ? keystore.load(kind) : null,
+    async (): Promise<string | null> => (canRemember ? keystore.load(KEY_NAME) : null),
     [],
   );
 

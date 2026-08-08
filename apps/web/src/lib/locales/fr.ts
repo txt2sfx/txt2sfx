@@ -70,32 +70,9 @@ export const fr: Partial<Readonly<Record<Key, string>>> = {
 
   'prompt.placeholder': 'une lourde porte métallique qui claque dans un couloir',
   'prompt.describeAria': 'décrivez le son',
-  'prompt.providerTitle': 'quel modèle répond, et avec quelle clé',
-  'prompt.noAgentDot': 'aucun agent connecté',
-  'prompt.model': 'modèle',
-  'prompt.modelId': 'identifiant du modèle',
-  'prompt.modelIdAria': 'identifiant du modèle',
-  'prompt.key': 'clé',
-  'prompt.keyPlaceholder': 'votre clé {provider} — cet onglet uniquement',
-  'prompt.keyAria': 'clé API {provider}',
-  'prompt.remember': 'retenir cette clé',
-  'prompt.rememberTitle':
-    'Chiffrée avec une clé non extractible dans IndexedDB, pas dans localStorage. N’importe quel script de cette origine pourrait quand même s’en servir : voir lib/keystore.ts.',
-  'prompt.forget': 'oublier',
-  'prompt.match': 'ajuster les nombres sur la référence',
-  'prompt.matchTitle': 'chargez d’abord une référence dans « Comparer A / B »',
   'prompt.stop': 'Arrêter',
   'prompt.stopping': 'arrêt…',
   'prompt.make': 'Créer le son',
-  'prompt.noteMock':
-    'répond avec les recettes du catalogue — sans réseau ni clé, et le validateur, le rendu, l’optimiseur et l’export tournent quand même',
-  'prompt.noteAgentReady':
-    'la requête part vers votre agent de code par la passerelle locale — sans clé, et rien ne quitte cette machine',
-  'prompt.noteAgentMissing':
-    'aucun agent n’est encore connecté à la passerelle — ouvrez le badge de l’en-tête pour les deux commandes',
-  'prompt.noteBridge': 'la requête attend window.txt2sfx.reply(id, text) dans les devtools — sans réseau',
-  'prompt.noteKey': 'la clé ne vit que dans cet onglet et ne part nulle part ailleurs que chez {provider}',
-  'prompt.noteKeySource': ' · à obtenir sur {url}',
 
   'run.accepted': 'accepté',
   'run.notAccepted': 'refusé — {outcome}',

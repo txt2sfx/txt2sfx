@@ -70,31 +70,9 @@ export const ja: Partial<Readonly<Record<Key, string>>> = {
 
   'prompt.placeholder': '廊下で重い金属扉がバタンと閉まる',
   'prompt.describeAria': '音を説明する',
-  'prompt.providerTitle': 'どのモデルが、どの鍵で答えるか',
-  'prompt.noAgentDot': 'エージェント未接続',
-  'prompt.model': 'モデル',
-  'prompt.modelId': 'モデル ID',
-  'prompt.modelIdAria': 'モデル ID',
-  'prompt.key': 'キー',
-  'prompt.keyPlaceholder': 'あなたの {provider} キー —— このタブ限り',
-  'prompt.keyAria': '{provider} の API キー',
-  'prompt.remember': 'このキーを記憶する',
-  'prompt.rememberTitle':
-    'localStorage ではなく IndexedDB 上の取り出し不可能な鍵で暗号化します。同一オリジンのスクリプトからは依然として利用可能です: lib/keystore.ts を参照。',
-  'prompt.forget': '忘れる',
-  'prompt.match': '数値をリファレンスに合わせる',
-  'prompt.matchTitle': '先に「A / B 比較」でリファレンスを読み込んでください',
   'prompt.stop': '停止',
   'prompt.stopping': '停止中…',
   'prompt.make': 'サウンドを作る',
-  'prompt.noteMock':
-    'カタログのレシピから答えます —— ネットワークもキーも不要で、バリデータ・レンダリング・オプティマイザ・エクスポートはそのまま動きます',
-  'prompt.noteAgentReady':
-    'リクエストはローカルのブリッジ経由であなたのコーディングエージェントへ —— キーは不要で、このマシンから何も出ていきません',
-  'prompt.noteAgentMissing': 'まだブリッジにエージェントが接続されていません —— ヘッダーのバッジに 2 つのコマンドがあります',
-  'prompt.noteBridge': 'リクエストは devtools の window.txt2sfx.reply(id, text) を待ちます —— ネットワークなし',
-  'prompt.noteKey': 'キーはこのタブだけに存在し、{provider} 以外のどこにも送られません',
-  'prompt.noteKeySource': ' · 取得は {url} から',
 
   'run.accepted': '採用',
   'run.notAccepted': '不採用 —— {outcome}',

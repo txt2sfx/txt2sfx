@@ -21,9 +21,9 @@
  *    Rows it does not mention keep their place behind the ones it does, so a search
  *    can never show fewer results because a model was unhelpful.
  *
- * With no provider — the picker on `mock` and no agent attached — stages 1 and 3 are
- * skipped and the library's own relevance stands. That is a working search, not a
- * degraded one, and it is what someone with a Freesound account and no model key gets.
+ * With no provider — no agent attached and no key pasted — stages 1 and 3 are skipped and
+ * the library's own relevance stands. That is a working search, not a degraded one, and it
+ * is what someone with a Freesound account and no model gets.
  *
  * ## One retry, and only for the one failure that deserves it
  *

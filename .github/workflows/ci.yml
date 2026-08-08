@@ -130,7 +130,17 @@ jobs:
 
       # No `PAGES_BASE_PATH`: an organization site is served from the root, which
       # is `vite.config.ts`'s default. See the note there.
+      #
+      # `YANDEX_METRIKA_ID` is the only thing that makes this build differ from the
+      # one `verify` and a developer produce, and it is set *here* rather than in
+      # `index.html` so that only the published site reports into the counter. A
+      # repository variable, not a secret: the id is readable in the page source of
+      # every site that runs one, and masking it in the log would buy nothing while
+      # making an empty value look the same as a missing one. Undefined, the step
+      # publishes a site with no counter at all.
       - name: Build the playground
+        env:
+          YANDEX_METRIKA_ID: ${{ vars.YANDEX_METRIKA_ID }}
         run: pnpm build:web
 
       # The guard is the point. The next step is `rsync --delete` over the live

@@ -144,14 +144,16 @@ Every sound downloads as **WAV** (16- or 24-bit), **MP3** or **M4A** — really 
 never a renamed WAV — alongside the two that matter more: the JavaScript and the
 soundline. The audio is for handing a sound to a person; the code is for shipping it.
 
-Pick a model, paste your key. The key lives in that tab's memory and is sent to that
-vendor and nowhere else — no proxy, no server of ours in the path. Ticking **remember**
-encrypts it with a non-extractable key in IndexedDB rather than storing it in
-`localStorage`; what that does and does not protect against is spelled out in
-`apps/web/src/lib/keystore.ts`, and **forget** undoes it. With **mock** selected there is
-no key and no network at all: the answer comes from the recipes already on the page, and
-the rest of the loop — validator, render, optimizer, export — runs exactly as it does with
-a real model.
+There is no model picker, because there is nothing to pick between. If a coding agent is
+attached to the bridge it answers — it already holds a model, it needs no key, and it is
+the reason the next section exists. If none is, your Gemini key does. If neither, the
+prompt row says so before you press anything rather than after. The badge in the header
+opens the one place any of it is configured.
+
+The key lives in that tab's memory and is sent to Google and nowhere else — no proxy, no
+server of ours in the path. Ticking **remember** encrypts it with a non-extractable key in
+IndexedDB rather than storing it in `localStorage`; what that does and does not protect
+against is spelled out in `apps/web/src/lib/keystore.ts`, and **forget** undoes it.
 
 ## Your agent, with an ear
 
@@ -178,10 +180,11 @@ a validator, a renderer and a human's ears, and all four are one `npx` away. It 
 `sfx_contract` once for the whole language, writes soundline, gets back measurements from
 `sfx_render`, and makes your speakers produce the result with `sfx_audition`.
 
-It runs the other way too. Choose **agent** in the playground's model picker and Generate
-parks the request — full contract, conversation, few-shot examples — for the agent to pick
-up with `sfx_next_request` and answer with `sfx_answer`; the validator, the render, the
-optimizer and the repair loop are untouched.
+It runs the other way too, and needs no setting: with an agent attached, **Make sound**
+parks the request — full contract, conversation, few-shot examples — for it to pick up with
+`sfx_next_request` and answer with `sfx_answer`; the validator, the render, the optimizer
+and the repair loop are untouched. The same agent composes on the **NeurosLoop** screen,
+where what it writes is a score rather than a recipe.
 
 Loopback only, a token on the socket, and an honest account of what that does and does not
 protect against, in [docs/BRIDGE.md](docs/BRIDGE.md).
@@ -199,6 +202,26 @@ is sent: one model call turns a request in any language into one line of concret
 and the caption is shown in an editable field because on a diffusion model it *is* the
 instrument. Any other script tokenizes into holes — the measurement is in
 [test/stable-audio/README.md](test/stable-audio/README.md).
+
+## NeurosLoop: the same claim, eight bars long
+
+The third screen is a game soundtrack made of the same parts as a sound effect. A lane's
+note is an ordinary soundline recipe, compiled by the same compiler and rendered by the
+same renderer, so a loop exports as a table of arrow functions plus a schedule — no sample
+data — or as MIDI for a DAW.
+
+What the connected model writes there is a **score**: tempo, key, form, which instruments
+play, and every note, in a small text DSL with a deterministic checker in front of it
+(`apps/web/src/lib/score.ts`). The rules are the physics a score does have — a closed lane
+table, degrees a register can sound, a note budget the mixdown can afford — and each one
+carries an imperative fix, so a rejected score is repaired the same way a rejected recipe
+is. It also names the track and writes a line about each part, which is what the screen
+shows while that part's audio is being rendered.
+
+With no model connected the screen is unchanged: a seeded composer writes the arrangement
+from the preset and a keyword table, instantly and offline. Which of the two you got is on
+screen, always — a soundtrack that quietly came from the PRNG after a model was asked for
+would put every later one under suspicion.
 
 The recipe bank runs as its own process and needs no native build — it uses Node's built-in
 `node:sqlite`:
