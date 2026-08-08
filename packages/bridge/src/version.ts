@@ -10,4 +10,4 @@
  */
 
 /** Must match `package.json`. Checked by `test/hygiene.test.ts`. */
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
