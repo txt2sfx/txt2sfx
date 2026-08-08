@@ -13,7 +13,8 @@ sites. The files in this directory are what is installed on it.
 | --- | --- |
 | [`txt2sfx-bank.service`](txt2sfx-bank.service) | `/etc/systemd/system/txt2sfx-bank.service` |
 | [`nginx.conf`](nginx.conf) | `/etc/nginx/sites-available/txt2sfx.pix3.dev`, symlinked into `sites-enabled/` |
-| [`deploy.sh`](deploy.sh) | `/srv/txt2sfx/deploy.sh` |
+| [`bootstrap.sh`](bootstrap.sh) | `/srv/txt2sfx/deploy.sh` — the only file installed by hand |
+| [`deploy.sh`](deploy.sh) | runs from the checkout; `bootstrap.sh` hands over to it |
 
 ## The layout on the box
 
@@ -42,7 +43,7 @@ sudo -u txt2sfx git clone https://github.com/txt2sfx/txt2sfx.git /srv/txt2sfx/ap
 install -o root -g txt2sfx -m 0640 /dev/null /srv/txt2sfx/env
 $EDITOR /srv/txt2sfx/env
 
-install -m 0755 /srv/txt2sfx/app/apps/server/deploy/deploy.sh /srv/txt2sfx/deploy.sh
+install -m 0755 /srv/txt2sfx/app/apps/server/deploy/bootstrap.sh /srv/txt2sfx/deploy.sh
 install -m 0644 /srv/txt2sfx/app/apps/server/deploy/txt2sfx-bank.service /etc/systemd/system/
 install -m 0644 /srv/txt2sfx/app/apps/server/deploy/nginx.conf /etc/nginx/sites-available/txt2sfx.pix3.dev
 ln -s /etc/nginx/sites-available/txt2sfx.pix3.dev /etc/nginx/sites-enabled/
@@ -66,6 +67,12 @@ certbot certonly --webroot -w /var/www/html -d txt2sfx.pix3.dev
 Renewal is certbot's own timer; nothing here needs to know about it.
 
 ## Deploying
+
+`bootstrap.sh` is deliberately the *only* deploy file installed on the box: it updates the
+checkout and hands over to `deploy.sh` from that checkout, so the procedure is versioned
+with the code it deploys. The first version of this was one script on the box, and it went
+stale immediately — a fix that existed in git while the file being executed was a copy
+installed weeks earlier.
 
 Pushing to `main` a change that touches the server or anything it links against runs
 [`deploy-server.yml`](../../../.github/workflows/deploy-server.yml): it repeats the full
