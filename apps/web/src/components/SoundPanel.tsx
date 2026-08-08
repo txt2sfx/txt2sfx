@@ -34,6 +34,7 @@ import { FormatMenu } from './FormatMenu.js';
 import { metricsOf, onsetIndex, signalOf } from '../lib/analysis.js';
 import { layerColor } from '../lib/design.js';
 import { ms } from '../lib/format.js';
+import { useI18n } from '../lib/i18n.js';
 import { bars, ghostBars, renderLayers } from '../lib/layers.js';
 import type { Format } from '../lib/download.js';
 
@@ -81,6 +82,7 @@ export function SoundPanel({
   onTrash,
   onShare,
 }: SoundPanelProps): React.JSX.Element {
+  const { t } = useI18n();
   const master =
     rendered === null ? ghostBars(name, MASTER_BARS) : bars(rendered.buffer, MASTER_BARS);
   const lanes = useLanes(ast, seed);
@@ -94,7 +96,7 @@ export function SoundPanel({
   return (
     <>
       <div className="strip">
-        <span className="mono strip-label">master</span>
+        <span className="mono strip-label">{t('sound.master')}</span>
         <Bars
           values={master}
           muted={rendered === null}
@@ -131,10 +133,10 @@ export function SoundPanel({
 
       <div className="transport">
         <button type="button" className="primary big" onClick={onPlay} disabled={ast === null}>
-          {playing ? '❚❚' : '▶'} Play
+          {playing ? '❚❚' : '▶'} {t('sound.play')}
         </button>
-        <button type="button" onClick={onLoop} disabled={rendered === null} title="loop the offline render">
-          ↻ Loop
+        <button type="button" onClick={onLoop} disabled={rendered === null} title={t('sound.loopTitle')}>
+          ↻ {t('sound.loop')}
         </button>
         <FormatMenu
           formatId={formatId}
@@ -142,12 +144,12 @@ export function SoundPanel({
           onDownload={onDownload}
           disabled={ast === null && rendered === null}
         />
-        <button type="button" className="danger" onClick={onTrash} title="hide it from the gallery">
-          Trash
+        <button type="button" className="danger" onClick={onTrash} title={t('sound.trashTitle')}>
+          {t('sound.trash')}
         </button>
         <div className="spacer" />
         <button type="button" className="violet" onClick={onShare} disabled={ast === null}>
-          Share
+          {t('sound.share')}
         </button>
       </div>
     </>

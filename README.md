@@ -10,6 +10,15 @@
   <img alt="Library runtime dependencies" src="https://img.shields.io/badge/library%20runtime%20deps-0-brightgreen.svg">
 </p>
 
+<p align="center">
+  <strong><a href="https://txt2sfx.github.io/txt2sfx/">▶ Open the playground</a></strong><br>
+  <sub>Runs entirely in the tab. No account, no upload, no key needed to browse the reference sounds.</sub>
+</p>
+
+<p align="center">
+  <a href="https://txt2sfx.github.io/txt2sfx/"><img src="assets/playground.png" alt="The playground: a prompt, the soundline it produced, the validator's verdict, a slider per fitted number, and the 876 bytes of Web Audio JavaScript it exports" width="900"></a>
+</p>
+
 ---
 
 Describe a sound effect in words and get back **compact procedural Web Audio code** —
@@ -97,6 +106,14 @@ flowchart LR
 ```
 
 ## Quick start
+
+Nothing to install to try it: **<https://txt2sfx.github.io/txt2sfx/>** is the playground
+built from `main`, and it is the same static bundle `pnpm dev` serves. Two things are
+absent there and only there, because both are dev-server endpoints rather than features of
+the app: writing an edited recipe back to `examples/`, and the local diffusion model behind
+the `Model` view.
+
+To run it from a clone:
 
 ```powershell
 npm install -g pnpm@10        # corepack is gone from Node 25

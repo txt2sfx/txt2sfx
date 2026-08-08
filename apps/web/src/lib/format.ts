@@ -6,8 +6,17 @@
  * Every panel formats through here, so the gallery, the studio and the share card
  * cannot disagree.
  *
+ * Only {@link ago} is language-dependent, and it delegates to `Intl` rather than to the
+ * dictionary: relative time needs plural rules, and Russian alone has three forms for
+ * "days". Hand-writing that nine times over is how a translation file starts being wrong.
+ * Durations, byte counts and frequencies are deliberately *not* localised — they are
+ * beside numbers the user types into recipes, and a `1,024 B` that becomes `1 024 B`
+ * disagrees with the text in the editor.
+ *
  * @packageDocumentation
  */
+
+import { bcp47, t } from './i18n.js';
 
 /**
  * A duration, in whichever unit reads better at that magnitude.
@@ -38,12 +47,30 @@ export function bytes(value: number): string {
  */
 export function ago(at: number, now = Date.now()): string {
   const minutes = Math.max(0, Math.round((now - at) / 60000));
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${String(minutes)} min ago`;
+  /* `Intl` would render this as "this minute", which answers a different question. */
+  if (minutes < 1) return t('time.justNow');
+  const relative = relativeFor(bcp47());
+  if (minutes < 60) return relative.format(-minutes, 'minute');
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${String(hours)} h ago`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? 'yesterday' : `${String(days)} d ago`;
+  if (hours < 24) return relative.format(-hours, 'hour');
+  /* `numeric: 'auto'` is what turns −1 day into "yesterday" rather than "1 day ago". */
+  return relative.format(-Math.round(hours / 24), 'day');
+}
+
+/**
+ * One formatter per language, built once.
+ *
+ * `Intl.RelativeTimeFormat` construction is not free and `ago` is called for every row of
+ * the rail and every card in the gallery on each render.
+ */
+const relatives = new Map<string, Intl.RelativeTimeFormat>();
+
+function relativeFor(tag: string): Intl.RelativeTimeFormat {
+  const existing = relatives.get(tag);
+  if (existing !== undefined) return existing;
+  const made = new Intl.RelativeTimeFormat(tag, { numeric: 'auto', style: 'short' });
+  relatives.set(tag, made);
+  return made;
 }
 
 /** A signed difference, for the Δ column of the compare table. */

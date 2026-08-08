@@ -17,8 +17,8 @@
 import { describe, expect, it } from 'vitest';
 import { spectrogram, type Spectrogram } from '../src/lib/fft.js';
 import {
-  COLOUR_MODES,
-  MODE_LEGEND,
+  colourModes,
+  modeLegend,
   paintMagnitude,
   paintSpectrogram,
   swatchesFor,
@@ -60,8 +60,8 @@ const SILENT: Spectrogram = spectrogram(silence(60), RATE, OPTIONS);
 
 describe('the colour modes', () => {
   it('names a legend and a full alpha channel for every mode it offers', () => {
-    for (const mode of COLOUR_MODES) {
-      expect(MODE_LEGEND[mode.id]).toBeTruthy();
+    for (const mode of colourModes()) {
+      expect(modeLegend(mode.id)).toBeTruthy();
       const target = image(24, 16);
       paintSpectrogram(target, { mode: mode.id, spec: LOUD, sampleRate: RATE, other: QUIET, layers: [LOUD] });
       for (let i = 3; i < target.data.length; i += 4) expect(target.data[i]).toBe(255);
@@ -69,7 +69,7 @@ describe('the colour modes', () => {
   });
 
   it('paints silence dark and a loud tone bright, in every mode', () => {
-    for (const mode of COLOUR_MODES) {
+    for (const mode of colourModes()) {
       const quiet = image(24, 16);
       const loud = image(24, 16);
       paintSpectrogram(quiet, { mode: mode.id, spec: SILENT, sampleRate: RATE, other: SILENT, layers: [SILENT] });
@@ -112,7 +112,7 @@ describe('the colour modes', () => {
       return sum;
     };
     expect(blueness(aLouder)).toBeGreaterThan(blueness(bLouder));
-    expect(MODE_LEGEND.diff).toContain('cyan');
+    expect(modeLegend('diff')).toContain('cyan');
   });
 
   it('keys tracks and hsv off the recipe’s own layer names', () => {
@@ -152,7 +152,7 @@ describe('the colour modes', () => {
   });
 
   it('offers exactly the four modes the panel has legends for', () => {
-    const ids = COLOUR_MODES.map((mode) => mode.id);
+    const ids = colourModes().map((mode) => mode.id);
     expect(ids).toEqual(['tracks', 'channels', 'hsv', 'diff'] satisfies ColourMode[]);
   });
 });

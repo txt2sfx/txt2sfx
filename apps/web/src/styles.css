@@ -555,6 +555,59 @@ input[type='range'] {
   color: oklch(0.72 0.11 var(--red));
 }
 
+/**
+ * The language menu.
+ *
+ * Deliberately quieter than the bridge pill beside it: the bridge badge changes on its
+ * own and has to be noticed, the globe only has to be *findable*. So no border and no
+ * fill until it is hovered or open, which keeps the corner from reading as two competing
+ * status chips.
+ *
+ * The menu opens to the right edge rather than the left, because this control sits in the
+ * corner and a left-anchored menu would hang off the viewport.
+ */
+.lang {
+  position: relative;
+  flex: 0 0 auto;
+}
+.lang-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 29px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+}
+.lang-button:hover,
+.lang-button.selected {
+  border-color: var(--line-hard);
+  background: var(--raised);
+  color: var(--ink-1);
+}
+.globe {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+.lang-code {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.lang-menu {
+  top: 37px;
+  left: auto;
+  right: 0;
+  min-width: 160px;
+}
+/* The entries are each in their own script, so the monospace stack the rest of the menu
+   uses would fall back unevenly — Latin at one weight, CJK at another. */
+.lang-menu .menu-item {
+  font-family: inherit;
+  font-size: 13px;
+}
+
 /* ------------------------------------------------------------------------- *
  * Screens
  * ------------------------------------------------------------------------- */

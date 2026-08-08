@@ -51,6 +51,7 @@
 import { useState } from 'react';
 import { bridgeOnboardingPrompt } from '@txt2sfx/agent';
 import { copy } from '../lib/download.js';
+import { t, useI18n, type Key } from '../lib/i18n.js';
 import type { BridgeStatus } from '../lib/bridge-client.js';
 
 export interface BridgeDialogProps {
@@ -88,7 +89,14 @@ function mcpConfig(port: string): string {
   );
 }
 
-/** One entry per tab, shortest honest path first. */
+/**
+ * One entry per tab, shortest honest path first.
+ *
+ * The client names and every `code` block stay untranslated by construction: they are a
+ * product name and a command the reader has to type verbatim. Only the `note` — the
+ * sentence explaining what the command did and what to restart — goes through the
+ * dictionary, and that is the sentence that decides whether the setup succeeds.
+ */
 function clientRecipes(port: string): readonly ClientRecipe[] {
   const argv = `npx ${bridgeArgs(port).join(' ')}`;
   return [
@@ -96,18 +104,18 @@ function clientRecipes(port: string): readonly ClientRecipe[] {
       id: 'claude',
       label: 'Claude Code',
       code: `claude mcp add txt2sfx -- ${argv}`,
-      note: 'That is the whole install — no daemon to start first. Add `-s user` after `add` to have it in every project. Restart Claude Code afterwards: it reads its server list at startup.',
+      note: t('dialog.noteClaude'),
     },
     {
       id: 'codex',
       label: 'Codex',
       code: `codex mcp add txt2sfx -- ${argv}`,
-      note: 'Writes [mcp_servers.txt2sfx] into ~/.codex/config.toml and starts the bridge on first use. Restart codex afterwards.',
+      note: t('dialog.noteCodex'),
     },
     {
       id: 'opencode',
       label: 'opencode',
-      file: 'opencode.json — in the project, or ~/.config/opencode/',
+      file: t('dialog.fileOpencode'),
       code: JSON.stringify(
         {
           $schema: 'https://opencode.ai/config.json',
@@ -116,20 +124,20 @@ function clientRecipes(port: string): readonly ClientRecipe[] {
         null,
         2,
       ),
-      note: 'opencode has no add command, so the file is the interface — and its key is `mcp` with type "local", not `mcpServers`. Restart opencode afterwards.',
+      note: t('dialog.noteOpencode'),
     },
     {
       id: 'cursor',
       label: 'Cursor',
-      file: '~/.cursor/mcp.json — or .cursor/mcp.json for one project',
+      file: t('dialog.fileCursor'),
       code: mcpConfig(port),
-      note: 'Settings → MCP → New MCP server writes the same file. Reload the window afterwards.',
+      note: t('dialog.noteCursor'),
     },
     {
       id: 'other',
       label: 'Other',
       code: mcpConfig(port),
-      note: 'Claude Desktop, Windsurf, Zed and most other clients take this shape; only the path to the file differs. Anything that speaks MCP over stdio can run it.',
+      note: t('dialog.noteOther'),
     },
   ];
 }
@@ -150,8 +158,8 @@ function CodeBlock({
       <button
         type="button"
         className="copy"
-        aria-label={`copy ${what}`}
-        title={`Copy ${what}`}
+        aria-label={t('dialog.copyWhat', { what })}
+        title={t('dialog.copyWhat', { what })}
         onClick={() => void copy(code, what).then(onCopied)}
       >
         ⧉
@@ -161,6 +169,11 @@ function CodeBlock({
 }
 
 export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: BridgeDialogProps): React.JSX.Element {
+  /* Subscribed for the re-render only. The strings come from the module-level `t`, which
+     is also what `clientRecipes` above has to use — it is not a component and cannot hold
+     a hook, and having one half of this dialog read a different translator than the other
+     is how a language change leaves a stale sentence on screen. */
+  useI18n();
   const [checking, setChecking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [url, setUrl] = useState(status.url);
@@ -185,37 +198,41 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
   const agentPrompt = (): string =>
     bridgeOnboardingPrompt({ port: Number(port), playgroundUrl: window.location.origin });
 
-  const checks: readonly { label: string; value: string; ok: boolean }[] = [
+  const checks: readonly { key: Key; label: string; value: string; ok: boolean }[] = [
     {
-      label: 'Bridge daemon',
-      value: live ? new URL(status.url).host : (status.error ?? 'no response'),
+      key: 'dialog.checkDaemon',
+      label: t('dialog.checkDaemon'),
+      value: live ? new URL(status.url).host : (status.error ?? t('dialog.noResponse')),
       ok: live,
     },
     {
-      label: 'Wire protocol',
+      key: 'dialog.checkProtocol',
+      label: t('dialog.checkProtocol'),
       value: health === null ? '—' : `v${String(health.protocol)} · bridge ${health.version}`,
       ok: live,
     },
     {
-      label: 'Agent attached',
+      key: 'dialog.checkAgent',
+      label: t('dialog.checkAgent'),
       value:
         agent?.connected === true
-          ? `${agent.client ?? 'MCP client'}${agent.sampling ? ' · sampling' : ''}`
+          ? `${agent.client ?? t('dialog.mcpClient')}${agent.sampling ? ' · sampling' : ''}`
           : live
-            ? 'register the MCP server below'
+            ? t('dialog.registerBelow')
             : '—',
       ok: agent?.connected === true,
     },
     {
-      label: 'Renderer',
+      key: 'dialog.checkRenderer',
+      label: t('dialog.checkRenderer'),
       value:
         health === null
           ? '—'
           : health.renderer === 'playground'
-            ? 'this tab · 44.1 kHz'
+            ? t('dialog.thisTab')
             : health.renderer === 'native'
               ? 'node-web-audio-api'
-              : 'none — validate only',
+              : t('dialog.rendererNone'),
       ok: health !== null && health.renderer !== 'none',
     },
   ];
@@ -237,26 +254,26 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="local agent bridge"
+        aria-label={t('dialog.bridgeAria')}
       >
         <div className="dialog-head">
           <span className={`dot ${live ? 'dot-ok' : 'dot-bad'}`} />
-          <h3>Local agent bridge</h3>
+          <h3>{t('dialog.bridgeTitle')}</h3>
           <div className="spacer" />
-          <button type="button" className="icon" onClick={onClose} aria-label="close">
+          <button type="button" className="icon" onClick={onClose} aria-label={t('dialog.close')}>
             ✕
           </button>
         </div>
 
         <p className="dialog-lede">
           {live
-            ? 'The bridge runs on your machine and lets a coding agent design, render, audition and export sounds here — with no API key, because the agent already has a model. It can also answer this playground’s own Generate button.'
-            : `Nothing is listening on ${new URL(status.url).host}. Register the server below and your client starts the bridge itself — in either direction.`}
+            ? t('dialog.bridgeLedeLive')
+            : t('dialog.bridgeLedeDead', { host: new URL(status.url).host })}
         </p>
 
         <div className="checks">
           {checks.map((check) => (
-            <div className="check" key={check.label}>
+            <div className="check" key={check.key}>
               <span className={`mark ${check.ok ? 'good' : 'bad'}`}>{check.ok ? '✓' : '✕'}</span>
               <span className="check-label">{check.label}</span>
               <span className="mono faint">{check.value}</span>
@@ -268,8 +285,8 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
           <div className="step">
             <span className="step-n">1</span>
             <div className="step-body">
-              <div className="step-title">Point your agent at the bridge</div>
-              <nav className="segmented small wrap" aria-label="agent">
+              <div className="step-title">{t('dialog.step1')}</div>
+              <nav className="segmented small wrap" aria-label={t('dialog.agentAria')}>
                 {recipes.map((candidate) => (
                   <button
                     key={candidate.id}
@@ -283,7 +300,7 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
                 ))}
               </nav>
               {recipe.file === undefined ? null : <div className="step-file mono">{recipe.file}</div>}
-              <CodeBlock code={recipe.code} what={`the ${recipe.label} setup`} onCopied={say} />
+              <CodeBlock code={recipe.code} what={t('dialog.setupOf', { client: recipe.label })} onCopied={say} />
               <div className="step-note">{recipe.note}</div>
             </div>
           </div>
@@ -291,16 +308,15 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
           <div className="step">
             <span className="step-n">2</span>
             <div className="step-body">
-              <div className="step-title">Ask the agent to introduce itself</div>
+              <div className="step-title">{t('dialog.step2')}</div>
+              {/* Not translated: it is a prompt, and the agent reading it was configured
+                  in English by the command one step above. */}
               <CodeBlock
                 code={'call sfx_contract, then design a "wet bubble pop" and audition it'}
-                what="the first ask"
+                what={t('dialog.firstAsk')}
                 onCopied={say}
               />
-              <div className="step-note">
-                sfx_contract hands over the whole grammar in one call. No API key is involved anywhere: your agent is
-                the model.
-              </div>
+              <div className="step-note">{t('dialog.step2note')}</div>
             </div>
           </div>
         </div>
@@ -309,21 +325,21 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
           <button
             type="button"
             className="primary"
-            onClick={() => void copy(agentPrompt(), 'the agent prompt').then(say)}
-            title="Paste it into your agent — it registers the server itself and makes the first sound"
+            onClick={() => void copy(agentPrompt(), t('dialog.agentPrompt')).then(say)}
+            title={t('dialog.copyPromptTitle')}
           >
-            Copy agent prompt
+            {t('dialog.copyPrompt')}
           </button>
           <button type="button" onClick={recheck} disabled={checking}>
-            {checking ? 'Checking…' : 'Re-check'}
+            {checking ? t('dialog.checking') : t('dialog.recheck')}
           </button>
           <label className="field">
-            daemon
+            {t('dialog.daemon')}
             <input
               type="text"
               name="bridge-url"
               value={url}
-              aria-label="bridge daemon URL"
+              aria-label={t('dialog.daemonAria')}
               onChange={(event) => setUrl(event.target.value)}
               onBlur={() => url !== status.url && onUrlChange(url.trim())}
             />

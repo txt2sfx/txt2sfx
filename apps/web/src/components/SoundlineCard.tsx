@@ -30,6 +30,7 @@
 import type { SoundlineError } from '@txt2sfx/core';
 import type { ValidationIssue } from '@txt2sfx/shared';
 import { Editor } from './Editor.js';
+import { useI18n } from '../lib/i18n.js';
 
 export interface SoundlineCardProps {
   readonly source: string;
@@ -47,6 +48,7 @@ export function SoundlineCard({
   warnings,
   onChange,
 }: SoundlineCardProps): React.JSX.Element {
+  const { t } = useI18n();
   const hard = issues.filter((issue) => issue.severity === 'error');
   const soft = issues.filter((issue) => issue.severity !== 'error');
 
@@ -56,14 +58,15 @@ export function SoundlineCard({
   const tone =
     errors.length > 0 || hard.length > 0 ? 'bad' : soft.length > 0 || warnings.length > 0 ? 'warn' : 'good';
 
+  const soften = soft.length + warnings.length;
   const short =
     errors.length > 0
-      ? `${String(errors.length)} syntax error${errors.length === 1 ? '' : 's'}`
+      ? t(errors.length === 1 ? 'soundline.errorsOne' : 'soundline.errorsMany', { count: errors.length })
       : hard.length > 0
-        ? `${String(hard.length)} invariant broken`
-        : soft.length + warnings.length > 0
-          ? `${String(soft.length + warnings.length)} warning${soft.length + warnings.length === 1 ? '' : 's'}`
-          : 'validator clean';
+        ? t('soundline.invariant', { count: hard.length })
+        : soften > 0
+          ? t(soften === 1 ? 'soundline.warningsOne' : 'soundline.warningsMany', { count: soften })
+          : t('soundline.clean');
 
   const kind = tone === 'bad' ? 'ERROR' : tone === 'warn' ? 'WARN' : 'OK';
 
@@ -74,13 +77,12 @@ export function SoundlineCard({
         ? `${hard[0].layer === null ? '' : `${hard[0].layer}: `}${hard[0].got} — ${hard[0].hint}`
         : soft[0] !== undefined
           ? `${soft[0].layer === null ? '' : `${soft[0].layer}: `}${soft[0].got} — ${soft[0].hint}`
-          : (warnings[0] ??
-            'Every decay fits inside the declared duration and the render sits below clipping.');
+          : (warnings[0] ?? t('soundline.allGood'));
 
   return (
     <div className="panel">
       <div className="panel-head">
-        <span className="mono panel-title">SOUNDLINE</span>
+        <span className="mono panel-title">{t('soundline.title')}</span>
         <div className="spacer" />
         <span className={`mono ${tone}`}>{short}</span>
       </div>
@@ -96,7 +98,7 @@ export function SoundlineCard({
           plain list rather than a second panel: the header already said how many. */}
       {errors.length + issues.length + warnings.length > 1 ? (
         <details className="more">
-          <summary className="mono">everything else</summary>
+          <summary className="mono">{t('soundline.more')}</summary>
           <ul>
             {errors.slice(1).map((error, index) => (
               <li key={`e${String(index)}`} className="bad">

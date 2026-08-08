@@ -6,10 +6,16 @@ on:
   pull_request:
 
 # One run per branch: a force-push while CI is running should not leave two
-# answers about the same code.
+# answers about the same code. Only pull requests are cancelled, though — a run
+# on `main` ends in a Pages deployment, and cancelling that mid-flight would
+# abandon a deployment rather than supersede it.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Read-only by default; the deploy job widens this for itself.
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -66,3 +72,66 @@ jobs:
       # to load it and report it. Flip this to `--strict` when that is resolved.
       - name: Seed the recipe bank (smoke)
         run: pnpm --filter @txt2sfx/server seed
+
+  # The playground is published only from `main`, and only behind a green
+  # `verify` — the site is the project's front door, so "it builds" is not a
+  # sufficient bar when the typecheck, the tests and the bench are what say the
+  # generator still works.
+  #
+  # This job builds the playground a second time rather than reusing an artifact
+  # from the matrix above, because the asset prefix differs: a project site is
+  # served from `/txt2sfx/`, and that path is only known after
+  # `configure-pages` has read the repository's Pages settings. `verify`'s build
+  # stays a root-relative build, which is what a developer gets locally.
+  #
+  # Nothing server-side ships here. The playground is static by construction: the
+  # write-back and Stable Audio endpoints are `apply: 'serve'` dev plugins, the
+  # recipe gallery falls back to its bundled `import.meta.glob` snapshot, and the
+  # model key is pasted by the visitor into their own tab.
+  deploy:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write # `deploy-pages` authenticates with OIDC, not a token.
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      # `base_path` is `/txt2sfx` for a project site and empty for a custom
+      # domain; `vite.config.ts` normalises both. Passing it rather than
+      # hard-coding it means a domain change needs no commit here.
+      - name: Build the playground for Pages
+        run: pnpm build:web
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -13,6 +13,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadLibrary, saveLibrary } from '../src/lib/library.js';
 import { ago, bytes, delta, hz, ms } from '../src/lib/format.js';
+import { setLang } from '../src/lib/i18n.js';
 
 const KEY = 'txt2sfx.library.v1';
 
@@ -116,9 +117,32 @@ describe('how numbers are spelled', () => {
   it('answers "did I touch this recently" rather than printing a timestamp', () => {
     const now = 1_700_000_000_000;
     expect(ago(now, now)).toBe('just now');
-    expect(ago(now - 3 * 60_000, now)).toBe('3 min ago');
-    expect(ago(now - 3 * 3_600_000, now)).toBe('3 h ago');
+    expect(ago(now - 3 * 60_000, now)).toBe('3 min. ago');
+    expect(ago(now - 3 * 3_600_000, now)).toBe('3 hr. ago');
+    /* `numeric: 'auto'` is the reason this is a word and not "1 day ago". */
     expect(ago(now - 26 * 3_600_000, now)).toBe('yesterday');
-    expect(ago(now - 5 * 86_400_000, now)).toBe('5 d ago');
+    expect(ago(now - 5 * 86_400_000, now)).toBe('5 days ago');
+  });
+
+  /**
+   * Relative time is the one format that follows the interface language.
+   *
+   * It is delegated to `Intl` rather than to the dictionary because plural rules are not
+   * a translator's job to get right nine times: Russian alone needs three forms for
+   * "days". Asserting one non-English language here is what keeps that delegation honest
+   * — a regression to a hand-written English template would pass every other test in
+   * this file.
+   */
+  it('follows the interface language, plural rules included', () => {
+    const now = 1_700_000_000_000;
+    setLang('ru');
+    try {
+      expect(ago(now, now)).toBe('только что');
+      expect(ago(now - 3 * 60_000, now)).toBe('3 мин. назад');
+      expect(ago(now - 26 * 3_600_000, now)).toBe('вчера');
+      expect(ago(now - 5 * 86_400_000, now)).toBe('5 дн. назад');
+    } finally {
+      setLang('en');
+    }
   });
 });

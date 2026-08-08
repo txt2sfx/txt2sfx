@@ -30,6 +30,7 @@
 
 import { encodeWav, type CodegenResult } from '@txt2sfx/core';
 import { CONTAINER, DEFAULT_BITRATE, encodeCompressed, type CompressedCodec } from './encode.js';
+import { t } from './i18n.js';
 
 /** A format the menu can offer. */
 export interface Format {
@@ -113,44 +114,45 @@ export async function download(subject: Downloadable, format: Format): Promise<s
 
   if (format.id === 'soundline') {
     save(new Blob([subject.source], { type: format.mime }), filename);
-    return `saved ${filename}`;
+    return t('dl.saved', { file: filename });
   }
 
   if (format.id === 'js') {
-    if (subject.code === null) return 'the recipe does not compile — nothing to export';
+    if (subject.code === null) return t('dl.noCompile');
     save(new Blob([`export default ${subject.code.code};\n`], { type: format.mime }), filename);
-    return `saved ${filename} · ${String(subject.code.bytes)} B`;
+    return t('dl.savedSize', { file: filename, size: `${String(subject.code.bytes)} B` });
   }
 
-  if (subject.buffer === null) return 'nothing rendered yet';
+  if (subject.buffer === null) return t('dl.nothingRendered');
 
   const codec = CODEC[format.id];
   if (codec !== undefined) {
     try {
       const bytes = await encodeCompressed(subject.buffer, codec, DEFAULT_BITRATE);
       save(new Blob([bytes.slice().buffer as ArrayBuffer], { type: format.mime }), filename);
-      return `saved ${filename} · ${size(bytes.length)}`;
+      return t('dl.savedSize', { file: filename, size: size(bytes.length) });
     } catch (error: unknown) {
       /* A capability problem, not a bug in the recipe. Name the format and leave the WAV
          entries — which need no encoder at all — as the obvious way forward. */
-      return `this browser could not encode ${format.short}: ${
-        error instanceof Error ? error.message : String(error)
-      } — WAV always works`;
+      return t('dl.encodeFail', {
+        format: format.short,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
   const bytes = encodeWav(subject.buffer, { bitDepth: format.id === 'wav24' ? 24 : 16 });
   /* `slice()` for a fresh ArrayBuffer: the view may look into a larger allocation. */
   save(new Blob([bytes.slice().buffer as ArrayBuffer], { type: format.mime }), filename);
-  return `saved ${filename} · ${size(bytes.length)}`;
+  return t('dl.savedSize', { file: filename, size: size(bytes.length) });
 }
 
 /** Copy text and report it, for the panels full of Copy buttons. */
 export async function copy(text: string, what: string): Promise<string> {
   try {
     await navigator.clipboard.writeText(text);
-    return `copied ${what}`;
+    return t('dl.copied', { what });
   } catch {
-    return 'the browser refused clipboard access — select the text instead';
+    return t('dl.clipboardRefused');
   }
 }

@@ -41,6 +41,7 @@ import { Bars } from './Bars.js';
 import { FormatMenu } from './FormatMenu.js';
 import { bars, ghostBars } from '../lib/layers.js';
 import { ms } from '../lib/format.js';
+import { useI18n } from '../lib/i18n.js';
 import { playBuffer, type Playback } from '../lib/engine.js';
 import {
   renderTarget,
@@ -76,6 +77,7 @@ export function ModelPanel({
   onDownload,
   seed,
 }: ModelPanelProps): React.JSX.Element {
+  const { t } = useI18n();
   const [status, setStatus] = useState<StableAudioStatus | null>(null);
   const [lines, setLines] = useState<readonly string[]>([]);
   const [running, setRunning] = useState(false);
@@ -108,7 +110,7 @@ export function ModelPanel({
 
   const run = useCallback(() => {
     if (prompt.trim() === '') {
-      setError('type a prompt first — the model answers the same sentence our loop does');
+      setError(t('model.promptFirst'));
       return;
     }
     const controller = new AbortController();
@@ -152,7 +154,7 @@ export function ModelPanel({
         if (abort.current === controller) abort.current = null;
         setRunning(false);
       });
-  }, [prompt, seed, seconds, status, onRendered]);
+  }, [prompt, seed, seconds, status, onRendered, t]);
 
   const play = useCallback(() => {
     playback.current?.stop();
@@ -166,20 +168,19 @@ export function ModelPanel({
     window.setTimeout(() => setPlaying(false), render.buffer.duration * 1000 + 120);
   }, [render, playing]);
 
+  /* `pnpm dev` and the README path are commands, not prose: they are typed verbatim, so
+     they stay out of the dictionary and are spliced back in as `<code>`. */
   if (!stableAudioSupported) {
-    return (
-      <p className="teach">
-        This view drives a diffusion model running on this machine, which only exists under{' '}
-        <code>pnpm dev</code>. A static build has no process to talk to.
-      </p>
-    );
+    return <p className="teach">{splice(t('model.needsDev'), { command: <code>pnpm dev</code> })}</p>;
   }
 
   if (status === null) {
     return (
       <p className="teach">
-        No local model endpoint. Under <code>pnpm dev</code> this view renders a reference from the same prompt with
-        Stable Audio Open Small — see <code>test/stable-audio/README.md</code> for the one-time provisioning.
+        {splice(t('model.noEndpoint'), {
+          command: <code>pnpm dev</code>,
+          readme: <code>test/stable-audio/README.md</code>,
+        })}
       </p>
     );
   }
@@ -190,9 +191,9 @@ export function ModelPanel({
     <div className="model">
       <div className="model-controls mono">
         <span className="chip chip-amber selected">stable-audio-open-small</span>
-        <span className="amber">· {render === null ? 'nothing rendered' : ms(render.buffer.duration * 1000)}</span>
+        <span className="amber">· {render === null ? t('model.nothing') : ms(render.buffer.duration * 1000)}</span>
         <label className="field tight">
-          seconds
+          {t('model.seconds')}
           <input
             type="number"
             name="model-seconds"
@@ -202,8 +203,8 @@ export function ModelPanel({
             onChange={(event) => setSeconds(Math.max(1, Math.min(12, event.target.valueAsNumber || 1)))}
           />
         </label>
-        <span className="faint">seed {seed}</span>
-        {status.ready ? null : <span className="warn">{status.reason ?? 'not provisioned'}</span>}
+        <span className="faint">{t('model.seed', { value: seed })}</span>
+        {status.ready ? null : <span className="warn">{status.reason ?? t('model.notProvisioned')}</span>}
       </div>
 
       <div className="model-wave">
@@ -219,15 +220,15 @@ export function ModelPanel({
 
       <div className="transport">
         <button type="button" className="amber-button big" onClick={play} disabled={render === null}>
-          {playing ? '❚❚' : '▶'} Play
+          {playing ? '❚❚' : '▶'} {t('model.play')}
         </button>
         {running ? (
           <button type="button" onClick={() => abort.current?.abort()}>
-            ■ Stop
+            ■ {t('model.stop')}
           </button>
         ) : (
           <button type="button" onClick={run} disabled={!status.ready || status.busy}>
-            ⤓ Render target
+            ⤓ {t('model.render')}
           </button>
         )}
         <FormatMenu
@@ -239,15 +240,11 @@ export function ModelPanel({
         />
         <div className="spacer" />
         <button type="button" onClick={onCompare} disabled={render === null}>
-          Compare with the recipe
+          {t('model.compare')}
         </button>
       </div>
 
-      <p className="caption">
-        Rendered audio from the same prompt — no recipe, nothing to tune, and one to two megabytes where the recipe is
-        under a kilobyte. It is here to be a <strong>target</strong>: A/B it, and tick{' '}
-        <em>fit the numbers to the reference</em> to point the optimizer at it.
-      </p>
+      <p className="caption">{t('model.caption')}</p>
 
       {error === null ? null : <div className="run-log-line bad">✗ {error}</div>}
       {lines.length === 0 ? null : (
@@ -255,4 +252,22 @@ export function ModelPanel({
       )}
     </div>
   );
+}
+
+/**
+ * Substitute `{name}` placeholders with React elements rather than with strings.
+ *
+ * `t()` cannot do this — its return type is a string, and a string cannot carry a `<code>`
+ * tag. The sentences that need it are the two that name a command the reader has to type,
+ * where losing the monospace would make `pnpm dev` read as English prose.
+ */
+function splice(
+  template: string,
+  parts: Readonly<Record<string, React.JSX.Element>>,
+): readonly React.ReactNode[] {
+  return template.split(/(\{\w+\})/g).map((piece, index) => {
+    const name = /^\{(\w+)\}$/.exec(piece)?.[1];
+    const element = name === undefined ? undefined : parts[name];
+    return <span key={`${String(index)}-${piece}`}>{element ?? piece}</span>;
+  });
 }

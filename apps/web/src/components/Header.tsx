@@ -15,9 +15,15 @@
  * confusing message. A dot that is green or amber, and a click that explains which,
  * costs 29 pixels of header and removes a whole class of support question.
  *
+ * The globe sits past it, in the corner, because language is the one control that has to
+ * be findable by someone who cannot read anything else on the page — and the far corner
+ * of the top bar is where every other application on their machine has put it.
+ *
  * @packageDocumentation
  */
 
+import { LanguageMenu } from './LanguageMenu.js';
+import { useI18n } from '../lib/i18n.js';
 import type { BridgeStatus } from '../lib/bridge-client.js';
 
 /** Which screen is showing. `share` is a leaf of `studio`, not a peer. */
@@ -31,6 +37,7 @@ export interface HeaderProps {
 }
 
 export function Header({ screen, onScreen, bridge, onOpenBridge }: HeaderProps): React.JSX.Element {
+  const { t } = useI18n();
   const live = bridge.state === 'live';
   const agent = bridge.health?.agent;
   const tools = bridge.health?.tools.length ?? 0;
@@ -40,12 +47,12 @@ export function Header({ screen, onScreen, bridge, onOpenBridge }: HeaderProps):
      done the npx step and not the MCP-config step, and being told `bridge live` would
      send them looking in the wrong place. */
   const tone = !live ? 'bad' : agent?.connected === true ? 'ok' : 'warn';
-  const label = !live ? 'bridge offline' : agent?.connected === true ? 'agent attached' : 'bridge live';
+  const label = !live ? t('bridge.offline') : agent?.connected === true ? t('bridge.attached') : t('bridge.live');
   const meta = !live
-    ? 'not connected'
+    ? t('bridge.notConnected')
     : agent?.connected === true
-      ? `${agent.client ?? 'MCP'} · ${String(tools)} tools`
-      : 'no agent yet';
+      ? t('bridge.tools', { client: agent.client ?? 'MCP', count: tools })
+      : t('bridge.noAgent');
 
   return (
     <header className="topbar">
@@ -53,14 +60,14 @@ export function Header({ screen, onScreen, bridge, onOpenBridge }: HeaderProps):
         txt2sfx
       </button>
 
-      <nav className="segmented" aria-label="screen">
+      <nav className="segmented" aria-label={t('nav.screenAria')}>
         <button
           type="button"
           className={screen === 'gallery' ? 'selected' : ''}
           aria-current={screen === 'gallery'}
           onClick={() => onScreen('gallery')}
         >
-          Sounds
+          {t('nav.sounds')}
         </button>
         <button
           type="button"
@@ -68,22 +75,19 @@ export function Header({ screen, onScreen, bridge, onOpenBridge }: HeaderProps):
           aria-current={screen !== 'gallery'}
           onClick={() => onScreen('studio')}
         >
-          Studio
+          {t('nav.studio')}
         </button>
       </nav>
 
       <div className="spacer" />
 
-      <button
-        type="button"
-        className={`pill pill-${tone}`}
-        title="agent bridge & MCP status"
-        onClick={onOpenBridge}
-      >
+      <button type="button" className={`pill pill-${tone}`} title={t('bridge.title')} onClick={onOpenBridge}>
         <span className={`dot${live ? ' dot-breathing' : ''}`} />
         <span className="mono">{label}</span>
         <span className="mono faint">{meta}</span>
       </button>
+
+      <LanguageMenu />
     </header>
   );
 }

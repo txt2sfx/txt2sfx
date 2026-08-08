@@ -24,6 +24,7 @@
 
 import { formatNumber } from '@txt2sfx/core';
 import { layerColor } from '../lib/design.js';
+import { useI18n } from '../lib/i18n.js';
 import { positionToValue, valueToPosition, type Slot } from '../lib/slots.js';
 
 export interface SlotsCardProps {
@@ -49,15 +50,23 @@ export function SlotsCard({
   onFit,
   onStopFit,
 }: SlotsCardProps): React.JSX.Element {
+  const { t } = useI18n();
+
+  /* The example and the tilde stay outside the dictionary and inside `<code>`: they are
+     the language's own syntax, and a translator who "localised" `~700Hz[500..1400]` would
+     be teaching a recipe that does not parse. So the placeholder is left standing and
+     split on here, rather than substituted — a string cannot carry an element. */
+  const [before = '', after = ''] = t('slots.teachAfter').split('{example}');
+
   return (
     <div className="panel">
       <div className="panel-head">
-        <span className="mono panel-title">SLOTS</span>
+        <span className="mono panel-title">{t('slots.title')}</span>
         <div className="spacer" />
         {fitting === null ? null : <span className="mono faint">{fitting}</span>}
         {fitRunning ? (
-          <button type="button" onClick={onStopFit} title="stop the search and keep the best it found">
-            ■ Stop
+          <button type="button" onClick={onStopFit} title={t('slots.stopTitle')}>
+            ■ {t('slots.stop')}
           </button>
         ) : (
           <button
@@ -65,9 +74,9 @@ export function SlotsCard({
             className="violet"
             onClick={onFit}
             disabled={fitBlocked !== null}
-            title={fitBlocked ?? 'fit every ~slot to the loaded reference'}
+            title={fitBlocked ?? t('slots.fitTitle')}
           >
-            ⌖ Fit to B
+            ⌖ {t('slots.fit')}
           </button>
         )}
       </div>
@@ -75,8 +84,11 @@ export function SlotsCard({
       <div className="panel-body">
         {slots.length === 0 ? (
           <p className="teach">
-            No <code>~</code> slots here. Write a number as <code>~700Hz[500..1400]</code> to make it a knob and hand
-            it to the optimizer.
+            {t('slots.teachBefore')}
+            <code>~</code>
+            {before}
+            <code>~700Hz[500..1400]</code>
+            {after}
           </p>
         ) : (
           <div className="sliders">

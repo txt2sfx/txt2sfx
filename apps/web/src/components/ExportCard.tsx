@@ -23,6 +23,7 @@ import type { CodegenResult } from '@txt2sfx/core';
 import { GLOBAL_LIMITS } from '@txt2sfx/shared';
 import { copy } from '../lib/download.js';
 import { bytes as fmtBytes } from '../lib/format.js';
+import { useI18n } from '../lib/i18n.js';
 
 export interface ExportCardProps {
   readonly code: CodegenResult | null;
@@ -33,6 +34,7 @@ export interface ExportCardProps {
 }
 
 export function ExportCard({ code, source, peak, seed, onCompare }: ExportCardProps): React.JSX.Element {
+  const { t } = useI18n();
   const [note, setNote] = useState<string | null>(null);
 
   const say = (message: string): void => {
@@ -48,24 +50,24 @@ export function ExportCard({ code, source, peak, seed, onCompare }: ExportCardPr
   return (
     <div className="panel">
       <div className="panel-head">
-        <span className="mono panel-title">EXPORT</span>
+        <span className="mono panel-title">{t('export.title')}</span>
         <div className="spacer" />
         {note === null ? null : <span className="mono faint">{note}</span>}
         <button
           type="button"
           disabled={code === null}
-          onClick={() => code !== null && void copy(code.code, 'the JavaScript').then(say)}
+          onClick={() => code !== null && void copy(code.code, t('what.js')).then(say)}
         >
-          Copy JS
+          {t('export.copyJs')}
         </button>
-        <button type="button" onClick={() => void copy(source, 'the soundline').then(say)}>
-          Copy soundline
+        <button type="button" onClick={() => void copy(source, t('what.soundline')).then(say)}>
+          {t('export.copySoundline')}
         </button>
       </div>
 
       <div className="panel-body">
         {code === null ? (
-          <p className="teach">The recipe does not compile, so there is nothing to size yet.</p>
+          <p className="teach">{t('export.noCompile')}</p>
         ) : (
           <>
             <div className="budget">
@@ -73,15 +75,15 @@ export function ExportCard({ code, source, peak, seed, onCompare }: ExportCardPr
                 <div className={`budget-fill${over ? ' over' : ''}`} style={{ width: `${String(share)}%` }} />
               </div>
               <span className="mono faint">
-                {fmtBytes(used)} of {fmtBytes(budget)}
+                {t('export.of', { used: fmtBytes(used), budget: fmtBytes(budget) })}
               </span>
             </div>
 
             <div className="facts mono">
-              <span>{code.ir.nodes.length} nodes</span>
-              <span>{code.ir.buffers.length} buffers</span>
-              <span>peak {peak === null ? '—' : peak.toFixed(3)}</span>
-              <span>seed {seed}</span>
+              <span>{t('export.nodes', { count: code.ir.nodes.length })}</span>
+              <span>{t('export.buffers', { count: code.ir.buffers.length })}</span>
+              <span>{t('export.peak', { value: peak === null ? '—' : peak.toFixed(3) })}</span>
+              <span>{t('export.seed', { value: seed })}</span>
             </div>
 
             <pre className="code-block">{code.code}</pre>
@@ -89,7 +91,7 @@ export function ExportCard({ code, source, peak, seed, onCompare }: ExportCardPr
         )}
 
         <button type="button" className="wide" onClick={onCompare}>
-          Compare A / B ↑
+          {t('export.compare')}
         </button>
       </div>
     </div>

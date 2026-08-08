@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { FORMATS, formatById, type Format } from '../lib/download.js';
+import { useI18n } from '../lib/i18n.js';
 
 export interface FormatMenuProps {
   readonly formatId: string;
@@ -37,6 +38,7 @@ export function FormatMenu({
   disabled = false,
   className = '',
 }: FormatMenuProps): React.JSX.Element {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const host = useRef<HTMLDivElement | null>(null);
@@ -90,10 +92,10 @@ export function FormatMenu({
           type="button"
           className="split-main"
           disabled={disabled || busy}
-          title={`download ${format.label}`}
+          title={t('format.downloadTitle', { label: format.label })}
           onClick={() => run(format)}
         >
-          {busy ? 'Encoding…' : 'Download'}
+          {busy ? t('format.encoding') : t('format.download')}
           <span className="mono split-format">{format.short}</span>
         </button>
         <button
@@ -101,7 +103,7 @@ export function FormatMenu({
           className="split-toggle"
           disabled={disabled || busy}
           aria-expanded={open}
-          aria-label="choose a format"
+          aria-label={t('format.chooseAria')}
           onClick={() => setOpen((current) => !current)}
         >
           ▾

@@ -32,6 +32,7 @@ import { FormatMenu } from '../components/FormatMenu.js';
 import { catColor } from '../lib/design.js';
 import { copy, type Format } from '../lib/download.js';
 import { bytes as fmtBytes, ms } from '../lib/format.js';
+import { useI18n } from '../lib/i18n.js';
 import { bars, ghostBars } from '../lib/layers.js';
 import { shareLink } from '../lib/share.js';
 
@@ -76,6 +77,7 @@ export function Share({
   onFormat,
   onDownload,
 }: ShareProps): React.JSX.Element {
+  const { t } = useI18n();
   const [note, setNote] = useState<string | null>(null);
   const card = useRef<HTMLDivElement>(null);
 
@@ -160,11 +162,11 @@ export function Share({
     }
     if (lines.length > 8) {
       ctx.fillStyle = 'rgba(226,232,240,0.5)';
-      ctx.fillText(`… ${String(lines.length - 8)} more line(s)`, 48, y);
+      ctx.fillText(t('share.moreLines', { count: lines.length - 8 }), 48, y);
     }
 
     return canvas;
-  }, [values, source, caption, code, durationMs]);
+  }, [values, source, caption, code, durationMs, t]);
 
   const copyImage = useCallback(async (): Promise<void> => {
     const canvas = paint();
@@ -173,11 +175,11 @@ export function Share({
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (blob === null) throw new Error('no image');
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      say('copied the card');
+      say(t('share.copiedCard'));
     } catch {
-      say('the clipboard refused an image — use Save PNG');
+      say(t('share.pngInstead'));
     }
-  }, [paint]);
+  }, [paint, t]);
 
   const savePng = useCallback((): void => {
     const canvas = paint();
@@ -186,15 +188,15 @@ export function Share({
     link_.href = canvas.toDataURL('image/png');
     link_.download = `${name}.png`;
     link_.click();
-    say(`saved ${name}.png`);
-  }, [paint, name]);
+    say(t('share.savedPng', { file: `${name}.png` }));
+  }, [paint, name, t]);
 
   return (
     <div className="screen screen-share">
       <div className="share-grid">
         <div className="share-main">
           <button type="button" className="link back" onClick={onBack}>
-            ← back to studio
+            {t('share.back')}
           </button>
           <h2 className="mono">{name}</h2>
           <p className="share-prompt">“{prompt === '' ? name.replace(/-/g, ' ') : prompt}”</p>
@@ -216,25 +218,23 @@ export function Share({
 
           <div className="input-shell link-row">
             <span className="mono link-text">{link}</span>
-            <button type="button" className="primary" onClick={() => void copy(link, 'the link').then(say)}>
-              Copy link
+            <button type="button" className="primary" onClick={() => void copy(link, t('what.link')).then(say)}>
+              {t('share.copyLink')}
             </button>
           </div>
-          <p className="caption">
-            Opens a page that plays the sound the moment it loads. The recipe travels inside the link, so nothing has to
-            stay up for it to keep working and no key is needed to listen — which is also why it is long.
-          </p>
+          <p className="caption">{t('share.linkCaption')}</p>
 
           <div className="share-actions">
             <button
               type="button"
               disabled={code === null}
-              onClick={() => code !== null && void copy(code.code, 'the JavaScript').then(say)}
+              onClick={() => code !== null && void copy(code.code, t('what.js')).then(say)}
             >
-              Copy JS{code === null ? '' : ` · ${fmtBytes(code.bytes)}`}
+              {t('share.copyJs')}
+              {code === null ? '' : ` · ${fmtBytes(code.bytes)}`}
             </button>
-            <button type="button" onClick={() => void copy(source, 'the soundline').then(say)}>
-              Copy soundline
+            <button type="button" onClick={() => void copy(source, t('what.soundline')).then(say)}>
+              {t('share.copySoundline')}
             </button>
             <FormatMenu formatId={formatId} onFormat={onFormat} onDownload={onDownload} />
             {note === null ? null : <span className="mono faint">{note}</span>}
@@ -256,10 +256,10 @@ export function Share({
 
           <div className="share-actions">
             <button type="button" className="wide" onClick={() => void copyImage()}>
-              Copy image
+              {t('share.copyImage')}
             </button>
             <button type="button" className="wide" onClick={savePng}>
-              Save PNG
+              {t('share.savePng')}
             </button>
           </div>
         </div>

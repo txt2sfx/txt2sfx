@@ -65,6 +65,7 @@ import { bankEntries, exampleEntries, mergeCatalog, type Entry } from './lib/cat
 import { download, formatById, type Format } from './lib/download.js';
 import { playBuffer, playLive, render, type Playback } from './lib/engine.js';
 import { bundledRecipes, canSave, fetchRecipes, saveRecipe } from './lib/examples.js';
+import { useI18n } from './lib/i18n.js';
 import { renderLayers } from './lib/layers.js';
 import { loadLibrary, saveLibrary, type Library } from './lib/library.js';
 import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
@@ -104,6 +105,8 @@ const FIT_ANCHOR = 0.25;
 const FIT_SPREAD = 0.25;
 
 export function App(): React.JSX.Element {
+  const { t } = useI18n();
+
   /* --- the catalog -------------------------------------------------------- */
 
   const [examples, setExamples] = useState<readonly Entry[]>(() => exampleEntries(bundledRecipes()));
@@ -353,7 +356,7 @@ export function App(): React.JSX.Element {
       stop();
       const result = parseWithDiagnostics(text);
       if (result.ast === null) {
-        setStatus(`${name} does not parse — open it to see why`);
+        setStatus(t('app.doesNotParse', { name }));
         return;
       }
       const live = playLive(result.ast, { seed });
@@ -361,7 +364,7 @@ export function App(): React.JSX.Element {
       setPlayingName(name);
       stopTimer.current = window.setTimeout(() => setPlayingName(null), live.ir.durationSec * 1000 + 200);
     },
-    [playingName, seed, stop],
+    [playingName, seed, stop, t],
   );
 
   const play = useCallback(() => {
@@ -402,9 +405,9 @@ export function App(): React.JSX.Element {
       .then((buffer) => setReference({ name: file.name, buffer }))
       .catch((error: unknown) => {
         setReference(null);
-        setReferenceError(`could not decode ${file.name}: ${String(error)}`);
+        setReferenceError(t('warn.decodeFail', { file: file.name, error: String(error) }));
       });
-  }, []);
+  }, [t]);
 
   /**
    * Render the current recipe again with a different seed.
@@ -418,9 +421,9 @@ export function App(): React.JSX.Element {
     if (ast === null) return;
     const other = (seed + 1 + Math.floor(Math.random() * 0xfff)) & 0xffff;
     void render(ast, { seed: other })
-      .then((result) => setTake({ name: `take · seed ${String(other)}`, buffer: result.buffer }))
+      .then((result) => setTake({ name: t('app.take', { seed: other }), buffer: result.buffer }))
       .catch(() => setTake(null));
-  }, [ast, seed]);
+  }, [ast, seed, t]);
 
   const b = bKind === 'take' ? take : reference;
 
@@ -544,10 +547,10 @@ export function App(): React.JSX.Element {
           delete next[selected];
           return next;
         });
-        setStatus(`saved ${path}`);
+        setStatus(t('app.saved', { path }));
       })
       .catch((error: unknown) => setStatus(String(error)));
-  }, [selected, source]);
+  }, [selected, source, t]);
 
   /**
    * Publish the current buffer to the bank.
@@ -557,7 +560,7 @@ export function App(): React.JSX.Element {
    * fingerprint belongs to the sound that was auditioned, not to a re-render nobody heard.
    */
   const publish = useCallback(async (): Promise<string> => {
-    if (rendered === null) return 'nothing rendered yet — fix the recipe first';
+    if (rendered === null) return t('app.nothingRendered');
     const profile = extractProfile({
       samples: Float32Array.from(rendered.buffer.getChannelData(0)),
       sampleRate: rendered.buffer.sampleRate,
@@ -569,10 +572,8 @@ export function App(): React.JSX.Element {
       profile,
     });
     setBankNonce((n) => n + 1);
-    return result.created
-      ? `published as #${String(result.recipe.id)}`
-      : `already in the bank as #${String(result.recipe.id)}`;
-  }, [bank, current, prompt, rendered, selected, source]);
+    return t(result.created ? 'app.published' : 'app.alreadyPublished', { id: result.recipe.id });
+  }, [bank, current, prompt, rendered, selected, source, t]);
 
   /* --- fitting by hand ---------------------------------------------------- */
 
@@ -590,7 +591,7 @@ export function App(): React.JSX.Element {
     const controller = new AbortController();
     fitAbort.current = controller;
     setFitRunning(true);
-    setFitting('fitting…');
+    setFitting(t('slots.fitting'));
     void optimize({
       source,
       target: targetFromBuffer(b.buffer),
@@ -605,7 +606,11 @@ export function App(): React.JSX.Element {
            penalty, and a live number that ends up disagreeing with the verdict two lines
            below it is worse than no live number. */
         setFitting(
-          `generation ${String(report.generation)}/${String(FIT_GENERATIONS)} · distance ${report.distance.toFixed(3)}`,
+          t('slots.generation', {
+            n: report.generation,
+            total: FIT_GENERATIONS,
+            distance: report.distance.toFixed(3),
+          }),
         );
       },
     })
@@ -616,7 +621,7 @@ export function App(): React.JSX.Element {
            meant to cost the rest of the wait and nothing else. */
         if (result.slots.length > 0) setSource(result.source);
         setFitting(
-          `${result.initialDistance.toFixed(3)} → ${result.distance.toFixed(3)} (${result.de.stopped})${result.slots.length === 0 ? ' — no ~slots to fit' : ''}`,
+          `${result.initialDistance.toFixed(3)} → ${result.distance.toFixed(3)} (${result.de.stopped})${result.slots.length === 0 ? t('slots.noSlots') : ''}`,
         );
       })
       .catch((error: unknown) => setFitting(String(error)))
@@ -624,17 +629,17 @@ export function App(): React.JSX.Element {
         if (fitAbort.current === controller) fitAbort.current = null;
         setFitRunning(false);
       });
-  }, [ast, b, fitRunning, seed, setSource, source]);
+  }, [ast, b, fitRunning, seed, setSource, source, t]);
 
   const stopFit = useCallback(() => fitAbort.current?.abort(), []);
 
   const fitBlocked =
     b === null
-      ? 'pick a B side in Compare A / B first'
+      ? t('blocked.noB')
       : ast === null
-        ? 'the recipe does not parse'
+        ? t('blocked.noParse')
         : slots.length === 0
-          ? 'this recipe has no ~slots to fit'
+          ? t('blocked.noSlots')
           : null;
 
   /* --- downloading -------------------------------------------------------- */
@@ -920,21 +925,17 @@ export function App(): React.JSX.Element {
 
   const warnings: string[] = [];
   if (rendered?.clipped === true) {
-    warnings.push(
-      `mix peaks at ${rendered.peak.toFixed(3)}, above the ${String(GLOBAL_LIMITS.maxPeak)} limit — lower a layer's gain rather than normalizing`,
-    );
+    warnings.push(t('warn.clipped', { peak: rendered.peak.toFixed(3), limit: GLOBAL_LIMITS.maxPeak }));
   }
   if (ast !== null && rendered !== null) {
     const declared = declaredDurationMs(ast);
     const actual = rendered.durationMs - 50;
     if (actual > declared * 1.15) {
-      warnings.push(
-        `sound runs ~${String(Math.round(actual))}ms but the header declares ${String(Math.round(declared))}ms`,
-      );
+      warnings.push(t('warn.longer', { actual: Math.round(actual), declared: Math.round(declared) }));
     }
   }
   if (code !== null && !code.withinBudget) {
-    warnings.push(`export is ${String(code.bytes)} B, over the ${String(GLOBAL_LIMITS.maxExportBytes)} B budget`);
+    warnings.push(t('warn.overBudget', { bytes: code.bytes, budget: GLOBAL_LIMITS.maxExportBytes }));
   }
   if (renderError !== null) warnings.push(renderError);
   if (referenceError !== null) warnings.push(referenceError);
@@ -1080,7 +1081,7 @@ export function App(): React.JSX.Element {
           under one seed and exported under another is two different sounds with one name. */}
       <div className="seedbar mono">
         <label>
-          seed
+          {t('app.seed')}
           <input
             type="number"
             name="seed"
@@ -1088,16 +1089,16 @@ export function App(): React.JSX.Element {
             onChange={(event) => setSeed(Number(event.target.valueAsNumber || 0))}
           />
         </label>
-        <button type="button" title="new random seed" onClick={() => setSeed(Math.floor(Math.random() * 0xffff))}>
-          rnd
+        <button type="button" title={t('app.rndTitle')} onClick={() => setSeed(Math.floor(Math.random() * 0xffff))}>
+          {t('app.rnd')}
         </button>
         {canSave ? (
-          <button type="button" onClick={save} title="write examples/<name>.soundline">
-            Save
+          <button type="button" onClick={save} title={t('app.saveTitle')}>
+            {t('app.save')}
           </button>
         ) : null}
         <button type="button" onClick={() => void publish().then(setStatus)} disabled={rendered === null}>
-          Publish
+          {t('app.publish')}
         </button>
       </div>
     </div>

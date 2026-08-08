@@ -29,6 +29,7 @@
 import { useEffect, useState } from 'react';
 import type { GenerateResult } from '@txt2sfx/agent';
 import { FitPreview } from './FitPreview.js';
+import { useI18n } from '../lib/i18n.js';
 
 export interface RunStripProps {
   readonly running: boolean;
@@ -54,6 +55,7 @@ export function RunStrip({
   seed,
   onTake,
 }: RunStripProps): React.JSX.Element | null {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   /* Open while it runs, closed when it stops. Not a one-way door: a user who collapses
@@ -76,18 +78,19 @@ export function RunStrip({
             last
           ) : (
             <span className={result.accepted ? 'good' : 'bad'}>
-              {result.accepted ? 'accepted' : `not accepted — ${result.outcome}`}
+              {result.accepted ? t('run.accepted') : t('run.notAccepted', { outcome: result.outcome })}
               {result.distance === undefined
                 ? ''
-                : ` · distance ${result.distance.toFixed(3)}${hadTarget ? ' to reference' : ''}`}
+                : t(hadTarget ? 'run.distanceToRef' : 'run.distance', { distance: result.distance.toFixed(3) })}
               {result.examples.length === 0
-                ? ' · no few-shot examples'
-                : ` · ${String(result.examples.length)} example(s)${result.fallbackExamples ? ' (fallback, unrelated)' : ''}`}
+                ? t('run.noExamples')
+                : t('run.examples', { count: result.examples.length }) +
+                  (result.fallbackExamples ? t('run.fallback') : '')}
             </span>
           )}
         </span>
         <div className="spacer" />
-        <span className="mono faint">{open ? 'hide' : `${String(log.length)} steps`}</span>
+        <span className="mono faint">{open ? t('run.hide') : t('run.steps', { count: log.length })}</span>
       </button>
 
       {open ? (

@@ -20,6 +20,7 @@
 import { Bars } from './Bars.js';
 import { catColor, catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
+import { useI18n } from '../lib/i18n.js';
 import { useBars } from '../lib/useBars.js';
 
 /** Bars across a card. 44 is about 6 px each at the grid's minimum column width. */
@@ -54,6 +55,7 @@ export function SoundCard({
   onPlay,
   onTrash,
 }: SoundCardProps): React.JSX.Element {
+  const { t } = useI18n();
   const { values, ready } = useBars(source, seed, BAR_COUNT, name);
 
   return (
@@ -75,7 +77,7 @@ export function SoundCard({
           role="button"
           tabIndex={0}
           className="chip-danger"
-          title={trashed ? 'put it back in the gallery' : 'hide it from the gallery — the file is not touched'}
+          title={trashed ? t('card.restoreTitle') : t('card.trashTitle')}
           onClick={(event) => {
             event.stopPropagation();
             onTrash();
@@ -87,7 +89,7 @@ export function SoundCard({
             onTrash();
           }}
         >
-          {trashed ? 'restore' : 'trash'}
+          {trashed ? t('card.restore') : t('card.trash')}
         </span>
       </div>
 
@@ -96,7 +98,7 @@ export function SoundCard({
           role="button"
           tabIndex={0}
           className="play-round"
-          title={playing ? 'stop' : 'play'}
+          title={playing ? t('card.stop') : t('card.play')}
           onClick={(event) => {
             event.stopPropagation();
             onPlay();
@@ -120,8 +122,10 @@ export function SoundCard({
         />
       </div>
 
-      <p className="card-prompt">{prompt === '' ? <span className="faint">no prompt recorded</span> : prompt}</p>
-      {editedAt === undefined ? null : <div className="mono card-edited">edited {ago(editedAt)}</div>}
+      <p className="card-prompt">{prompt === '' ? <span className="faint">{t('card.noPrompt')}</span> : prompt}</p>
+      {editedAt === undefined ? null : (
+        <div className="mono card-edited">{t('card.edited', { when: ago(editedAt) })}</div>
+      )}
     </button>
   );
 }

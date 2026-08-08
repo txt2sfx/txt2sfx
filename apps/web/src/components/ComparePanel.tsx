@@ -51,10 +51,11 @@ import {
   type Metrics,
 } from '../lib/analysis.js';
 import { drawWaveform, drawWaveformGuides, F_MIN, fMaxFor, type Box } from '../lib/draw.js';
-import { COLOUR_MODES, MODE_LEGEND, paintMagnitude, paintSpectrogram, swatchesFor, type ColourMode } from '../lib/spectro.js';
+import { colourModes, modeLegend, paintMagnitude, paintSpectrogram, swatchesFor, type ColourMode } from '../lib/spectro.js';
 import { copy } from '../lib/download.js';
 import { delta, hz, ms } from '../lib/format.js';
 import { playBuffer, type Playback } from '../lib/engine.js';
+import { useI18n, type Key } from '../lib/i18n.js';
 
 /** Where B comes from. */
 export type BKind = 'model' | 'upload' | 'take';
@@ -86,6 +87,13 @@ const DIFF_RANGE_DB = 30;
 
 const WAVE_HEIGHT = 52;
 const SPEC_HEIGHT = 132;
+
+/** What each kind of B side is, said once under the two names. */
+const B_HINT: Readonly<Record<BKind, Key>> = {
+  model: 'compare.hintModel',
+  upload: 'compare.hintUpload',
+  take: 'compare.hintTake',
+};
 
 export interface ComparePanelProps {
   readonly candidateName: string;
@@ -122,6 +130,7 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
     maxPeak,
   } = props;
 
+  const { t } = useI18n();
   const [mode, setMode] = useState<ColourMode>('tracks');
   const [width, setWidth] = useState(760);
   const [note, setNote] = useState<string | null>(null);
@@ -359,17 +368,21 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
 
     ctx.fillStyle = 'rgba(226,232,240,0.62)';
     ctx.fillText(
-      `${mode} · both onsets shifted to ${String(Math.round(pair.onsetMs))} ms · peak-normalized · log ${String(F_MIN)} Hz – ${hz(fMaxFor(pair.sampleRate))}`,
+      `${mode} · ${t('compare.alignment', {
+        onset: Math.round(pair.onsetMs),
+        min: F_MIN,
+        max: hz(fMaxFor(pair.sampleRate)),
+      })}`,
       pad,
       y,
     );
-    ctx.fillText(MODE_LEGEND[mode], pad, y + line * 0.8);
+    ctx.fillText(modeLegend(mode), pad, y + line * 0.8);
 
     try {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (blob === null) throw new Error('the canvas produced no image');
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      say('copied the picture');
+      say(t('compare.copiedPicture'));
     } catch {
       /* Safari and Firefox restrict image writes to the clipboard. A download is the
          same bytes by a different route, and silently failing is not an option. */
@@ -378,9 +391,9 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
       link.href = url;
       link.download = `${candidateName}-vs-${b?.name ?? 'b'}.png`;
       link.click();
-      say('the clipboard refused an image — saved a PNG instead');
+      say(t('compare.clipboardRefused'));
     }
-  }, [candidateName, candidate, b, pair, mode]);
+  }, [candidateName, candidate, b, pair, mode, t]);
 
   /* --- rows -------------------------------------------------------------- */
 
@@ -388,35 +401,33 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
     if (metrics === null) return [];
     const { a, b: bm } = metrics;
     return [
-      row('peak', a.peak, bm.peak, '', 3, 0.15),
-      row('duration to −60 dB', a.durationMs, bm.durationMs, 'ms', 0, 200),
-      row('attack to peak', a.attackMs, bm.attackMs, 'ms', 0, 3),
-      row('dominant partial', a.dominantHz, bm.dominantHz, 'Hz', 0, 300),
-      row('centroid', a.centroidHz, bm.centroidHz, 'Hz', 0, 600),
-      row('flatness', a.flatness, bm.flatness, '', 4, 0.08),
+      row(t('metric.peak'), a.peak, bm.peak, '', 3, 0.15),
+      row(t('metric.duration'), a.durationMs, bm.durationMs, 'ms', 0, 200),
+      row(t('metric.attack'), a.attackMs, bm.attackMs, 'ms', 0, 3),
+      row(t('metric.dominant'), a.dominantHz, bm.dominantHz, 'Hz', 0, 300),
+      row(t('metric.centroid'), a.centroidHz, bm.centroidHz, 'Hz', 0, 600),
+      row(t('metric.flatness'), a.flatness, bm.flatness, '', 4, 0.08),
+      /* The band edges themselves stay as they are: `60–250` is a number, and a
+         translated frequency range would be a different claim about the analysis. */
       ...BAND_LABELS.map((label, index) =>
-        row(`band ${label}`, a.bandsDb[index] ?? 0, bm.bandsDb[index] ?? 0, 'dB', 1, 3),
+        row(t('metric.band', { range: label }), a.bandsDb[index] ?? 0, bm.bandsDb[index] ?? 0, 'dB', 1, 3),
       ),
     ];
-  }, [metrics]);
+  }, [metrics, t]);
 
   const swatches = swatchesFor(mode, layerNames);
-  const bHint = {
-    model: 'rendered by a diffusion model from the same prompt — a target, not a competitor',
-    upload: 'your own file, onset-aligned and peak-normalized on load',
-    take: 'the same recipe with a different seed — how much of this sound is the design?',
-  }[bKind];
+  const bHint = t(B_HINT[bKind]);
 
   return (
     <div className="compare" ref={host}>
       <div className="compare-controls">
-        <span className="mono faint">B is a</span>
+        <span className="mono faint">{t('compare.bIs')}</span>
         <div className="chips">
           {(
             [
-              { id: 'model', label: 'Model render' },
-              { id: 'upload', label: 'File' },
-              { id: 'take', label: 'Another take' },
+              { id: 'model', label: t('compare.model') },
+              { id: 'upload', label: t('compare.file') },
+              { id: 'take', label: t('compare.take') },
             ] as const
           ).map((entry) => (
             <button
@@ -429,11 +440,7 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
                 if (entry.id === 'take') onNewTake();
               }}
               disabled={entry.id === 'model' && !modelAvailable}
-              title={
-                entry.id === 'model' && !modelAvailable
-                  ? 'needs the local diffusion model — see test/stable-audio/README.md'
-                  : undefined
-              }
+              title={entry.id === 'model' && !modelAvailable ? t('compare.modelBlocked') : undefined}
             >
               {entry.label}
             </button>
@@ -468,14 +475,14 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
       <div className="compare-names mono">
         <span className="cyan">A · {candidateName}</span>
         <span className="faint">/</span>
-        <span className="amber">B · {b?.name ?? 'nothing loaded'}</span>
+        <span className="amber">B · {b?.name ?? t('compare.nothingLoaded')}</span>
         <span className="faint hint">{bHint}</span>
       </div>
 
       <div className="compare-colour">
-        <span className="mono faint tiny">COLOUR</span>
+        <span className="mono faint tiny">{t('compare.colour')}</span>
         <div className="chips">
-          {COLOUR_MODES.map((entry) => (
+          {colourModes().map((entry) => (
             <button
               type="button"
               key={entry.id}
@@ -512,8 +519,10 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
           }}
         >
           <p>
-            Nothing to compare against yet. Drop an audio file here, pick <strong>Another take</strong> to render this
-            recipe with a new seed, or {modelAvailable ? 'let the local model render a target' : 'provision the local model'}.
+            {t('compare.dropzone', {
+              take: t('compare.take'),
+              model: t(modelAvailable ? 'compare.dropzoneModelReady' : 'compare.dropzoneModelMissing'),
+            })}
           </p>
         </div>
       ) : (
@@ -522,7 +531,7 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
               length, which carries the analyzer's trailing pad and would report every
               recipe as 50 ms longer than it is. */}
           <div className="mono plot-label cyan">
-            candidate · {ms(metrics?.a.durationMs ?? 0)}
+            {t('compare.candidate')} · {ms(metrics?.a.durationMs ?? 0)}
           </div>
           <div className="plot-row">
             <div className="axis" />
@@ -561,10 +570,13 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
           )}
 
           <p className="caption mono">
-            both onsets shifted to {String(Math.round(pair?.onsetMs ?? 5))} ms · peak-normalized · log frequency{' '}
-            {String(F_MIN)} Hz – {hz(fMaxFor(pair?.sampleRate ?? 44100))}
+            {t('compare.alignment', {
+              onset: Math.round(pair?.onsetMs ?? 5),
+              min: F_MIN,
+              max: hz(fMaxFor(pair?.sampleRate ?? 44100)),
+            })}
             <br />
-            {MODE_LEGEND[mode]}
+            {modeLegend(mode)}
           </p>
         </div>
       )}
@@ -573,7 +585,7 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
         <>
           <div className="table">
             <div className="table-head mono">
-              <span>METRIC</span>
+              <span>{t('compare.metric')}</span>
               <span>A</span>
               <span>B</span>
               <span>Δ</span>
@@ -587,17 +599,13 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
               </div>
             ))}
           </div>
-          <p className="caption">
-            Numeric, not perceptual — it ranks candidates, it does not judge them. Both signals are peak-normalized and
-            onset-aligned, so the distance cannot tell <em>this sound, closer</em> from <em>a different sound that
-            scores well</em>.
-          </p>
+          <p className="caption">{t('compare.numeric')}</p>
         </>
       )}
 
       <div className="compare-actions">
         <button type="button" onClick={() => void copyImage()} disabled={b === null}>
-          Copy picture
+          {t('compare.copyPicture')}
         </button>
         <button
           type="button"
@@ -606,16 +614,16 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
             metrics !== null &&
             void copy(
               metricsMarkdown(candidateName, b?.name ?? 'B', metrics.a, metrics.b),
-              'the numbers as markdown',
+              t('what.numbers'),
             ).then(say)
           }
         >
-          Copy numbers
+          {t('compare.copyNumbers')}
         </button>
         {note === null ? null : <span className="mono faint">{note}</span>}
         <div className="spacer" />
-        <button type="button" className="violet" onClick={onFit} disabled={fitBlocked !== null}>
-          Fit slots to B
+        <button type="button" className="violet" onClick={onFit} disabled={fitBlocked !== null} title={fitBlocked ?? ''}>
+          {t('compare.fitSlots')}
         </button>
       </div>
     </div>

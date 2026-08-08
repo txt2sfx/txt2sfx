@@ -16,6 +16,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import type { SoundlineError } from '@txt2sfx/core';
 import { highlight } from '../lib/highlight.js';
+import { useI18n } from '../lib/i18n.js';
 
 export interface EditorProps {
   readonly source: string;
@@ -24,6 +25,7 @@ export interface EditorProps {
 }
 
 export function Editor({ source, errors, onChange }: EditorProps): React.JSX.Element {
+  const { t } = useI18n();
   const textarea = useRef<HTMLTextAreaElement>(null);
   const overlay = useRef<HTMLPreElement>(null);
 
@@ -57,7 +59,7 @@ export function Editor({ source, errors, onChange }: EditorProps): React.JSX.Ele
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"
-        aria-label="soundline source"
+        aria-label={t('editor.aria')}
         onChange={(event) => onChange(event.target.value)}
         onScroll={(event) => {
           const pre = overlay.current;

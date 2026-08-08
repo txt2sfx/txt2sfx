@@ -33,6 +33,7 @@ import { SOUND_CATEGORIES } from '@txt2sfx/shared';
 import { SoundCard } from '../components/SoundCard.js';
 import { Bars } from '../components/Bars.js';
 import { catHue } from '../lib/design.js';
+import { useI18n, type Key } from '../lib/i18n.js';
 import { ghostBars } from '../lib/layers.js';
 
 /** A gallery row, with everything the card needs already derived. */
@@ -66,11 +67,7 @@ export interface GalleryProps {
 }
 
 /** The three steps, which is the whole of the product in eleven words. */
-const STEPS: readonly string[] = [
-  'Type what you hear',
-  'Play it, tweak the wording',
-  'Copy the JavaScript into your game',
-];
+const STEPS: readonly Key[] = ['gallery.step1', 'gallery.step2', 'gallery.step3'];
 
 export function Gallery({
   items,
@@ -89,6 +86,7 @@ export function Gallery({
   onPlay,
   onTrash,
 }: GalleryProps): React.JSX.Element {
+  const { t } = useI18n();
   const trashedCount = items.filter((item) => item.trashed).length;
 
   /* Filtering by category *and* by trash through one control, because they are the
@@ -126,8 +124,8 @@ export function Gallery({
     <div className="screen screen-gallery">
       <section className="hero">
         <div className="wrap">
-          <h1>Describe a sound. Get code that plays it.</h1>
-          <p className="lede">Nothing to ship but a few hundred bytes of Web Audio JavaScript.</p>
+          <h1>{t('gallery.title')}</h1>
+          <p className="lede">{t('gallery.lede')}</p>
 
           <form className="hero-row" onSubmit={submit}>
             <div className="input-shell accent">
@@ -137,27 +135,27 @@ export function Gallery({
                 name="prompt"
                 className="mono"
                 value={prompt}
-                placeholder="rusty gate opening slowly, then a heavy latch"
-                aria-label="describe the sound"
+                placeholder={t('gallery.placeholder')}
+                aria-label={t('gallery.describeAria')}
                 onChange={(event) => onPromptChange(event.target.value)}
               />
             </div>
             <button type="submit" className="primary big" disabled={prompt.trim() === ''}>
-              Generate
+              {t('gallery.generate')}
             </button>
           </form>
 
           {onboarded ? null : (
             <div className="onboard">
-              {STEPS.map((text, index) => (
-                <div className="onboard-step" key={text}>
+              {STEPS.map((step, index) => (
+                <div className="onboard-step" key={step}>
                   <span className="step-n">{index + 1}</span>
-                  <span>{text}</span>
+                  <span>{t(step)}</span>
                 </div>
               ))}
               <div className="spacer" />
               <button type="button" className="link" onClick={onDismissOnboarding}>
-                Got it
+                {t('gallery.gotIt')}
               </button>
             </div>
           )}
@@ -173,8 +171,8 @@ export function Gallery({
                 type="search"
                 name="search"
                 value={query}
-                placeholder="search names, prompts and recipes"
-                aria-label="search the catalog"
+                placeholder={t('gallery.searchPlaceholder')}
+                aria-label={t('gallery.searchAria')}
                 onChange={(event) => onQueryChange(event.target.value)}
               />
             </div>
@@ -185,7 +183,7 @@ export function Gallery({
                 className={`chip${filter === 'all' ? ' selected' : ''}`}
                 onClick={() => onFilterChange('all')}
               >
-                all
+                {t('gallery.all')}
               </button>
               {categories.map((category) => (
                 <button
@@ -203,7 +201,7 @@ export function Gallery({
                 className={`chip chip-quiet${filter === 'trash' ? ' selected' : ''}`}
                 onClick={() => onFilterChange(filter === 'trash' ? 'all' : 'trash')}
               >
-                trash · {trashedCount}
+                {t('gallery.trash')} · {trashedCount}
               </button>
             </div>
           </div>
@@ -214,13 +212,13 @@ export function Gallery({
               <p>
                 {query.trim() === ''
                   ? filter === 'trash'
-                    ? 'Trash is empty.'
-                    : `Nothing in the catalog is a ${filter}.`
-                  : `Nothing in the catalog matches “${query.trim()}”.`}
+                    ? t('gallery.emptyTrash')
+                    : t('gallery.emptyCategory', { category: filter })
+                  : t('gallery.emptyQuery', { query: query.trim() })}
               </p>
               {query.trim() === '' ? null : (
                 <button type="button" className="primary" onClick={() => onGenerate(query.trim())}>
-                  Generate it instead
+                  {t('gallery.generateInstead')}
                 </button>
               )}
             </div>

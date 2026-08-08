@@ -26,6 +26,7 @@
 import { useMemo } from 'react';
 import { catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
+import { useI18n } from '../lib/i18n.js';
 import type { GalleryItem } from '../screens/Gallery.js';
 
 /** Which ordering the rail is in. */
@@ -60,19 +61,20 @@ export function Rail({
   onTrash,
   onNew,
 }: RailProps): React.JSX.Element {
+  const { t } = useI18n();
   const live = items.filter((item) => !item.trashed);
   const trashed = items.filter((item) => item.trashed);
 
   const groups = useMemo<readonly Group[]>(() => {
     if (mode === 'trash') {
-      return [{ label: 'trash', hue: null, items: trashed, emptyText: 'Trash is empty.' }];
+      return [{ label: t('rail.groupTrash'), hue: null, items: trashed, emptyText: t('rail.emptyTrash') }];
     }
     if (mode === 'recent') {
       /* Anything never touched here sorts after everything that was, rather than to
          the top with a timestamp of zero: a fresh checkout would otherwise show the
          reference set as the most recent work. */
       const byRecency = [...live].sort((a, b) => (b.editedAt ?? 0) - (a.editedAt ?? 0));
-      return [{ label: 'recent', hue: 195, items: byRecency, emptyText: 'Nothing here yet.' }];
+      return [{ label: t('rail.groupRecent'), hue: 195, items: byRecency, emptyText: t('rail.emptyRecent') }];
     }
     const seen: string[] = [];
     for (const item of live) {
@@ -85,25 +87,23 @@ export function Rail({
       items: live.filter((item) => (item.category ?? 'misc') === category),
       emptyText: '',
     }));
-  }, [live, trashed, mode]);
+  }, [live, trashed, mode, t]);
 
   return (
     <aside className="rail">
       <div className="rail-top">
         <button type="button" className="primary block" onClick={onNew}>
-          <span className="plus">+</span>New sound
+          <span className="plus">+</span>
+          {t('rail.new')}
         </button>
       </div>
 
       <div className="rail-tabs">
         {(['recent', 'categories', 'trash'] as const).map((id) => (
-          <button
-            type="button"
-            key={id}
-            className={mode === id ? 'selected' : ''}
-            onClick={() => onMode(id)}
-          >
-            {id === 'trash' && trashed.length > 0 ? `Trash · ${String(trashed.length)}` : capital(id)}
+          <button type="button" key={id} className={mode === id ? 'selected' : ''} onClick={() => onMode(id)}>
+            {id === 'trash' && trashed.length > 0
+              ? t('rail.trashCount', { count: trashed.length })
+              : t(`rail.${id}`)}
           </button>
         ))}
       </div>
@@ -133,7 +133,11 @@ export function Rail({
                   }}
                 >
                   <span className="rail-name">{item.name}</span>
-                  {dirty.includes(item.name) ? <span className="dirty" title="unsaved edits">●</span> : null}
+                  {dirty.includes(item.name) ? (
+                    <span className="dirty" title={t('rail.unsaved')}>
+                      ●
+                    </span>
+                  ) : null}
                   <span className="mono faint rail-meta">
                     {mode === 'recent' && item.editedAt !== undefined ? ago(item.editedAt) : ms(item.durationMs)}
                   </span>
@@ -141,7 +145,7 @@ export function Rail({
                     role="button"
                     tabIndex={0}
                     className="rail-act"
-                    title={item.trashed ? 'restore' : 'move to trash'}
+                    title={item.trashed ? t('rail.restore') : t('rail.moveToTrash')}
                     onClick={(event) => {
                       event.stopPropagation();
                       onTrash(item.name);
@@ -162,8 +166,4 @@ export function Rail({
       </div>
     </aside>
   );
-}
-
-function capital(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

@@ -38,6 +38,7 @@ import { SoundPanel } from '../components/SoundPanel.js';
 import { SoundlineCard } from '../components/SoundlineCard.js';
 import { catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
+import { useI18n } from '../lib/i18n.js';
 import type { Format } from '../lib/download.js';
 import type { Slot } from '../lib/slots.js';
 import type { Generation, ProviderSettings } from '../lib/useGenerate.js';
@@ -109,6 +110,7 @@ export interface StudioProps {
 }
 
 export function Studio(props: StudioProps): React.JSX.Element {
+  const { t } = useI18n();
   const current = props.items.find((item) => item.name === props.selected);
   const layerNames = props.ast?.layers.map((layer) => layer.name) ?? [];
 
@@ -157,35 +159,31 @@ export function Studio(props: StudioProps): React.JSX.Element {
           />
 
           <div className="views">
-            <nav className="segmented small" aria-label="view">
+            <nav className="segmented small" aria-label={t('studio.viewAria')}>
               <button
                 type="button"
                 className={props.view === 'sound' ? 'selected cyan' : ''}
                 onClick={() => props.onView('sound')}
               >
-                Soundline
+                {t('studio.soundline')}
               </button>
               <button
                 type="button"
                 className={props.view === 'model' ? 'selected amber' : ''}
                 onClick={() => props.onView('model')}
               >
-                Model
+                {t('studio.model')}
               </button>
               <button
                 type="button"
                 className={props.view === 'compare' ? 'selected violet' : ''}
                 onClick={() => props.onView('compare')}
               >
-                Compare A / B
+                {t('studio.compare')}
               </button>
             </nav>
-            {props.view === 'compare' ? (
-              <span className="faint hint">numeric, not perceptual — it ranks candidates, it does not judge them</span>
-            ) : null}
-            {props.view === 'model' ? (
-              <span className="faint hint">rendered audio from the same prompt — no recipe, nothing to tune</span>
-            ) : null}
+            {props.view === 'compare' ? <span className="faint hint">{t('studio.hintCompare')}</span> : null}
+            {props.view === 'model' ? <span className="faint hint">{t('studio.hintModel')}</span> : null}
           </div>
 
           <section className="card-panel" style={{ ['--hue' as string]: String(catHue(current?.category)) }}>
@@ -197,8 +195,8 @@ export function Studio(props: StudioProps): React.JSX.Element {
                   analyzer's trailing pad and would report a 55 ms pop as 105 ms. */}
               <span className="mono faint">
                 {ms(props.ast === null ? 0 : declaredDurationMs(props.ast))}
-                {current?.editedAt === undefined ? '' : ` · edited ${ago(current.editedAt)}`}
-                {props.dirty.includes(props.selected) ? ' · unsaved' : ''}
+                {current?.editedAt === undefined ? '' : t('studio.edited', { when: ago(current.editedAt) })}
+                {props.dirty.includes(props.selected) ? t('studio.unsaved') : ''}
               </span>
             </div>
 

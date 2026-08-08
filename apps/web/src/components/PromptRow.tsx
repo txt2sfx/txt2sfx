@@ -35,6 +35,7 @@ import { useEffect, useRef, useState } from 'react';
 import { needsKey, providerOptions, type ProviderKind } from '../lib/agent.js';
 import { canRemember } from '../lib/keystore.js';
 import { HUE } from '../lib/design.js';
+import { useI18n, type Key } from '../lib/i18n.js';
 import type { ProviderSettings } from '../lib/useGenerate.js';
 
 /** Which of the three studio views is showing, so the row can take its hue. */
@@ -74,6 +75,7 @@ export function PromptRow({
   onRun,
   onStop,
 }: PromptRowProps): React.JSX.Element {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const popover = useRef<HTMLDivElement | null>(null);
 
@@ -133,8 +135,8 @@ export function PromptRow({
           name="prompt"
           className="mono"
           value={prompt}
-          placeholder="a heavy metal door slamming shut in a corridor"
-          aria-label="describe the sound"
+          placeholder={t('prompt.placeholder')}
+          aria-label={t('prompt.describeAria')}
           onChange={(event) => onPromptChange(event.target.value)}
         />
 
@@ -143,18 +145,20 @@ export function PromptRow({
             type="button"
             className={`chip-hue${open ? ' selected' : ''}`}
             aria-expanded={open}
-            title="which model answers, and with which key"
+            title={t('prompt.providerTitle')}
             onClick={() => setOpen((current) => !current)}
           >
             {settings.kind}
-            {settings.kind === 'agent' && !agentReady ? <span className="warn-dot" title="no agent attached" /> : null}
+            {settings.kind === 'agent' && !agentReady ? (
+              <span className="warn-dot" title={t('prompt.noAgentDot')} />
+            ) : null}
             <span className="caret-down">▾</span>
           </button>
 
           {open ? (
             <div className="popover">
               <label className="field">
-                model
+                {t('prompt.model')}
                 <select
                   name="provider"
                   value={settings.kind}
@@ -173,18 +177,18 @@ export function PromptRow({
               {wantsKey ? (
                 <>
                   <label className="field">
-                    model id
+                    {t('prompt.modelId')}
                     <input
                       type="text"
                       name="model-id"
                       value={settings.model}
                       placeholder={option?.defaultModel ?? 'default'}
-                      aria-label="model id"
+                      aria-label={t('prompt.modelIdAria')}
                       onChange={(event) => onSettingsChange({ ...settings, model: event.target.value })}
                     />
                   </label>
                   <label className="field">
-                    key
+                    {t('prompt.key')}
                     <input
                       type="password"
                       name="api-key"
@@ -194,23 +198,20 @@ export function PromptRow({
                          the hint browsers honour, and an API key is closer to a new
                          secret than to a stored login anyway. */
                       autoComplete="new-password"
-                      placeholder={`your ${settings.kind} key — this tab only`}
-                      aria-label={`${settings.kind} API key`}
+                      placeholder={t('prompt.keyPlaceholder', { provider: settings.kind })}
+                      aria-label={t('prompt.keyAria', { provider: settings.kind })}
                       onChange={(event) => onSettingsChange({ ...settings, apiKey: event.target.value })}
                     />
                   </label>
                   {canRemember ? (
-                    <label
-                      className="toggle"
-                      title="Encrypted with a non-extractable key in IndexedDB — not localStorage. Any script on this origin could still use it: see lib/keystore.ts."
-                    >
+                    <label className="toggle" title={t('prompt.rememberTitle')}>
                       <input
                         type="checkbox"
                         name="remember-key"
                         checked={settings.remember}
                         onChange={(event) => onSettingsChange({ ...settings, remember: event.target.checked })}
                       />
-                      remember this key
+                      {t('prompt.remember')}
                       {storedKeys.includes(settings.kind) ? (
                         <button
                           type="button"
@@ -220,7 +221,7 @@ export function PromptRow({
                             onSettingsChange({ ...settings, apiKey: '', remember: false });
                           }}
                         >
-                          forget
+                          {t('prompt.forget')}
                         </button>
                       ) : null}
                     </label>
@@ -228,7 +229,7 @@ export function PromptRow({
                 </>
               ) : null}
 
-              <label className="toggle" title={hasReference ? '' : 'load a reference in Compare A / B first'}>
+              <label className="toggle" title={hasReference ? '' : t('prompt.matchTitle')}>
                 <input
                   type="checkbox"
                   name="match-reference"
@@ -236,21 +237,21 @@ export function PromptRow({
                   disabled={!hasReference}
                   onChange={(event) => onSettingsChange({ ...settings, matchReference: event.target.checked })}
                 />
-                fit the numbers to the reference
+                {t('prompt.match')}
               </label>
 
-              <p className="popover-note">{note(settings.kind, option?.keySource, agentReady)}</p>
+              <p className="popover-note">{note(t, settings.kind, option?.keySource, agentReady)}</p>
             </div>
           ) : null}
         </div>
 
         {running ? (
           <button type="button" className="hue-button" onClick={onStop} disabled={stopping}>
-            {stopping ? 'stopping…' : 'Stop'}
+            {stopping ? t('prompt.stopping') : t('prompt.stop')}
           </button>
         ) : (
           <button type="submit" className="hue-button" disabled={blocked}>
-            Regenerate
+            {t('prompt.regenerate')}
           </button>
         )}
       </form>
@@ -258,18 +259,29 @@ export function PromptRow({
   );
 }
 
-/** One sentence about where the request goes. The most load-bearing text in the panel. */
-function note(kind: ProviderKind, keySource: string | undefined, agentReady: boolean): string {
+/**
+ * One sentence about where the request goes. The most load-bearing text in the panel.
+ *
+ * Takes the translator rather than reading the store directly, so it re-runs with the
+ * component that renders it instead of going stale on a language change.
+ */
+function note(
+  t: (key: Key, params?: Readonly<Record<string, string | number>>) => string,
+  kind: ProviderKind,
+  keySource: string | undefined,
+  agentReady: boolean,
+): string {
   switch (kind) {
     case 'mock':
-      return 'answers from the recipes in the catalog — no network, no key, and the validator, render, optimizer and export all still run';
+      return t('prompt.noteMock');
     case 'agent':
-      return agentReady
-        ? 'the request goes to your coding agent over the local bridge — no key, and nothing leaves this machine'
-        : 'no agent is attached to the bridge yet — open the badge in the header for the two commands';
+      return agentReady ? t('prompt.noteAgentReady') : t('prompt.noteAgentMissing');
     case 'bridge':
-      return 'the request waits for window.txt2sfx.reply(id, text) in devtools — no network';
+      return t('prompt.noteBridge');
     default:
-      return `the key lives in this tab only and goes nowhere but ${kind}${keySource === undefined ? '' : ` · get one at ${keySource}`}`;
+      return (
+        t('prompt.noteKey', { provider: kind }) +
+        (keySource === undefined ? '' : t('prompt.noteKeySource', { url: keySource }))
+      );
   }
 }

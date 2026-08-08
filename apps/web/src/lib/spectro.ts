@@ -18,7 +18,7 @@
  * Each mode answers by spending a colour dimension on a *measurement* rather than on
  * aesthetics, and each is legible only because the legend beside it names the axes.
  * A colour scheme whose meaning has to be remembered is a decoration; these are
- * instruments, so {@link MODE_LEGEND} and {@link swatchesFor} ship with them and the
+ * instruments, so {@link modeLegend} and {@link swatchesFor} ship with them and the
  * panel is not allowed to render one without the other.
  *
  * | mode | what colour means |
@@ -45,26 +45,30 @@
 import type { Spectrogram } from './fft.js';
 import { LAYER_RGB } from './design.js';
 import { binRanges, cellMax, diffColor, frameRange, hotColor } from './draw.js';
+import { t } from './i18n.js';
 
 /** Which question the spectrogram is being asked. */
 export type ColourMode = 'tracks' | 'channels' | 'hsv' | 'diff';
 
-/** The modes, in the order the picker offers them. */
-export const COLOUR_MODES: readonly { readonly id: ColourMode; readonly label: string }[] = [
-  { id: 'tracks', label: 'Tracks' },
-  { id: 'channels', label: 'Channels' },
-  { id: 'hsv', label: 'HSV' },
-  { id: 'diff', label: 'Diff' },
-];
+/**
+ * The modes, in the order the picker offers them.
+ *
+ * A function rather than a constant now that the labels are translated: a module-level
+ * array would freeze whichever language was in force when this file was first imported.
+ */
+export function colourModes(): readonly { readonly id: ColourMode; readonly label: string }[] {
+  return [
+    { id: 'tracks', label: t('mode.tracks') },
+    { id: 'channels', label: t('mode.channels') },
+    { id: 'hsv', label: t('mode.hsv') },
+    { id: 'diff', label: t('mode.diff') },
+  ];
+}
 
 /** One line under the picture, naming what colour means in the active mode. */
-export const MODE_LEGEND: Readonly<Record<ColourMode, string>> = {
-  tracks: 'hue = which layer owns this point · brightness = energy',
-  channels:
-    'R = noisiness · G = level · B = frequency height — a fixed axis per channel, so the colour itself names the character',
-  hsv: 'hue = dominant layer · saturation = tonal vs noisy · brightness = energy',
-  diff: 'cyan = candidate louder than the reference · amber = quieter · grey = matched',
-};
+export function modeLegend(mode: ColourMode): string {
+  return t(`legend.${mode}`);
+}
 
 /** A key beside the picture. */
 export interface Swatch {
@@ -88,19 +92,19 @@ export function swatchesFor(mode: ColourMode, layerNames: readonly string[]): re
     case 'tracks':
       return layers;
     case 'hsv':
-      return [...layers, { color: 'rgb(120,120,126)', label: 'noisy / desaturated' }];
+      return [...layers, { color: 'rgb(120,120,126)', label: t('swatch.noisy') }];
     case 'channels':
       return [
-        { color: 'rgb(236,214,72)', label: 'loud + noisy' },
-        { color: 'rgb(206,96,236)', label: 'noisy highs' },
-        { color: 'rgb(96,236,140)', label: 'loud tonal lows' },
-        { color: 'rgb(40,44,52)', label: 'silence' },
+        { color: 'rgb(236,214,72)', label: t('swatch.loudNoisy') },
+        { color: 'rgb(206,96,236)', label: t('swatch.noisyHighs') },
+        { color: 'rgb(96,236,140)', label: t('swatch.loudTonalLows') },
+        { color: 'rgb(40,44,52)', label: t('swatch.silence') },
       ];
     case 'diff':
       return [
-        { color: 'rgb(74,208,238)', label: 'A louder' },
-        { color: 'rgb(34,37,44)', label: 'matched' },
-        { color: 'rgb(236,176,72)', label: 'B louder' },
+        { color: 'rgb(74,208,238)', label: t('swatch.aLouder') },
+        { color: 'rgb(34,37,44)', label: t('swatch.matched') },
+        { color: 'rgb(236,176,72)', label: t('swatch.bLouder') },
       ];
   }
 }

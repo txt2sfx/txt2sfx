@@ -29,6 +29,7 @@ import { GLOBAL_LIMITS } from '@txt2sfx/shared';
 import { spectrogram } from '../lib/fft.js';
 import { drawFreqGrid, drawWaveform, drawWaveformGuides, spectrogramImage, type Box } from '../lib/draw.js';
 import { playBuffer, render, type Playback } from '../lib/engine.js';
+import { useI18n } from '../lib/i18n.js';
 
 export interface FitPreviewProps {
   /** The best recipe so far, as text. Empty means there is nothing to show yet. */
@@ -52,6 +53,7 @@ const WAVE_H = 40;
 const SPEC_H = 88;
 
 export function FitPreview({ source, seed, onTake }: FitPreviewProps): React.JSX.Element {
+  const { t } = useI18n();
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const playback = useRef<Playback | null>(null);
@@ -144,7 +146,7 @@ export function FitPreview({ source, seed, onTake }: FitPreviewProps): React.JSX
     if (buffer === null) {
       ctx.font = `${String(11 * dpr)}px ui-monospace, monospace`;
       ctx.fillStyle = '#64748b';
-      ctx.fillText('rendering the leader…', 8 * dpr, 20 * dpr);
+      ctx.fillText(t('fit.rendering'), 8 * dpr, 20 * dpr);
       return;
     }
 
@@ -159,24 +161,24 @@ export function FitPreview({ source, seed, onTake }: FitPreviewProps): React.JSX
     spectrogramImage(image, spec, buffer.sampleRate);
     ctx.putImageData(image, specBox.x, specBox.y);
     drawFreqGrid(ctx, specBox, buffer.sampleRate, dpr);
-  }, [buffer, width]);
+  }, [buffer, width, t]);
 
   return (
     <div className="fit-preview">
       <div className="fit-preview-bar">
-        <button type="button" onClick={play} disabled={buffer === null} title="play the candidate on screen">
-          ▶ leader
+        <button type="button" onClick={play} disabled={buffer === null} title={t('fit.leaderTitle')}>
+          ▶ {t('fit.leader')}
         </button>
         <button type="button" onClick={() => playback.current?.stop()}>
           ■
         </button>
-        <button type="button" onClick={onTake} title="stop the search and edit this candidate by hand">
-          ⤓ take it
+        <button type="button" onClick={onTake} title={t('fit.takeTitle')}>
+          ⤓ {t('fit.take')}
         </button>
         <span className="hint">
           {buffer === null
-            ? 'the search runs on this thread — the picture lands between generations'
-            : `${((buffer.length / buffer.sampleRate) * 1000).toFixed(0)} ms as rendered`}
+            ? t('fit.waiting')
+            : t('fit.asRendered', { ms: ((buffer.length / buffer.sampleRate) * 1000).toFixed(0) })}
         </span>
       </div>
       <div className="fit-preview-canvas" ref={wrap}>
