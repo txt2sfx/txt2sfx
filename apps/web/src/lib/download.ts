@@ -110,6 +110,49 @@ export const FORMATS: readonly Format[] = [
 export const AUDIO_FORMATS: readonly Format[] = FORMATS.filter((format) => format.kind === 'audio');
 
 /**
+ * What NeurosLoop offers, and why it is a third list rather than a filter of the first.
+ *
+ * A soundtrack is not one recipe, so three of the six entries above would be wrong here:
+ * `soundline` would hand over one note of it, `js` would compile that same one note, and
+ * neither refusal is something a filter on `kind` could express. What replaces them is a
+ * module that carries *every* voice plus the schedule (`lib/loop-export.ts`), the same
+ * module with types, and the arrangement as MIDI — which is the export somebody who
+ * wants to rewrite the melody in a DAW actually needs.
+ *
+ * The two mixdown entries are last and MP3 is the default, for the reason argued in the
+ * header: the first press of an export button is nearly always "send this to someone".
+ */
+export const LOOP_FORMATS: readonly Format[] = [
+  {
+    id: 'loop-js',
+    label: 'JS · Web Audio module',
+    short: 'JS',
+    extension: 'js',
+    mime: 'text/javascript',
+    kind: 'code',
+  },
+  {
+    id: 'loop-ts',
+    label: 'TS · typed Web Audio module',
+    short: 'TS',
+    extension: 'ts',
+    mime: 'text/plain',
+    kind: 'code',
+  },
+  { id: 'midi', label: 'MIDI · .mid multitrack', short: 'MIDI', extension: 'mid', mime: 'audio/midi', kind: 'code' },
+  { id: 'wav16', label: 'WAV · 16-bit mixdown', short: 'WAV', extension: 'wav', mime: 'audio/wav', kind: 'audio' },
+  {
+    id: 'mp3',
+    label: 'MP3 · 192 kbps mixdown',
+    short: 'MP3',
+    extension: CONTAINER.mp3.extension,
+    mime: CONTAINER.mp3.mime,
+    kind: 'audio',
+    slow: true,
+  },
+];
+
+/**
  * What is preselected before anyone has chosen, and the fallback for anything unreadable.
  *
  * Present in both lists on purpose — a default that only one of the two menus can offer
@@ -138,18 +181,21 @@ export function formatById(id: string, from: readonly Format[] = FORMATS): Forma
  * Remembering the choice
  * ------------------------------------------------------------------------- */
 
-/** Which menu is asking. The two never share a preference — see the header. */
-export type FormatScope = 'sound' | 'model';
+/** Which menu is asking. No two share a preference — see the header. */
+export type FormatScope = 'sound' | 'model' | 'loop';
 
 /** Versioned, so a change to the list of ids is a fresh start rather than a stuck menu. */
 const STORAGE_KEY: Readonly<Record<FormatScope, string>> = {
   sound: 'txt2sfx.format.v1',
   model: 'txt2sfx.format.model.v1',
+  loop: 'txt2sfx.format.loop.v1',
 };
 
 /** The list each scope's menu offers, which is also what its stored id is checked against. */
 export function formatsFor(scope: FormatScope): readonly Format[] {
-  return scope === 'model' ? AUDIO_FORMATS : FORMATS;
+  if (scope === 'model') return AUDIO_FORMATS;
+  if (scope === 'loop') return LOOP_FORMATS;
+  return FORMATS;
 }
 
 /**

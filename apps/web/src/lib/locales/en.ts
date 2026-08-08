@@ -28,6 +28,7 @@ export const en = {
 
   'nav.sounds': 'Sounds',
   'nav.studio': 'Studio',
+  'nav.loop': 'NeurosLoop',
   'nav.screenAria': 'screen',
 
   'bridge.title': 'agent bridge & MCP status',
@@ -124,6 +125,59 @@ export const en = {
   'rail.unsaved': 'unsaved edits',
   'rail.restore': 'restore',
   'rail.moveToTrash': 'move to trash',
+
+  /* --- NeurosLoop --------------------------------------------------------- */
+
+  'loop.new': 'New soundtrack',
+  'loop.soundtracks': 'soundtracks',
+  'loop.bpm': '{bpm} bpm',
+  'loop.compose': 'Compose',
+  'loop.composing': 'Composing…',
+  'loop.add': 'Add tracks',
+  'loop.adding': 'Adding…',
+  'loop.modeNew': 'New track',
+  'loop.modeAdd': 'Add tracks',
+  'loop.placeholderNew': 'describe the soundtrack — mood, instruments, tempo',
+  'loop.placeholderAdd': 'what should the new lanes add — e.g. counter-melody and light percussion',
+  'loop.describeAria': 'describe the soundtrack',
+  'loop.hintNew': 'the preset names the palette; the words steer tempo, density and brightness',
+  'loop.hintAdd': 'existing lanes stay frozen — one or two new ones arrive to audition',
+  'loop.presets': 'PRESETS',
+  'loop.meta': '{bars} bars · {length} loop · {lanes} lanes',
+  'loop.play': 'Play loop',
+  'loop.stop': 'Stop',
+  'loop.seamless': '∞ seamless loop',
+  'loop.stems': 'Export stems · {count}×',
+  'loop.stemsSaved': 'saved {count} stems of {name}',
+  'loop.mute': 'mute this lane',
+  'loop.unmute': 'unmute this lane',
+  'loop.laneNew': 'new',
+  'loop.keep': 'keep',
+  'loop.retryTitle': 'compose this lane again',
+  'loop.discardTitle': 'discard this lane',
+  'loop.progress': '{done}/{total} lanes',
+  'loop.facts': '{voices} voices · {notes} hits · peak {peak}',
+  'loop.headroom': 'mix turned down {db} dB to fit',
+  'loop.noSpare': 'Every lane this palette knows about is already here. Compose a new track instead.',
+
+  /* One line per lane, because these seconds are when you find out whether what is
+     being built is what you asked for. */
+  'loop.msg.drums': 'laying the drum grid…',
+  'loop.msg.perc': 'sprinkling percussion…',
+  'loop.msg.bass': 'voicing the bass…',
+  'loop.msg.chords': 'spreading the chords…',
+  'loop.msg.keys': 'comping the keys…',
+  'loop.msg.stabs': 'cutting the stabs…',
+  'loop.msg.lead': 'writing the lead line…',
+  'loop.msg.arp': 'winding the arp…',
+  'loop.msg.bells': 'hanging the bells…',
+  'loop.msg.fx': 'placing the fx hits…',
+  'loop.msg.pads': 'stretching the pads…',
+  'loop.msg.strings': 'bowing the strings…',
+  'loop.msg.choir': 'raising the choir…',
+  'loop.msg.drone': 'settling the drone…',
+  'loop.msg.air': 'letting the air in…',
+  'loop.msg.generic': 'writing {lane}…',
 
   /* --- the studio -------------------------------------------------------- */
 

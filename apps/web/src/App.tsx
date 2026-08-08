@@ -56,6 +56,7 @@ import type { BKind } from './components/ComparePanel.js';
 import type { RailMode } from './components/Rail.js';
 import type { StudioView } from './components/PromptRow.js';
 import { Gallery, type GalleryItem } from './screens/Gallery.js';
+import { Loop } from './screens/Loop.js';
 import { Share } from './screens/Share.js';
 import { Studio } from './screens/Studio.js';
 import { renderSignalFor, targetFromBuffer } from './lib/agent.js';
@@ -77,6 +78,7 @@ import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
 import { modelStatus, renderTarget } from './lib/stable-audio.js';
 import { DEFAULT_PROVIDER, useGenerate, type ProviderSettings } from './lib/useGenerate.js';
+import { useLoop } from './lib/useLoop.js';
 import { useSearch } from './lib/useSearch.js';
 
 /** How long to wait after the last edit before re-rendering offline. */
@@ -179,6 +181,10 @@ export function App(): React.JSX.Element {
      `lib/download.ts`. */
   const [formatId, setFormatId] = useState(() => loadFormat('sound'));
   const [modelFormatId, setModelFormatId] = useState(() => loadFormat('model'));
+  /* A third menu, and a third memory. The loop's list is JS / TS / MIDI / WAV / MP3 —
+     a `soundline` entry there would export one note of it, which is the same class of
+     lie the two existing menus are kept apart to avoid. */
+  const [loopFormatId, setLoopFormatId] = useState(() => loadFormat('loop'));
   const [status, setStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<ProviderSettings>(DEFAULT_PROVIDER);
 
@@ -202,6 +208,15 @@ export function App(): React.JSX.Element {
      never mind a pasted key — that died on a tab switch would make the two unusable
      together, which is the whole workflow. */
   const search = useSearch({ bankUrl });
+
+  /* --- the soundtrack screen ---------------------------------------------- */
+
+  /* Above the screens for the same reason the search is: the arrangements and the mixed
+     buffer are minutes of composing and a few hundred offline renders, and losing them
+     to a tab switch would make the screen unusable next to the other two. It shares the
+     session seed, so a soundtrack and a sound effect auditioned in the same sitting are
+     drawn from the same noise. */
+  const loopState = useLoop({ seed });
 
   /* --- fitting ------------------------------------------------------------ */
 
@@ -1148,6 +1163,10 @@ export function App(): React.JSX.Element {
         screen={screen}
         onScreen={(next) => {
           stop();
+          /* Both transports, because they are two `AudioContext` graphs and only the
+             user knows they are one application. Leaving a soundtrack looping under the
+             gallery would be the single most annoying bug this screen could ship. */
+          loopState.stop();
           setScreen(next);
         }}
         bridge={bridgeStatus}
@@ -1264,6 +1283,19 @@ export function App(): React.JSX.Element {
         />
       ) : null}
 
+      {screen === 'loop' ? (
+        <Loop
+          state={loopState}
+          seed={seed}
+          formatId={loopFormatId}
+          onFormat={(id) => {
+            setLoopFormatId(id);
+            saveFormat('loop', id);
+          }}
+          onStatus={setStatus}
+        />
+      ) : null}
+
       {screen === 'share' ? (
         <Share
           name={selected}
@@ -1335,14 +1367,22 @@ export function App(): React.JSX.Element {
         <button type="button" title={t('app.rndTitle')} onClick={() => setSeed(Math.floor(Math.random() * 0xffff))}>
           {t('app.rnd')}
         </button>
-        {canSave ? (
-          <button type="button" onClick={save} title={t('app.saveTitle')}>
-            {t('app.save')}
-          </button>
-        ) : null}
-        <button type="button" onClick={() => void publish().then(setStatus)} disabled={rendered === null}>
-          {t('app.publish')}
-        </button>
+        {/* The seed belongs to the soundtrack screen too — it is the draw every noise
+            generator in every lane takes — but Save and Publish do not: they act on the
+            studio's current recipe, and a Publish button under an arrangement nobody is
+            looking at would publish something else entirely. */}
+        {screen === 'loop' ? null : (
+          <>
+            {canSave ? (
+              <button type="button" onClick={save} title={t('app.saveTitle')}>
+                {t('app.save')}
+              </button>
+            ) : null}
+            <button type="button" onClick={() => void publish().then(setStatus)} disabled={rendered === null}>
+              {t('app.publish')}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

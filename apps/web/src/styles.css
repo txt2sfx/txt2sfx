@@ -2764,3 +2764,251 @@ input[type='range'] {
   line-height: 1.45;
   margin: 0;
 }
+
+/* ------------------------------------------------------------------------- *
+ * NeurosLoop
+ *
+ * The lane hue is the whole colour scheme here. Every lane sets `--hue` once —
+ * from `LANE_HUES`, the same table the composing indicator's dot reads — and its
+ * label, its mute button and every clip in its row inherit it. That is what lets
+ * the eye follow one instrument across a sixteen-bar grid without reading a name,
+ * and it is the same trick the gallery plays with categories.
+ *
+ * The timeline is two columns rather than one grid with a label cell: the clip
+ * area has to be a single positioning context so the playhead can be one element
+ * sweeping the whole stack instead of one per lane.
+ * ------------------------------------------------------------------------- */
+
+.screen-loop {
+  display: flex;
+}
+
+.loop-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 18px 22px 64px;
+}
+
+.presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.presets-label {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+/* Not `.panel`: that one clips its children, and the export menu has to paint over
+   the card's own edge. */
+.loop-card {
+  padding: 16px 18px 15px;
+  background: var(--panel);
+  border: 1px solid oklch(0.27 0.015 265);
+  border-radius: var(--radius-lg);
+}
+
+.loop-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.loop-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.loop-head span {
+  white-space: nowrap;
+}
+.loop-prompt {
+  margin: 0 0 13px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+.loop-facts {
+  margin: 11px 0 0;
+  font-size: 11px;
+}
+
+/* --- the timeline -------------------------------------------------------- */
+
+.timeline {
+  display: flex;
+  gap: 9px;
+  margin-top: 14px;
+}
+.timeline-labels {
+  flex: 0 0 122px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.timeline-ruler-gap {
+  height: 18px;
+}
+.timeline-grid {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.timeline-ruler {
+  display: flex;
+  height: 18px;
+  font-size: 9.5px;
+  color: var(--ink-4);
+}
+.timeline-ruler > div {
+  flex: 1;
+  min-width: 0;
+  padding-left: 4px;
+  border-left: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+
+.lane-label {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  animation: rise 0.32s var(--ease) both;
+}
+.lane-label.muted {
+  opacity: 0.4;
+}
+.lane-name {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: oklch(0.78 0.12 var(--hue));
+}
+.lane-mute {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--ink-4);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+.lane-mute.on {
+  border-color: oklch(0.45 0.08 var(--amber));
+  background: oklch(0.28 0.05 var(--amber));
+  color: oklch(0.86 0.11 var(--amber));
+}
+.lane-badge {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: oklch(0.28 0.05 var(--amber));
+  color: oklch(0.86 0.11 var(--amber));
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.lane-track {
+  position: relative;
+  height: 44px;
+  background: var(--panel-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  animation: rise 0.32s var(--ease) both;
+}
+
+/* One cell per step, at the loudness that step actually plays — see
+   `components/LoopTimeline.tsx` for why the picture is derived from the notes. */
+.clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px;
+  border-radius: 6px;
+  overflow: hidden;
+  color: oklch(0.78 0.12 var(--hue));
+  background: oklch(0.24 0.035 var(--hue) / 0.45);
+  border: 1px solid oklch(0.42 0.07 var(--hue) / 0.55);
+}
+.clip.proposed {
+  border-style: dashed;
+  border-color: oklch(0.42 0.07 var(--hue) / 0.9);
+}
+.clip.muted {
+  background: oklch(0.24 0.035 var(--hue) / 0.2);
+  opacity: 0.5;
+}
+.clip i {
+  flex: 1;
+  min-width: 1px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.lane-verdict {
+  position: absolute;
+  right: 6px;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.lane-verdict .keep {
+  height: 22px;
+  padding: 0 10px;
+  border-color: oklch(0.4 0.07 var(--green));
+  background: oklch(0.25 0.045 var(--green));
+  color: oklch(0.85 0.12 var(--green));
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.lane-verdict .icon {
+  width: 22px;
+  height: 22px;
+  background: oklch(0.21 0.014 265 / 0.92);
+}
+
+/* The tempo indicator, not a clock: one CSS animation at the loop's own duration,
+   which cannot drift over a long session and never wakes the main thread. */
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  z-index: 6;
+  pointer-events: none;
+  background: oklch(0.94 0.09 var(--cyan));
+  box-shadow: 0 0 14px oklch(0.85 0.14 var(--cyan));
+  animation: sweep linear infinite;
+}
+
+.composing {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px dashed oklch(0.3 0.02 265);
+  border-radius: 9px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  animation: rise 0.2s var(--ease) both;
+}

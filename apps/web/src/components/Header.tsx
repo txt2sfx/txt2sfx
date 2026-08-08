@@ -4,9 +4,11 @@
  * Three things earn a permanent place, and the third is the interesting one.
  *
  * The brand doubles as *home* — it returns to the gallery, because a logo that is
- * not a link is a piece of furniture. The two screen tabs are the whole navigation:
- * `Sounds` is the catalog and `Studio` is one sound, and there is no third mode
- * because the share screen belongs to a specific recipe and is reached from it.
+ * not a link is a piece of furniture. The screen tabs are the whole navigation, and
+ * each names a different *subject*: `Sounds` is the catalog, `Studio` is one sound,
+ * `NeurosLoop` is eight bars of one. The share screen has no tab on purpose — it
+ * belongs to a specific recipe and is reached from it, so a tab for it would mean
+ * nothing until something else had been chosen.
  *
  * Then the bridge badge. It is here rather than tucked in a settings pane because it
  * answers a question that changes without the user doing anything: *can an agent
@@ -34,7 +36,7 @@
  */
 
 import { LanguageMenu } from './LanguageMenu.js';
-import { useI18n } from '../lib/i18n.js';
+import { useI18n, type Key } from '../lib/i18n.js';
 import type { BridgeStatus } from '../lib/bridge-client.js';
 
 /** Where the source is. The same string the OG tags in `index.html` point at. */
@@ -58,7 +60,22 @@ function GitHubMark(): React.JSX.Element {
 }
 
 /** Which screen is showing. `share` is a leaf of `studio`, not a peer. */
-export type Screen = 'gallery' | 'studio' | 'share';
+export type Screen = 'gallery' | 'studio' | 'share' | 'loop';
+
+/**
+ * The tabs, in the order the work goes.
+ *
+ * `share` is deliberately absent: it belongs to one recipe and is reached from it, so a
+ * tab for it would be a tab that means nothing until something else has been selected.
+ * `loop` is a peer of the other two rather than a leaf of the studio — it is a different
+ * kind of subject (eight bars, not one hit) with a different set of controls, and the
+ * argument for that split is in `screens/Loop.tsx`.
+ */
+const TABS: readonly { readonly screen: Screen; readonly label: Key }[] = [
+  { screen: 'gallery', label: 'nav.sounds' },
+  { screen: 'studio', label: 'nav.studio' },
+  { screen: 'loop', label: 'nav.loop' },
+];
 
 export interface HeaderProps {
   readonly screen: Screen;
@@ -100,22 +117,22 @@ export function Header({ screen, onScreen, bridge, onOpenBridge, account }: Head
       </button>
 
       <nav className="segmented" aria-label={t('nav.screenAria')}>
-        <button
-          type="button"
-          className={screen === 'gallery' ? 'selected' : ''}
-          aria-current={screen === 'gallery'}
-          onClick={() => onScreen('gallery')}
-        >
-          {t('nav.sounds')}
-        </button>
-        <button
-          type="button"
-          className={screen === 'gallery' ? '' : 'selected'}
-          aria-current={screen !== 'gallery'}
-          onClick={() => onScreen('studio')}
-        >
-          {t('nav.studio')}
-        </button>
+        {TABS.map((tab) => {
+          /* `share` lights the Studio tab: it is that screen's leaf, and a navigation
+             bar with nothing selected reads as a bug. */
+          const active = tab.screen === 'studio' ? screen === 'studio' || screen === 'share' : screen === tab.screen;
+          return (
+            <button
+              type="button"
+              key={tab.screen}
+              className={active ? 'selected' : ''}
+              aria-current={active}
+              onClick={() => onScreen(tab.screen)}
+            >
+              {t(tab.label)}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="spacer" />
