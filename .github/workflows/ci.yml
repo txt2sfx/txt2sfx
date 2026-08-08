@@ -168,9 +168,11 @@ jobs:
           # Jekyll drops paths beginning with an underscore.
           touch site/.nojekyll
 
-          # Read out of the checkout, never interpolated with `${{ }}`: a commit
-          # subject is author-controlled text, and `${{ }}` would splice it into
-          # the shell before bash ever saw it as data.
+          # Read out of the checkout, never through a GitHub expression: a commit
+          # subject is author-controlled text, and an expression would splice it
+          # into this script before bash ever saw it as data. (Do not write the
+          # expression delimiters even in a comment — Actions parses them here too,
+          # and an empty one fails the whole workflow before any step runs.)
           subject=$(git -C "$GITHUB_WORKSPACE" log -1 --pretty=%s)
 
           cd site
