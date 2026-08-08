@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SoundlineError } from '../src/index.js';
-import { parse, parseWithDiagnostics } from '../src/index.js';
+import { parse, parseWithDiagnostics, serialize } from '../src/index.js';
 
 /** First diagnostic of a document that is expected to be broken. */
 function firstError(source: string): SoundlineError {
@@ -196,6 +196,34 @@ describe('ramp and slot errors', () => {
   it('rejects slot bounds in another unit', () => {
     const error = firstError(doc('  a: noise white >> bp ~3200Hz[500ms..8000] | gain 0.5 decay 20ms'));
     expect(error.code).toBe('slot.unit-mismatch');
+  });
+
+  it('rejects slot bounds in dB against a linear gain', () => {
+    const error = firstError(doc('  a: noise white | gain ~0.5[-20dB..0dB] decay 20ms'));
+    expect(error.code).toBe('slot.unit-mismatch');
+  });
+
+  /* A model that writes a range crossing a round second reaches for `1s`; the
+     conversion is exact, so refusing it would cost a repair iteration for nothing. */
+  it('converts slot bounds written in a scalable unit of the same kind', () => {
+    const ast = parse(doc('  a: noise white >> verb ~500ms[200ms..1s] mix 0.3 | gain 0.5 decay 20ms'));
+    const time = ast.layers[0]?.chain[0]?.args.time;
+    expect(time?.kind === 'number' ? time.head.slot : undefined).toEqual({ min: 200, max: 1000 });
+  });
+
+  it('serializes converted bounds in the unit of the value', () => {
+    const src = doc('  a: noise white >> bp ~3.2kHz[1500Hz..6kHz] | gain 0.5 decay 20ms');
+    expect(serialize(parse(src))).toContain('bp ~3.2kHz[1.5..6]');
+  });
+});
+
+describe('named-parameter errors', () => {
+  /* The mistake this hint is for: `dist` is the one effect whose first parameter
+     is dimensionless, so it is named where every other effect takes a value. */
+  it('names the parameter when a value is written where a name belongs', () => {
+    const error = firstError(doc('  a: noise white >> dist ~4[1..10] | gain 0.5 decay 20ms'));
+    expect(error.code).toBe('arg.unexpected');
+    expect(error.hint).toMatch(/write 'drive <value>'/);
   });
 });
 

@@ -1,8 +1,8 @@
 /**
- * The executable: `txt2sfx-bridge [doctor] [--stdio] [--port N] [--bank URL]
- * [--allow-origin O]... [--allow-write DIR]...`
+ * The executable: `txt2sfx-bridge [doctor|claude] [--stdio] [--port N]
+ * [--bank URL] [--allow-origin O]... [--allow-write DIR]...`
  *
- * Three shapes of the same process:
+ * Four shapes of the same process:
  *
  * - **serve** (default) — the daemon: HTTP + WS on loopback, token persisted.
  * - **`--stdio`** — an MCP server for a client's config file. If a daemon is
@@ -10,6 +10,11 @@
  *   hub starts *and opens the port*, so an agent that only wants to design and
  *   measure sounds needs one process, not two — and a tab opened later still
  *   finds someone to talk to.
+ * - **claude** — the other direction, standing on its own: the local Claude
+ *   Code CLI answers the playground's Generate. Same hub, same parked jobs,
+ *   except the thing collecting them is this process rather than an agent that
+ *   has to remember to poll. Starts a bridge when none is running, for the same
+ *   reason `--stdio` does — one command has to be enough.
  * - **doctor** — what is listening, what can render, what is paired, and both
  *   ways to attach an agent: the MCP config to paste into a client, and the
  *   prompt to paste into the agent itself. Doctor prints to stdout because
@@ -28,6 +33,13 @@ import { resolve } from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { bridgeOnboardingPrompt } from '@txt2sfx/agent';
+import {
+  CLAUDE_DEFAULT_BIN,
+  ClaudeError,
+  claudeCompleter,
+  runClaudeWorker,
+  runCommand,
+} from './claude.js';
 import { Hub, localToolHub, type ToolHub } from './hub.js';
 import { createBridgeServer, remoteToolHub } from './http.js';
 import { log } from './log.js';
@@ -40,11 +52,15 @@ import { VERSION } from './version.js';
 
 /** Everything the flags can say. */
 export interface CliOptions {
-  readonly command: 'serve' | 'stdio' | 'doctor' | 'help';
+  readonly command: 'serve' | 'stdio' | 'claude' | 'doctor' | 'help';
   readonly port: number;
   readonly bankUrl: string;
   readonly allowOrigins: readonly string[];
   readonly allowWrite: readonly string[];
+  /** `claude` mode: the executable to drive. */
+  readonly claudeBin: string;
+  /** `claude` mode: `--model`, or undefined to let the CLI pick its own. */
+  readonly model: string | undefined;
 }
 
 const DEFAULT_PORT = 4455;
@@ -55,6 +71,7 @@ const USAGE = `txt2sfx-bridge — the local switchboard between an MCP agent and
 usage:
   txt2sfx-bridge                 start the daemon on 127.0.0.1:${String(DEFAULT_PORT)}
   txt2sfx-bridge --stdio         MCP server over stdio, for a client's config file
+  txt2sfx-bridge claude          answer the playground's Generate with the local Claude Code CLI
   txt2sfx-bridge doctor          what is listening, what can render, what is paired
 
 options:
@@ -62,6 +79,8 @@ options:
   --bank <url>          recipe bank origin (default ${DEFAULT_BANK}; also TXT2SFX_BANK)
   --allow-origin <o>    extra Origin allowed to pair; repeatable
   --allow-write <dir>   extra directory sfx_export may write into; repeatable
+  --claude-bin <path>   claude mode: the executable (default ${CLAUDE_DEFAULT_BIN}; also TXT2SFX_CLAUDE_BIN)
+  --model <id>          claude mode: model for those completions (default: the CLI's own)
   --help                this text
 `;
 
@@ -70,6 +89,8 @@ export function parseCliOptions(argv: readonly string[], env: NodeJS.ProcessEnv 
   let command: CliOptions['command'] = 'serve';
   let port = DEFAULT_PORT;
   let bankUrl = env['TXT2SFX_BANK'] ?? DEFAULT_BANK;
+  let claudeBin = env['TXT2SFX_CLAUDE_BIN'] ?? CLAUDE_DEFAULT_BIN;
+  let model: string | undefined;
   const allowOrigins: string[] = [];
   const allowWrite: string[] = [];
 
@@ -78,6 +99,9 @@ export function parseCliOptions(argv: readonly string[], env: NodeJS.ProcessEnv 
     switch (arg) {
       case 'doctor':
         command = 'doctor';
+        break;
+      case 'claude':
+        command = 'claude';
         break;
       case '--stdio':
         command = 'stdio';
@@ -110,12 +134,24 @@ export function parseCliOptions(argv: readonly string[], env: NodeJS.ProcessEnv 
         allowWrite.push(value);
         break;
       }
+      case '--claude-bin': {
+        const value = argv[++i];
+        if (value === undefined) throw new Error('--claude-bin needs a path');
+        claudeBin = value;
+        break;
+      }
+      case '--model': {
+        const value = argv[++i];
+        if (value === undefined) throw new Error('--model needs a model id');
+        model = value;
+        break;
+      }
       default:
         throw new Error(`unknown argument "${arg}" — run with --help`);
     }
   }
 
-  return { command, port, bankUrl, allowOrigins, allowWrite };
+  return { command, port, bankUrl, allowOrigins, allowWrite, claudeBin, model };
 }
 
 /** `GET /health`, briefly. `undefined` when nothing answers. */
@@ -292,6 +328,96 @@ async function stdio(options: CliOptions): Promise<number> {
   return 0;
 }
 
+/* --- claude ---------------------------------------------------------------------- */
+
+/**
+ * Attach to a bridge, however one has to be found.
+ *
+ * The same three-way choice `stdio` makes, for the same reason: a daemon on the
+ * port owns the playground tabs and the parked jobs, so it must be used rather
+ * than shadowed; with nothing on the port, opening one here is what keeps this a
+ * single command. The recursion is the lost-race path — another process bound
+ * the port between the probe and the listen — and it terminates because the
+ * retry finds that process with `probeHealth`.
+ */
+async function attachHub(options: CliOptions): Promise<
+  { readonly hub: ToolHub; readonly bridge?: RunningBridge; readonly where: string } | undefined
+> {
+  const running = await probeHealth(options.port);
+  if (running !== undefined) {
+    const state = loadState();
+    if (state === undefined) {
+      log(
+        `a bridge is on port ${String(options.port)} but ${stateFilePath()} is missing — restart that bridge so it writes its token, then retry.`,
+      );
+      return undefined;
+    }
+    return {
+      hub: remoteToolHub(`http://127.0.0.1:${String(options.port)}`, state.token),
+      where: `the daemon on 127.0.0.1:${String(options.port)}`,
+    };
+  }
+
+  const state = ensureState(options.port);
+  try {
+    const bridge = await startBridge(options, state.token);
+    saveState({ token: state.token, port: options.port });
+    return { hub: bridge.ctx.hub, bridge, where: `an in-process bridge on 127.0.0.1:${String(options.port)}` };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+    return attachHub(options);
+  }
+}
+
+/**
+ * `txt2sfx-bridge claude` — Claude Code as the playground's model.
+ *
+ * The binary is probed with `--version` before anything is promised, because
+ * the failure this mode has is a missing or unauthenticated CLI and finding
+ * that out on the human's first Generate — after they have typed a prompt and
+ * pressed a button — is the wrong moment. What it costs is one process launch
+ * at startup.
+ */
+async function claudeMode(options: CliOptions): Promise<number> {
+  const attached = await attachHub(options);
+  if (attached === undefined) return 1;
+
+  try {
+    const probe = await runCommand(options.claudeBin, ['--version'], '', 30_000);
+    if (probe.code !== 0) {
+      log(`${options.claudeBin} --version exited ${String(probe.code)}: ${probe.stderr.trim() || 'no output'}`);
+      return 1;
+    }
+    log(`claude: ${probe.stdout.trim() || options.claudeBin}${options.model === undefined ? '' : ` (--model ${options.model})`}`);
+  } catch (error) {
+    log(error instanceof ClaudeError ? error.message : `could not run ${options.claudeBin}: ${String(error)}`);
+    return 1;
+  }
+
+  /* Only an in-process hub can be told who is answering. Behind a daemon the
+     open long-poll is the evidence, and the badge says "via polling" — which is
+     true, and better than this process claiming an identity the daemon has no
+     way to verify. */
+  attached.bridge?.hub.setAgent('Claude Code (CLI)', false);
+
+  log(`claude: answering generation requests through ${attached.where}`);
+  log(`pick the "agent" provider in the playground and press Generate; Ctrl+C stops answering.`);
+
+  const stop = (): void => {
+    void (attached.bridge?.close() ?? Promise.resolve()).then(() => process.exit(0));
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+
+  await runClaudeWorker({
+    hub: attached.hub,
+    complete: claudeCompleter({ bin: options.claudeBin, model: options.model, log }),
+    log,
+  });
+  await attached.bridge?.close();
+  return 1; // the worker only returns when it has given up on the daemon
+}
+
 /* --- doctor --------------------------------------------------------------------- */
 
 /** Doctor is for a human at a terminal, so stdout — the one non-JSON use it has. */
@@ -359,6 +485,14 @@ async function doctor(options: CliOptions): Promise<number> {
   print('    }');
   print('  }');
 
+  /* The third door, one line: the config and the prompt both assume a human
+     with an agent to point at this. Someone who only wants to type prompts in
+     the playground needs neither, and would never find the mode from a flag
+     list. */
+  print('');
+  print('  Claude Code installed? `npx txt2sfx-bridge claude` makes it the model behind');
+  print('  the playground\'s "agent" provider — no MCP client, no key, no restart.');
+
   /* Doctor's other half: the config is for a human who knows where their
      client keeps it, and the prompt below is for everyone else — paste it into
      the agent and let it do both the registering and the first sound. */
@@ -393,6 +527,9 @@ async function main(): Promise<void> {
       break;
     case 'stdio':
       process.exit(await stdio(options));
+      break;
+    case 'claude':
+      process.exit(await claudeMode(options));
       break;
     case 'serve':
       process.exit(await serve(options));

@@ -8,6 +8,7 @@ LLM in the loop — the coding agent you already run **is** the model, and
 ```powershell
 npx txt2sfx-bridge            # daemon on 127.0.0.1:4455
 npx txt2sfx-bridge --stdio    # MCP server, for a client's config file
+npx txt2sfx-bridge claude     # the local Claude Code CLI answers the playground's Generate
 npx txt2sfx-bridge doctor     # what is listening, what can render, what is paired
 ```
 
@@ -79,6 +80,27 @@ should outlive the client — if one is already listening, `--stdio` uses it, an
 playground tabs and parked jobs are the ones you want. Every client needs a restart
 afterwards; none of them re-read their server list while running.
 
+### Claude Code the other way round: the CLI as this playground's model
+
+Everything above points an agent at the tools. This points the playground at the agent:
+
+```powershell
+npx txt2sfx-bridge claude                 # add --model opus to choose the model
+```
+
+The bridge collects its own parked jobs and answers them by running the `claude` binary
+already on your machine: `claude -p`, tools disabled, the request's own system prompt in
+a file, the completion handed straight back to the tab. Pick the **agent** provider in
+the playground, press Generate, and the recipe appears — everything downstream is
+untouched, so extraction, the validator, the render, the optimizer and the repair turn
+all run exactly as they do for a hosted model. There is still no API key here: whatever
+the CLI is already logged in with answers.
+
+It starts a bridge when none is running, so this is the entire setup — no MCP client, no
+config file, no restart. Leave it running; `Ctrl+C` stops answering. This is direction B
+without a polling agent, which matters because sampling is rare and pressing Generate
+otherwise meant an agent that remembered to call `sfx_next_request`.
+
 ### No restart: the same tools over loopback HTTP
 
 For an agent that can run `curl` but cannot restart itself, every tool is also a route.
@@ -132,7 +154,9 @@ with one sentence naming the fix.
 press Generate, and the request parks at the bridge until the agent collects it with
 `sfx_next_request` and answers with `sfx_answer`. If your MCP client supports the
 `sampling` capability, no polling happens at all: the bridge asks the client directly and
-the human watches the recipe appear.
+the human watches the recipe appear. `txt2sfx-bridge claude` is the third way to answer
+those jobs and the only one that needs no agent at all — the daemon runs the `claude` CLI
+itself, once per Generate.
 
 ## Honesty about limits
 
@@ -142,6 +166,12 @@ the human watches the recipe appear.
 - **Sampling is rare.** Most MCP clients today do not implement `sampling/createMessage`,
   which is why the two polling tools exist. Sampling also only works when the MCP server
   owns the hub (`--stdio` with no separate daemon).
+- **`claude` mode is a subprocess, and inherits everything that implies.** It drives the
+  CLI you already have — its login, its rate limits, its model default, its version. The
+  flags it is launched with (`--print`, `--output-format json`, `--system-prompt-file`,
+  `--tools ""`) are checked against `claude --help` by a human and not by a test, so a CLI
+  old enough to lack one of them fails on the first Generate with its own message about
+  the flag. No dependency is added for it: the binary is spawned, never imported.
 - **The threat model is loopback plus a token.** The listener binds `127.0.0.1`. The
   WebSocket requires a token because same-origin policy does not protect loopback sockets
   from hostile pages; the token is served only by `GET /pair`, which checks `Origin`
@@ -183,6 +213,8 @@ rename the workflow and the release fails until npm's package settings are updat
 | `--bank <url>` | `http://127.0.0.1:8787` | recipe bank origin (also `TXT2SFX_BANK`) |
 | `--allow-origin <o>` | — | extra `Origin` allowed to pair; repeatable |
 | `--allow-write <dir>` | — | extra directory `sfx_export` may write into; repeatable |
+| `--claude-bin <path>` | `claude` | `claude` mode: the executable (also `TXT2SFX_CLAUDE_BIN`) |
+| `--model <id>` | the CLI's own | `claude` mode: model for those completions |
 
 ## License
 

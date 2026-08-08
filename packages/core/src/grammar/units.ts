@@ -32,6 +32,38 @@ export function unitAllowed(kind: ParamKind, unit: Unit): boolean {
   return UNITS_FOR_KIND[kind].includes(unit);
 }
 
+/**
+ * Units related to the canonical unit of their kind by a plain multiplication.
+ *
+ * `dB` and `s` are both "second units of their kind", but only one of them can be
+ * rescaled: 1 s is 1000 ms whatever the value, while -6 dB is a *ratio* of the
+ * value it applies to. That difference is why {@link convertUnit} converts one
+ * and refuses the other rather than treating "same kind" as "interchangeable".
+ */
+const SCALE_TO_CANONICAL: Partial<Record<Unit, readonly [ParamKind, number]>> = {
+  Hz: ['freq', 1],
+  kHz: ['freq', 1000],
+  ms: ['time', 1],
+  s: ['time', 1000],
+};
+
+/**
+ * Rewrite a value written in `from` so that it means the same thing read as `to`,
+ * e.g. `1` in `s` becomes `1000` in `ms`.
+ *
+ * Returns `undefined` when no such rewriting exists — different kinds (`ms` into
+ * `Hz`), or a logarithmic relation (`dB` into linear gain). The result is rounded
+ * to writing precision because it lands back in the source text: an unrounded
+ * `1.1kHz -> 1100.0000000000002Hz` would serialize into a recipe no human reads.
+ */
+export function convertUnit(value: number, from: Unit, to: Unit): number | undefined {
+  if (from === to) return value;
+  const source = SCALE_TO_CANONICAL[from];
+  const target = SCALE_TO_CANONICAL[to];
+  if (source === undefined || target === undefined || source[0] !== target[0]) return undefined;
+  return roundLiteral((value * source[1]) / target[1]);
+}
+
 /** Frequency of a literal in hertz. */
 export function toHz(lit: NumberLiteral): number {
   return lit.unit === 'kHz' ? lit.value * 1000 : lit.value;

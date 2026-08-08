@@ -54,6 +54,9 @@ export interface StudioProps {
   readonly onSelect: (name: string) => void;
   readonly onTrash: (name: string) => void;
   readonly onNew: () => void;
+  /** Audition a row without selecting it; `railPlaying` is the name currently sounding. */
+  readonly onRailPlay: (name: string) => void;
+  readonly railPlaying: string | null;
 
   /* --- the recipe --- */
   readonly source: string;
@@ -123,8 +126,10 @@ export function Studio(props: StudioProps): React.JSX.Element {
         mode={props.railMode}
         onMode={props.onRailMode}
         onSelect={props.onSelect}
+        onPlay={props.onRailPlay}
         onTrash={props.onTrash}
         onNew={props.onNew}
+        playing={props.railPlaying}
       />
 
       <main className="studio-main">

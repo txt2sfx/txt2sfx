@@ -330,6 +330,10 @@ export const en = {
   'dialog.agentPrompt': 'the agent prompt',
   'dialog.noteClaude':
     'That is the whole install — no daemon to start first. Add `-s user` after `add` to have it in every project. Restart Claude Code afterwards: it reads its server list at startup.',
+  'dialog.claudeModel': 'Or: Claude Code as the model here',
+  'dialog.claudeModelWhat': 'the claude-as-model command',
+  'dialog.claudeModelNote':
+    'The same bridge, the other way round: this command answers this page’s Generate with the claude CLI already on your machine, so the “agent” provider works with no MCP client and no restart. Add --model opus to choose the model. Leave it running; Ctrl+C stops it.',
   'dialog.noteCodex':
     'Writes [mcp_servers.txt2sfx] into ~/.codex/config.toml and starts the bridge on first use. Restart codex afterwards.',
   'dialog.noteOpencode':

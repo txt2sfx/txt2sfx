@@ -49,6 +49,19 @@ export type {
   RenderResult,
 } from './protocol.js';
 
+export {
+  CLAUDE_DEFAULT_BIN,
+  CLAUDE_TIMEOUT_MS,
+  ClaudeError,
+  claudeArgs,
+  claudeCompleter,
+  conversationText,
+  parseClaudeJson,
+  runClaudeWorker,
+  runCommand,
+} from './claude.js';
+export type { ClaudeOptions, ClaudeWorkerOptions, CommandResult, CommandRunner } from './claude.js';
+
 export { Hub, NoPlaygroundError, localToolHub } from './hub.js';
 export type { HubOptions, PlaygroundPort, SamplingFulfiller, ToolHub } from './hub.js';
 

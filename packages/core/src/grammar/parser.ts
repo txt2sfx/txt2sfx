@@ -34,7 +34,7 @@ import { SOUND_CATEGORIES } from '@txt2sfx/shared';
 import { SoundlineError, didYouMean, expectedList } from './errors.js';
 import { describeToken, tokenize, type Token } from './lexer.js';
 import { EFFECTS, EFFECT_NAMES, ENVELOPE, PRIMITIVES, PRIMITIVE_NAMES } from './signatures.js';
-import { describeUnits, formatNumber, unitAllowed } from './units.js';
+import { convertUnit, describeUnits, formatNumber, unitAllowed } from './units.js';
 
 /** Outcome of a lenient parse. */
 export interface ParseResult {
@@ -193,10 +193,23 @@ function parseSlot(cur: Cursor, head: Token, owner: string): SlotRange {
     throw cur.error(close, 'slot.unclosed', `expected ']' to close the slot range, got ${describeToken(close)}`);
   }
 
+  /* A bound is read in the unit of the value it bounds, so a bare number is the
+     canonical form. A bound that repeats a *scalable* unit of the same kind is
+     converted rather than rejected: `~500ms[200ms..1s]` is what a model writes
+     when the range crosses a round second, and refusing it costs a whole repair
+     iteration to change nothing about the meaning. What stays an error is a
+     bound that cannot be rewritten — another kind, or dB against a linear gain. */
   const headUnit = (head.unit ?? '') as Unit;
+  const bounds: number[] = [];
   for (const bound of [minTok, maxTok]) {
     const unit = (bound.unit ?? '') as Unit;
-    if (unit !== '' && unit !== headUnit) {
+    const raw = bound.value ?? 0;
+    if (unit === '' || unit === headUnit) {
+      bounds.push(raw);
+      continue;
+    }
+    const converted = convertUnit(raw, unit, headUnit);
+    if (converted === undefined) {
       throw cur.error(
         bound,
         'slot.unit-mismatch',
@@ -204,10 +217,11 @@ function parseSlot(cur: Cursor, head: Token, owner: string): SlotRange {
         'bounds may be written bare: ~3200Hz[500..8000]',
       );
     }
+    bounds.push(converted);
   }
 
-  const min = minTok.value ?? 0;
-  const max = maxTok.value ?? 0;
+  const min = bounds[0] ?? 0;
+  const max = bounds[1] ?? 0;
   if (!(min < max)) {
     throw cur.error(
       minTok,
@@ -395,10 +409,16 @@ function parseArgs(cur: Cursor, sig: Signature, owner: string): Record<string, A
   while (!argsEnd(cur)) {
     const token = cur.peek();
     if (token.type !== 'ident') {
+      /* A bare value here is nearly always a parameter written positionally that
+         is not positional — `dist ~4[1..10]` instead of `dist drive ~4[1..10]`.
+         Dimensionless parameters carry no unit to identify them, so the grammar
+         asks for the name; saying which name turns a dead end into a one-token fix. */
+      const missing = sig.params.find((p) => p.positional !== true && args[p.name] === undefined);
       throw cur.error(
         token,
         'arg.unexpected',
         `unexpected ${describeToken(token)} in ${owner} — expected a parameter name, '>>' or '|'`,
+        missing === undefined ? undefined : `every value here is named: write '${missing.name} <value>'`,
       );
     }
     const spec = sig.params.find((p) => p.name === token.text && p.positional !== true);

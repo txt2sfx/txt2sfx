@@ -275,6 +275,10 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'dialog.agentPrompt': 'промпт для агента',
   'dialog.noteClaude':
     'Это вся установка — заранее ничего поднимать не нужно. Добавьте `-s user` после `add`, чтобы сервер был во всех проектах. Затем перезапустите Claude Code: список серверов он читает при старте.',
+  'dialog.claudeModel': 'Либо: Claude Code как модель прямо здесь',
+  'dialog.claudeModelWhat': 'команду «Claude Code как модель»',
+  'dialog.claudeModelNote':
+    'Тот же мост, но в обратную сторону: эта команда отвечает на кнопку «Генерировать» через CLI claude, который уже стоит у вас. Провайдер «agent» работает без MCP-клиента и без перезапуска. Модель выбирается флагом --model opus. Команду не закрывайте; Ctrl+C останавливает.',
   'dialog.noteCodex':
     'Пишет [mcp_servers.txt2sfx] в ~/.codex/config.toml и поднимает мост при первом обращении. Затем перезапустите codex.',
   'dialog.noteOpencode':

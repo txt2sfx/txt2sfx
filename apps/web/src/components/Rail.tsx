@@ -20,6 +20,11 @@
  * prompts, one line each, and the colour of the row is the recipe's category — which
  * carries identity at a glance without spending a column on a badge.
  *
+ * The one exception is the play glyph, because auditioning is the cheapest way to know
+ * you have the right row and switching to find out costs the editor's state. It is dim
+ * until the row is hovered so a still list stays a list of names, and it stops at the
+ * click rather than selecting, so hearing a neighbour never moves you off your work.
+ *
  * @packageDocumentation
  */
 
@@ -39,8 +44,11 @@ export interface RailProps {
   readonly mode: RailMode;
   readonly onMode: (mode: RailMode) => void;
   readonly onSelect: (name: string) => void;
+  readonly onPlay: (name: string) => void;
   readonly onTrash: (name: string) => void;
   readonly onNew: () => void;
+  /** Name of whatever is sounding right now, from anywhere in the app, or `null`. */
+  readonly playing: string | null;
 }
 
 /** A labelled run of rows. */
@@ -58,8 +66,10 @@ export function Rail({
   mode,
   onMode,
   onSelect,
+  onPlay,
   onTrash,
   onNew,
+  playing,
 }: RailProps): React.JSX.Element {
   const { t } = useI18n();
   const live = items.filter((item) => !item.trashed);
@@ -132,6 +142,24 @@ export function Rail({
                     if (event.key === 'Enter' && !item.trashed) onSelect(item.name);
                   }}
                 >
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className={`rail-play${item.name === playing ? ' playing' : ''}`}
+                    title={item.name === playing ? t('card.stop') : t('card.play')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onPlay(item.name);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.stopPropagation();
+                      event.preventDefault();
+                      onPlay(item.name);
+                    }}
+                  >
+                    {item.name === playing ? '❚❚' : '▶'}
+                  </span>
                   <span className="rail-name">{item.name}</span>
                   {dirty.includes(item.name) ? (
                     <span className="dirty" title={t('rail.unsaved')}>

@@ -70,6 +70,18 @@ interface ClientRecipe {
   /** The thing to copy: a shell command, or the config to paste into `file`. */
   readonly code: string;
   readonly note: string;
+  /**
+   * A second block, for the one client that can also be driven the other way
+   * round. Optional because it is not a fallback and not an alternative to the
+   * command above — it is the reverse direction, and only Claude Code has it.
+   */
+  readonly extra?: {
+    readonly title: string;
+    readonly code: string;
+    readonly note: string;
+    /** What the copy button says it copied — the title reads badly in that sentence. */
+    readonly what: string;
+  };
 }
 
 /**
@@ -105,6 +117,16 @@ function clientRecipes(port: string): readonly ClientRecipe[] {
       label: 'Claude Code',
       code: `claude mcp add txt2sfx -- ${argv}`,
       note: t('dialog.noteClaude'),
+      /* The command above points Claude Code at the tools; this one points the
+         tab at Claude Code. Same daemon, opposite direction — and it is the
+         only setup here that needs no MCP client and no restart, which is why
+         it earns a block of its own rather than a sentence in the note. */
+      extra: {
+        title: t('dialog.claudeModel'),
+        code: `npx -y txt2sfx-bridge claude${port === '4455' ? '' : ` --port ${port}`}`,
+        note: t('dialog.claudeModelNote'),
+        what: t('dialog.claudeModelWhat'),
+      },
     },
     {
       id: 'codex',
@@ -302,6 +324,13 @@ export function BridgeDialog({ status, onClose, onRecheck, onUrlChange }: Bridge
               {recipe.file === undefined ? null : <div className="step-file mono">{recipe.file}</div>}
               <CodeBlock code={recipe.code} what={t('dialog.setupOf', { client: recipe.label })} onCopied={say} />
               <div className="step-note">{recipe.note}</div>
+              {recipe.extra === undefined ? null : (
+                <>
+                  <div className="step-title">{recipe.extra.title}</div>
+                  <CodeBlock code={recipe.extra.code} what={recipe.extra.what} onCopied={say} />
+                  <div className="step-note">{recipe.extra.note}</div>
+                </>
+              )}
             </div>
           </div>
 

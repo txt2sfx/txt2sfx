@@ -123,6 +123,9 @@ sound "<name>" <duration> [<category>] [loop]
   count against the header's duration.
 - Every number carries a unit except dimensionless ratios: \`Hz\`, \`kHz\`, \`ms\`,
   \`s\`, \`dB\`. \`480Hz\`, \`1.2kHz\`, \`35ms\`, \`-6dB\`, \`Q6\`.
+- A slot is \`~<value>[<min>..<max>]\`. The bounds are read in the unit of the value,
+  so write them bare: \`~500ms[200..1500]\`, \`~3.2kHz[1.5..6]\`. Repeating a unit of
+  the same kind is accepted and converted; mixing kinds is an error.
 - A trajectory is \`<value> -> <target> in <time>\`, exponential by default,
   \`-> lin <target> in <time>\` for linear. Chain segments for multi-stage sweeps.
 - \`#\` starts a comment. Comments survive every transformation — use them to record

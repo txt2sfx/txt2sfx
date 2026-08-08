@@ -7,6 +7,7 @@ npm and needs no install:
 ```powershell
 npx txt2sfx-bridge            # daemon on 127.0.0.1:4455
 npx txt2sfx-bridge --stdio    # MCP server, for a client's config file
+npx txt2sfx-bridge claude     # the local Claude Code CLI answers the playground's Generate
 npx txt2sfx-bridge doctor     # what is listening, what can render, what is paired
 ```
 
@@ -71,6 +72,31 @@ Where the MCP client advertises the `sampling` capability, direction B needs no 
 the daemon fulfils the request with `sampling/createMessage` and the human sees the recipe
 appear. Where it does not — which today is most clients — the two polling tools are the
 path, and the playground says so plainly instead of hanging.
+
+### `txt2sfx-bridge claude`: the third answerer
+
+Both of those need an agent on the other end — one that remembers to poll, or one whose
+client implements a capability almost none of them do. `txt2sfx-bridge claude` removes the
+agent from direction B entirely: the process collects its own parked jobs and answers each
+by running the Claude Code CLI already installed on the machine. One command, no MCP
+client, no config file, no restart, and it opens a bridge itself when none is listening.
+
+The job's system prompt goes to `--system-prompt-file` and the conversation to stdin,
+never to argv: the contract alone is about 12 KB and Windows caps a whole command line at
+32767 characters, so a prompt in argv is a bug that only appears on someone else's
+machine. Tools are disabled (`--tools ""`) because this is a completion, not an agent
+session — the model is being asked for one fenced soundline block, and a permission prompt
+would have nobody to answer it at the end of a pipe. What comes back is the `result` field
+of `--output-format json`, checked for `is_error` as well as for the exit code, because a
+refusal or a spent budget is reported as a *successful* run with the explanation in
+`result` — and handing that to the playground to parse as soundline is precisely the
+failure worth spending a check on.
+
+`@anthropic-ai/claude-agent-sdk` would have been the obvious way to do this and is
+deliberately not used: `packages/bridge` ships as one bundled file with zero runtime
+dependencies, which is what makes `npx txt2sfx-bridge` work at all. The binary is spawned,
+never imported, and everything about the exchange is tested against a scripted runner
+rather than a real model.
 
 ## The tools
 

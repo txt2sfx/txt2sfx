@@ -988,6 +988,15 @@ export function App(): React.JSX.Element {
           railMode={railMode}
           onRailMode={setRailMode}
           onSelect={select}
+          /* The selected row plays the editor's text, not the stored one — the rail
+             shows the working set, and a row that sounds unlike what is on screen
+             would be a lie about which sound you are looking at. */
+          onRailPlay={(name) =>
+            name === selected
+              ? play()
+              : playNamed(name, items.find((item) => item.name === name)?.source ?? '')
+          }
+          railPlaying={playingName}
           onTrash={trash}
           onNew={() => {
             setPrompt('');
