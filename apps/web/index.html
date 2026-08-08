@@ -22,6 +22,49 @@
       rel="stylesheet"
     />
     <title>txt2sfx — soundline playground</title>
+    <meta
+      name="description"
+      content="Describe a sound effect in words and get back compact procedural Web Audio code — typically 300–1000 bytes, zero dependencies — instead of an audio file."
+    />
+
+    <!--
+      The share card.
+
+      Absolute URLs, and pointing at the published site rather than at whatever host is
+      serving this file: a scraper resolves these itself, from its own network, and a
+      relative path or a localhost URL is a preview that renders as a bare link. That
+      does mean a fork's deployment advertises this site until these five lines are
+      edited, which is the honest trade — the alternative is a build-time substitution to
+      spare a case that happens once.
+
+      `og:image` is drawn by `assets/og-card.py`, which explains why it is a card rather
+      than the screenshot: the screenshot's 1.30 aspect ratio is cropped by every
+      timeline that wants 1.91, and it loses the two rows worth showing. Twitter reads
+      the `og:*` tags for everything it can, so only the card type and the alt text need
+      a `twitter:` twin.
+    -->
+    <link rel="canonical" href="https://txt2sfx.github.io/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="txt2sfx" />
+    <meta property="og:url" content="https://txt2sfx.github.io/" />
+    <meta property="og:title" content="txt2sfx — text-to-SFX as code" />
+    <meta
+      property="og:description"
+      content="Sounds that weigh bytes, not megabytes. A prompt becomes a readable recipe, a validator checks it against the physics of its category, and the export is a few hundred bytes of Web Audio JavaScript with no dependencies."
+    />
+    <meta property="og:image" content="https://txt2sfx.github.io/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="A three-line soundline recipe for a bubble pop, and the note that it exports as 876 bytes of Web Audio JavaScript with zero dependencies."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:image:alt"
+      content="A three-line soundline recipe for a bubble pop, and the note that it exports as 876 bytes of Web Audio JavaScript with zero dependencies."
+    />
   </head>
   <body>
     <div id="root"></div>

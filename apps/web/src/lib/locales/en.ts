@@ -38,6 +38,11 @@ export const en = {
   'bridge.noAgent': 'no agent yet',
   'bridge.tools': '{client} · {count} tools',
 
+  'repo.label': 'GitHub',
+  'repo.title': 'Read the source — the pipeline, the validator, the optimizer and the tests',
+  'repo.star': 'Star',
+  'repo.starTitle': 'Opens the repository on GitHub, where the star button is',
+
   'lang.aria': 'interface language',
   'lang.title': 'Interface language',
 

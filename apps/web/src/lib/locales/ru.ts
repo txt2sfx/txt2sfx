@@ -15,6 +15,10 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'bridge.noAgent': 'агента пока нет',
   'bridge.tools': '{client} · инструментов: {count}',
 
+  'repo.title': 'Исходники — весь конвейер, валидатор, оптимизатор и тесты',
+  'repo.star': 'Звезда',
+  'repo.starTitle': 'Открывает репозиторий на GitHub, где и находится кнопка звезды',
+
   'lang.aria': 'язык интерфейса',
   'lang.title': 'Язык интерфейса',
 
