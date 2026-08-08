@@ -39,6 +39,27 @@ export function bytes(value: number): string {
 }
 
 /**
+ * A byte count on the scale a download page uses.
+ *
+ * {@link bytes} is for the export budget, where every byte is the point and `847 B`
+ * is the honest answer. This is for the other end of the range — a 1.7 GB checkpoint
+ * and a 6 GB environment — where the separators stop being readable and the reader
+ * only wants to know whether the disk can take it. Powers of 1024, matching what
+ * `run.py` prints and what Hugging Face reports while it fetches.
+ */
+export function size(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let scaled = value;
+  let unit = 0;
+  while (scaled >= 1024 && unit < units.length - 1) {
+    scaled /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 ? String(Math.round(scaled)) : scaled.toFixed(2)} ${units[unit] ?? 'B'}`;
+}
+
+/**
  * "3 min ago".
  *
  * Relative rather than absolute because the only question anyone asks of this

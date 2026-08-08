@@ -39,15 +39,43 @@ export type {
   FitResult,
   Frame,
   HealthPayload,
+  ModelEvent,
+  ModelProvisionParams,
+  ModelProvisionResult,
+  ModelRenderParams,
+  ModelRenderResult,
+  ModelStage,
+  ModelStatus,
   NextResult,
   OpenParams,
   PairPayload,
   ParkedRequest,
   PlaygroundStateResult,
   Renderer,
+  RenderFile,
   RenderParams,
   RenderResult,
 } from './protocol.js';
+
+export {
+  DEFAULT_REPO,
+  LICENCE_URL,
+  StableAudio,
+  TOKENS_URL,
+  dirSize,
+  ensureWorkspace,
+  findLauncher,
+  formatBytes,
+  hfCacheDir,
+  modelCacheDir,
+  parseProvisioned,
+  parseResult,
+  provisionArgs,
+  renderArgs,
+  splitLines,
+  workspace,
+} from './stable-audio.js';
+export type { Launcher, RenderResultLine, StableAudioOptions, Workspace } from './stable-audio.js';
 
 export {
   CLAUDE_DEFAULT_BIN,
@@ -63,7 +91,7 @@ export {
 export type { ClaudeOptions, ClaudeWorkerOptions, CommandResult, CommandRunner } from './claude.js';
 
 export { Hub, NoPlaygroundError, localToolHub } from './hub.js';
-export type { HubOptions, PlaygroundPort, SamplingFulfiller, ToolHub } from './hub.js';
+export type { HubOptions, ModelPort, PlaygroundPort, SamplingFulfiller, ToolHub } from './hub.js';
 
 export { createBridgeServer, originAllowed, remoteToolHub } from './http.js';
 export type { BridgeServerOptions } from './http.js';

@@ -15,13 +15,19 @@
   "bin": {
     "txt2sfx-bridge": "dist/txt2sfx-bridge.mjs"
   },
-  "files": ["dist/txt2sfx-bridge.mjs", "README.md", "LICENSE"],
+  "files": [
+    "dist/txt2sfx-bridge.mjs",
+    "dist/stable-audio/run.py",
+    "dist/stable-audio/requirements.txt",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsc -b",
-    "bundle": "tsc -b && esbuild src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/txt2sfx-bridge.mjs --external:node-web-audio-api \"--banner:js=#!/usr/bin/env node\"",
+    "bundle": "tsc -b && esbuild src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/txt2sfx-bridge.mjs --external:node-web-audio-api \"--banner:js=#!/usr/bin/env node\" && node scripts/pack-assets.mjs",
     "prepack": "npm run bundle"
   },
   "devDependencies": {

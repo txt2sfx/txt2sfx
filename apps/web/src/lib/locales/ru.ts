@@ -161,14 +161,44 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'format.downloadTitle': 'скачать {label}',
   'format.chooseAria': 'выбрать формат',
 
-  'model.needsDev':
-    'Эта вкладка управляет диффузионной моделью на этой машине, а она существует только под {command}. Статической сборке не с чем разговаривать.',
-  'model.noEndpoint':
-    'Локальной модели нет. Под {command} эта вкладка рендерит референс по тому же запросу через Stable Audio Open Small — разовая настройка описана в {readme}.',
+  'model.looking': 'Ищу модель на этой машине…',
+  'model.noBridge':
+    'Эта вкладка рендерит референс по тому же запросу через Stable Audio Open Small — у вас на машине. Пока никто не отвечает: запустите {command} в терминале, и страница сама его найдёт. Под {dev} отвечает дев-сервер.',
+  'model.noBridgeWhy':
+    'Модель — это локальная программа, а не наш сервис: мост и есть способ до неё достучаться. Он же её и установит — кнопкой, которая появится, как только он запустится.',
+  'model.recheck': 'Проверить снова',
+
+  'model.setupTitle': 'Установить референсную модель',
+  'model.stage.unavailable':
+    'В этой сборке моста нет установщика. Обновите txt2sfx-bridge или укажите TXT2SFX_STABLE_AUDIO_DIR на копию test/stable-audio.',
+  'model.stage.needsPython':
+    'Собрать окружение пока нечем. Поставьте uv — `winget install --id astral-sh.uv` или `pip install uv` — и проверьте снова: он сам скачает CPython 3.10, который требует тулкит, и системный Python не тронет.',
+  'model.stage.needsVenv':
+    'Ещё не установлено. Одна кнопка соберёт изолированное окружение на CPython 3.10 и скачает веса. Это разовая операция — все последующие рендеры идут офлайн.',
+  'model.stage.needsWeights':
+    'Окружение готово, весов на машине ещё нет — примерно 1.7 ГБ в общий кэш Hugging Face.',
+  'model.stage.ready': 'Установлено и готово.',
+  'model.licenceStep': 'Примите Stability AI Community License на',
+  'model.tokenStep': 'Создайте read-токен на',
+  'model.pasteStep': 'Вставьте его ниже. Он уйдёт только с этим запросом и нигде не сохраняется.',
+  'model.token': 'Токен Hugging Face',
+  'model.tokenFound': 'уже найден ({source})',
+  'model.repo': 'Репозиторий',
+  'model.repoHint':
+    'Пусто — официальный чекпоинт. Зеркалу с теми же весами не нужны ни токен, ни принятие лицензии — но лицензия всё равно определяет, что можно делать с полученным звуком.',
+  'model.install': 'Скачать и установить',
+  'model.installCaption':
+    'Несколько гигабайт, один раз, по вашему каналу. Всё, что печатает установщик, видно ниже — включая то, что его остановило.',
+  'model.factWeights': 'веса',
+  'model.factEnv': 'окружение',
+  'model.factVia': 'отвечает',
+  'model.viaBridge': 'локальный мост',
+  'model.viaDev': 'дев-сервер',
+  'model.notDownloaded': 'не скачаны',
+  'model.notInstalled': 'не установлено',
   'model.nothing': 'ничего не отрендерено',
   'model.seconds': 'секунды',
   'model.seed': 'seed {value}',
-  'model.notProvisioned': 'не настроено',
   'model.play': 'Играть',
   'model.stop': 'Стоп',
   'model.render': 'Отрендерить цель',
@@ -181,7 +211,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'compare.model': 'Рендер модели',
   'compare.file': 'Файл',
   'compare.take': 'Другой дубль',
-  'compare.modelBlocked': 'нужна локальная диффузионная модель — см. test/stable-audio/README.md',
+  'compare.modelBlocked': 'нужна локальная диффузионная модель — установите её во вкладке «Модель»',
   'compare.nothingLoaded': 'ничего не загружено',
   'compare.hintModel': 'отрендерено диффузионной моделью по тому же запросу — это цель, а не соперник',
   'compare.hintUpload': 'ваш файл, при загрузке выровнен по атаке и нормализован по пику',
@@ -190,7 +220,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'compare.dropzone':
     'Сравнивать пока не с чем. Перетащите сюда аудиофайл, выберите «{take}», чтобы отрендерить рецепт с новым seed, или {model}.',
   'compare.dropzoneModelReady': 'пусть локальная модель отрендерит цель',
-  'compare.dropzoneModelMissing': 'настройте локальную модель',
+  'compare.dropzoneModelMissing': 'установите локальную модель во вкладке «Модель»',
   'compare.candidate': 'кандидат',
   'compare.alignment':
     'обе атаки сдвинуты к {onset} мс · нормализация по пику · лог. шкала частот {min} Гц – {max}',

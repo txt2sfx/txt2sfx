@@ -14,6 +14,10 @@ npx txt2sfx-bridge doctor     # what is listening, what can render, what is pair
 Nothing about it is hosted by us and nothing leaves the machine. It binds loopback, and
 the one non-loopback thing it can reach — the recipe bank — is a URL the user typed.
 
+It is also how the playground gets a **reference render**: the daemon carries the
+installer for Stable Audio Open Small and drives it, so the Model tab works for someone
+who has never cloned this repository. See [the reference model](#the-reference-model).
+
 ## Getting an agent attached, in one paste
 
 `bridgeOnboardingPrompt` (in `@txt2sfx/agent`) is the text a human copies from the
@@ -177,9 +181,62 @@ And the playground calls these on the daemon:
 | --- | --- | --- |
 | `agent.complete` | `{ turn, messages, system }` | `{ text }` — parked until the agent answers |
 | `agent.status` | `{}` | `{ connected, client, sampling }` |
+| `model.status` | `{ repo? }` | `ModelStatus` — see below |
+| `model.provision` | `{ repo?, token? }` | `{ status, torch?, device? }` — minutes, streams `model.log` |
+| `model.render` | `{ prompt, seconds?, steps?, seed?, repo?, token? }` | `{ name, mime, bytes, ms, audio }` — audio is base64 |
+| `model.cancel` | `{}` | `{ stopped }` — kills whichever child is running |
 
 Events, fire and forget: `agent.attached`, `agent.detached`, `job.parked`, `job.answered`
 from the daemon; `catalog` (`{ names }`) and `selection` (`{ name }`) from the playground.
+`model.log` is the exception that is *not* broadcast — it goes to the socket that asked,
+because an install scrolling past in a window nobody started it from is noise.
+
+### The reference model
+
+`model.*` is the odd one out: the only work the daemon does itself rather than passing
+between two participants. It is here because the argument for the bridge is exactly the
+argument for this feature — code that must run on the human's machine, reached from a
+page that may be served from anywhere. Stable Audio Open Small renders the *target* a
+recipe is fitted to, and the alternative to putting it behind this socket was a feature
+only a repository checkout could have.
+
+The daemon carries its own copy of the installer (`run.py` and `requirements.txt`, packed
+into the published tarball), so `npx txt2sfx-bridge` needs nothing else. It writes them
+to `~/.txt2sfx/stable-audio/` and works there; run from a checkout it uses
+`test/stable-audio/` instead, so a venv provisioned from a terminal and one provisioned
+from the Model tab are the same venv. `TXT2SFX_STABLE_AUDIO_DIR` overrides both.
+
+```ts
+type ModelStage = 'unavailable' | 'needs-python' | 'needs-venv' | 'needs-weights' | 'ready';
+
+interface ModelStatus {
+  stage: ModelStage; ready: boolean; busy: boolean; running: 'render' | 'provision' | null;
+  reason?: string;                                   // phrased as the thing that fixes it
+  workDir: string; script: string | null;            // where run.py and the venv live
+  venv:    { path: string; present: boolean; bytes: number; torch: string | null };
+  weights: { repo: string; dir: string; present: boolean; bytes: number };
+  cacheDir: string;                                  // the shared Hugging Face cache
+  gated: boolean; licenceUrl: string; tokensUrl: string;
+  hasToken: boolean; tokenSource: 'env' | 'file' | null;
+  launcher: string | null; uv: string | null; python: string | null;
+  defaults: { seconds: number; steps: number; repo: string };
+  renders: { file: string; bytes: number; modifiedMs: number }[];
+}
+```
+
+The byte counts are **measured**, by walking those directories without following
+symlinks — the Hugging Face cache hard-links each blob into a snapshot, and a walk that
+followed them would report 3.4 GB for a 1.7 GB checkpoint. They are in the payload
+because the Model tab is asked to show them: an install that quietly takes six gigabytes
+is something people discover when a disk fills.
+
+A `token` is used for the one call it arrives on and is never written down. It travels in
+the child's environment rather than in its argv, which is echoed back in a `start` event
+and is visible to every other user on the machine in the process list.
+
+There is no deadline on these calls at the hub. The child owns its own — ten minutes for
+a render, two hours for an install — and a second, shorter one here would turn a slow
+download into a mystery abort.
 
 A `call` the other side does not implement comes back as an `error` with code
 `unsupported`, never a dropped frame — a bridge that silently ignores a method makes a

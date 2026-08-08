@@ -70,7 +70,7 @@ import { renderLayers } from './lib/layers.js';
 import { loadLibrary, saveLibrary, type Library } from './lib/library.js';
 import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
-import { renderTarget, stableAudioStatus, stableAudioSupported } from './lib/stable-audio.js';
+import { modelStatus, renderTarget } from './lib/stable-audio.js';
 import { DEFAULT_PROVIDER, useGenerate, type ProviderSettings } from './lib/useGenerate.js';
 
 /** How long to wait after the last edit before re-rendering offline. */
@@ -137,6 +137,7 @@ export function App(): React.JSX.Element {
   const [rendered, setRendered] = useState<RenderResult | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [playingName, setPlayingName] = useState<string | null>(null);
+  const [looping, setLooping] = useState(false);
   const [formatId, setFormatId] = useState('js');
   const [status, setStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<ProviderSettings>(DEFAULT_PROVIDER);
@@ -205,10 +206,19 @@ export function App(): React.JSX.Element {
     };
   }, [bank, bankNonce]);
 
+  /* Re-asked whenever the bridge's state changes, not once at mount: the ordinary way
+     this goes from "no model" to "ready" is somebody running `npx txt2sfx-bridge` while
+     the tab is already open, and a Compare panel still saying the model is missing
+     afterwards would be lying about something they just fixed. */
   useEffect(() => {
-    if (!stableAudioSupported) return;
-    void stableAudioStatus().then((next) => setModelAvailable(next?.ready === true));
-  }, []);
+    let cancelled = false;
+    void modelStatus().then((next) => {
+      if (!cancelled) setModelAvailable(next?.ready === true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bridgeStatus.state]);
 
   /* A link that carries a recipe becomes a session entry and opens in the studio, playing
      itself. The payload is dropped from the address bar immediately: leaving it there
@@ -344,6 +354,7 @@ export function App(): React.JSX.Element {
     if (stopTimer.current !== null) window.clearTimeout(stopTimer.current);
     stopTimer.current = null;
     setPlayingName(null);
+    setLooping(false);
   }, []);
 
   /** Play a named recipe's own text — used by the gallery, where nothing is "current". */
@@ -372,12 +383,19 @@ export function App(): React.JSX.Element {
     playNamed(selected, source);
   }, [ast, playNamed, selected, source]);
 
+  /* A loop has no end of its own to stop it, so the button that starts one is the only
+     thing that can end it: pressing it again is the off switch, not a restart. */
   const loop = useCallback(() => {
     if (rendered === null) return;
+    if (looping) {
+      stop();
+      return;
+    }
     stop();
     playback.current = playBuffer(rendered.buffer, { loop: true });
     setPlayingName(selected);
-  }, [rendered, selected, stop]);
+    setLooping(true);
+  }, [looping, rendered, selected, stop]);
 
   /* Retrigger while a knob moves: the point of the sliders is hearing the change, and
      reaching for Play after every nudge defeats it. */
@@ -1024,6 +1042,7 @@ export function App(): React.JSX.Element {
           generation={generation}
           agentReady={bridgeStatus.health?.agent.connected === true}
           playing={playingName === selected}
+          looping={looping && playingName === selected}
           onPlay={play}
           onLoop={loop}
           formatId={formatId}
@@ -1035,6 +1054,7 @@ export function App(): React.JSX.Element {
           onBKind={setBKind}
           candidateLayers={layerBuffers}
           modelAvailable={modelAvailable}
+          onModelReady={setModelAvailable}
           onLoadFile={loadReference}
           onNewTake={newTake}
           onModelRendered={(file) => {

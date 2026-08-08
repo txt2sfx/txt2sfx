@@ -85,6 +85,7 @@ export interface StudioProps {
 
   /* --- playback and export --- */
   readonly playing: boolean;
+  readonly looping: boolean;
   readonly onPlay: () => void;
   readonly onLoop: () => void;
   readonly formatId: string;
@@ -98,6 +99,8 @@ export interface StudioProps {
   readonly onBKind: (kind: BKind) => void;
   readonly candidateLayers: readonly (AudioBuffer | null)[];
   readonly modelAvailable: boolean;
+  /** The Model tab can install the model; when it does, the rest of the app must know. */
+  readonly onModelReady: (ready: boolean) => void;
   readonly onLoadFile: (file: File) => void;
   readonly onNewTake: () => void;
   readonly onModelRendered: (file: File) => void;
@@ -212,6 +215,7 @@ export function Studio(props: StudioProps): React.JSX.Element {
                 rendered={props.rendered}
                 seed={props.seed}
                 playing={props.playing}
+                looping={props.looping}
                 formatId={props.formatId}
                 onFormat={props.onFormat}
                 onDownload={props.onDownload}

@@ -160,14 +160,9 @@ export const ja: Partial<Readonly<Record<Key, string>>> = {
   'format.downloadTitle': '{label} をダウンロード',
   'format.chooseAria': '形式を選ぶ',
 
-  'model.needsDev':
-    'このビューはこのマシン上の拡散モデルを動かしますが、それは {command} のときだけ存在します。静的ビルドには話しかける相手がいません。',
-  'model.noEndpoint':
-    'ローカルのモデルエンドポイントがありません。{command} なら、このビューは同じプロンプトから Stable Audio Open Small でリファレンスを生成します —— 一度だけの準備手順は {readme} にあります。',
   'model.nothing': '未生成',
   'model.seconds': '秒数',
   'model.seed': 'シード {value}',
-  'model.notProvisioned': '未設定',
   'model.play': '再生',
   'model.stop': '停止',
   'model.render': 'ターゲットを生成',

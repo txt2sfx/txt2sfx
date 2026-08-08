@@ -150,6 +150,21 @@ render), then `node-web-audio-api` if it installed, then none — in which case
 `sfx_validate`, `sfx_contract` and the bank tools still work and everything else fails
 with one sentence naming the fix.
 
+**Playground → the model on your disk.** The playground's Model tab renders the same
+prompt with Stable Audio Open Small, so the procedural recipe has a target to be fitted
+to — and the bridge is what makes that reachable from a page it does not host. The daemon
+carries the installer, so the tab shows a licence link, a token field, exactly where the
+files will land and one button that fetches them; nothing needs to be cloned or run in a
+terminal first. The environment goes to `~/.txt2sfx/stable-audio/` (`test/stable-audio/`
+when the bridge is run from a checkout, so an existing venv is reused) and the ~1.7 GB
+checkpoint into the shared Hugging Face cache. `npx txt2sfx-bridge doctor` prints both
+paths and both sizes, and `TXT2SFX_STABLE_AUDIO_DIR` moves them to a disk with room.
+
+The weights are gated: the tab links the Stability AI Community License and the token
+page, and the token you paste travels with that one request and is never stored. A
+community mirror of the same weights needs neither — the repo field takes one — though
+the licence still governs what you do with the audio.
+
 **Playground → agent.** The playground's provider picker has an `agent` entry. Choose it,
 press Generate, and the request parks at the bridge until the agent collects it with
 `sfx_next_request` and answers with `sfx_answer`. If your MCP client supports the
@@ -181,6 +196,12 @@ itself, once per Generate.
 - **`sfx_export` writes where you let it.** Relative paths land under the bridge's
   working directory; anything outside it is refused unless you started the bridge with
   `--allow-write <dir>`.
+- **The reference model is a big install and the bridge does not pretend otherwise.**
+  It needs `uv` or a system Python (uv fetches the CPython 3.10 the toolkit pins), a
+  gigabyte of wheels — three, if an NVIDIA GPU is found and the CUDA build is chosen —
+  and ~1.7 GB of gated weights. It is never installed silently: nothing happens until
+  somebody presses the button, and every line the installer prints is on screen while it
+  runs. Rendering with it is ~0.5 s on an RTX 3080 and ~22 s on eight CPU cores.
 
 ## Two builds, on purpose
 
@@ -192,7 +213,15 @@ what makes `npx txt2sfx-bridge` work with **zero runtime dependencies** — the 
 server and the MCP server are hand-rolled on `node:*` builtins, and the only entry in
 `optionalDependencies` is the native renderer that is allowed to be absent.
 
-Only the bundle ships. `files` names that one file, and the package advertises no `main`
+Only the bundle ships, plus the two files the reference-model installer is made of:
+`run.py` and its `requirements.txt`, copied out of `test/stable-audio/` by
+`scripts/pack-assets.mjs` during the bundle step. They are not JavaScript, so esbuild has
+nothing to do with them, and embedding the Python in the `.mjs` as a string would be a
+second copy of a checked-in file to keep in step. `src/stable-audio.ts` looks for them
+beside the bundle first and falls back to a checkout, which is what lets a contributor
+keep using the repository's own venv while an `npx` install gets its own.
+
+`files` names exactly those three, and the package advertises no `main`
 or `exports`, because the modular build imports the private packages and would throw
 `ERR_MODULE_NOT_FOUND` on the first import for anyone outside this repository — a
 library entry that cannot be honoured is worse than none. Embedders build from source;

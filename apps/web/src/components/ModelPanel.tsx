@@ -18,20 +18,26 @@
  * never written down: a target is used once, and a session of clicking this button
  * should not leave a directory of files to sweep up.
  *
- * ## Why the model list is one item long
+ * ## Three screens, not one panel with a warning
  *
- * The design showed three. Three would require either three provisioned local models or
- * three hosted API keys, and offering a picker whose other entries error on click is
- * worse than a picker with one entry. What is here is what is actually runnable: the
- * local Stable Audio Open Small, behind the one-time provisioning in
- * `test/stable-audio/README.md`, and a plain statement of the fact when it is absent.
+ * The model is a gated, multi-gigabyte download, and for most visitors the truthful
+ * state of this tab is "you do not have it yet". Showing the render form anyway, with a
+ * disabled button and a sentence in the corner, tells someone what they cannot do
+ * without telling them what to press. So the panel is a small state machine over
+ * `status.stage`, and each state owns the whole view:
+ *
+ * - **no door** — nothing on this machine is listening. One command fixes it.
+ * - **not installed** — the licence to accept, the token to paste or the mirror to
+ *   name, exactly where the files will land, and one button that fetches them.
+ * - **ready** — the render form, and underneath it what is on the disk and where.
  *
  * ## Why the log is the progress bar
  *
- * A first render downloads a multi-gigabyte checkpoint and can take minutes; a warm one
- * takes thirty seconds. The child process says which is happening — "loaded in 10.1s on
- * cpu", "sampled in 8.1s, decoding 3s" — and a spinner in place of those lines would
- * hide the download, the licence gate and every other reason a run is slow.
+ * A first install downloads a CPython, a gigabyte of wheels and 1.7 GB of weights; a
+ * warm render takes thirty seconds. The child process says which is happening — pip's
+ * resolver, a download bar, "loaded in 10.1s on cpu" — and a spinner in place of those
+ * lines would hide the download, the licence gate and every other reason a run is slow.
+ * That is also the argument that makes an install button acceptable here at all.
  *
  * @packageDocumentation
  */
@@ -40,20 +46,39 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bars } from './Bars.js';
 import { FormatMenu } from './FormatMenu.js';
 import { bars, ghostBars } from '../lib/layers.js';
-import { ms } from '../lib/format.js';
+import { ms, size } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
 import { playBuffer, type Playback } from '../lib/engine.js';
 import {
+  devEndpointPossible,
+  modelStatus,
+  provisionModel,
   renderTarget,
-  stableAudioStatus,
-  stableAudioSupported,
+  type ModelStatus,
   type RenderEvent,
-  type StableAudioStatus,
 } from '../lib/stable-audio.js';
 import type { Format } from '../lib/download.js';
 
 /** Bars across the model's waveform. */
 const BAR_COUNT = 96;
+
+/** How many lines of the child's output to keep on screen. */
+const LOG_LINES = 400;
+
+/**
+ * What each stage is, in one sentence.
+ *
+ * A table rather than an interpolated key, so a stage the daemon invents and this
+ * build has never heard of falls back to a sentence instead of rendering its own key
+ * name at the reader.
+ */
+const STAGE_KEY = {
+  unavailable: 'model.stage.unavailable',
+  'needs-python': 'model.stage.needsPython',
+  'needs-venv': 'model.stage.needsVenv',
+  'needs-weights': 'model.stage.needsWeights',
+  ready: 'model.stage.ready',
+} as const;
 
 export interface ModelPanelProps {
   readonly prompt: string;
@@ -65,6 +90,8 @@ export interface ModelPanelProps {
   readonly onFormat: (id: string) => void;
   readonly onDownload: (format: Format) => Promise<unknown> | void;
   readonly seed: number;
+  /** Told when an install finishes, so the rest of the app stops saying "missing". */
+  readonly onReady?: (ready: boolean) => void;
 }
 
 export function ModelPanel({
@@ -76,29 +103,57 @@ export function ModelPanel({
   onFormat,
   onDownload,
   seed,
+  onReady,
 }: ModelPanelProps): React.JSX.Element {
   const { t } = useI18n();
-  const [status, setStatus] = useState<StableAudioStatus | null>(null);
+  const [status, setStatus] = useState<ModelStatus | null>(null);
+  const [asked, setAsked] = useState(false);
   const [lines, setLines] = useState<readonly string[]>([]);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState<'render' | 'provision' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [seconds, setSeconds] = useState<number | null>(null);
+  /* Both live in component state and nowhere else. The token is a credential and
+     `lib/keystore.ts` sets the rule; the repo id is not, but it belongs to the same
+     form and is one field to retype. */
+  const [token, setToken] = useState('');
+  const [repo, setRepo] = useState('');
 
   const abort = useRef<AbortController | null>(null);
   const playback = useRef<Playback | null>(null);
+  const log = useRef<HTMLPreElement | null>(null);
+
+  /**
+   * Ask again, about whichever repo is in the field.
+   *
+   * The repo matters to the *question*, not only to the install: a community mirror
+   * lives in its own cache directory and is not behind the licence click, so somebody
+   * who already has one would otherwise be told they have nothing.
+   */
+  const refresh = useCallback(
+    async (which = repo): Promise<ModelStatus | null> => {
+      const next = await modelStatus(which.trim() === '' ? {} : { repo: which.trim() });
+      setStatus(next);
+      setAsked(true);
+      onReady?.(next?.ready === true);
+      return next;
+    },
+    [repo, onReady],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    void stableAudioStatus().then((next) => {
+    void modelStatus().then((next) => {
       if (cancelled) return;
       setStatus(next);
-      if (next !== null && seconds === null) setSeconds(next.defaults.seconds);
+      setAsked(true);
+      onReady?.(next?.ready === true);
+      if (next !== null) setSeconds((current) => current ?? next.defaults.seconds);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onReady]);
 
   useEffect(
     () => () => {
@@ -108,6 +163,52 @@ export function ModelPanel({
     [],
   );
 
+  /* A log nobody is scrolling should show its newest line — that is where the answer
+     to "is this stuck?" is. A log somebody *is* scrolling must not be yanked back. */
+  useEffect(() => {
+    const element = log.current;
+    if (element === null) return;
+    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+    if (atBottom) element.scrollTop = element.scrollHeight;
+  }, [lines]);
+
+  const onEvent = useCallback((event: RenderEvent) => {
+    if (event.type === 'log') setLines((current) => [...current.slice(-LOG_LINES), event.line]);
+    if (event.type === 'start') setLines((current) => [...current, `$ ${event.argv.join(' ')}`]);
+    if (event.type === 'error') setError(event.message);
+  }, []);
+
+  const install = useCallback(() => {
+    const controller = new AbortController();
+    abort.current = controller;
+    setRunning('provision');
+    setError(null);
+    setLines([]);
+
+    void provisionModel(
+      { ...(repo.trim() === '' ? {} : { repo: repo.trim() }), ...(token.trim() === '' ? {} : { token: token.trim() }) },
+      { signal: controller.signal, onEvent },
+    )
+      .then((next) => {
+        setStatus(next);
+        onReady?.(next?.ready === true);
+        setSeconds((current) => current ?? next.defaults.seconds);
+        /* The token did its job in that one request and is not needed again — the
+           weights are on the disk now, and keeping it in a form field for the rest of
+           the session is a credential lying around for no reason. */
+        setToken('');
+      })
+      .catch((failure: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(failure instanceof Error ? failure.message : String(failure));
+        void refresh();
+      })
+      .finally(() => {
+        if (abort.current === controller) abort.current = null;
+        setRunning(null);
+      });
+  }, [repo, token, onEvent, onReady, refresh]);
+
   const run = useCallback(() => {
     if (prompt.trim() === '') {
       setError(t('model.promptFirst'));
@@ -115,7 +216,7 @@ export function ModelPanel({
     }
     const controller = new AbortController();
     abort.current = controller;
-    setRunning(true);
+    setRunning('render');
     setError(null);
     setLines([]);
 
@@ -124,24 +225,20 @@ export function ModelPanel({
         prompt,
         seed,
         ...(seconds === null ? {} : { seconds }),
-        ...(status?.hasToken === false && status.defaults.repo !== '' ? { repo: status.defaults.repo } : {}),
+        ...(repo.trim() === '' ? {} : { repo: repo.trim() }),
       },
       {
         signal: controller.signal,
         onEvent: (event: RenderEvent) => {
-          if (event.type === 'log') setLines((current) => [...current.slice(-40), event.line]);
-          if (event.type === 'start') setLines((current) => [...current, `$ ${event.argv.join(' ')}`]);
-          if (event.type === 'done')
-            setLines((current) => [
-              ...current,
-              `${event.name} · ${(event.bytes / 1024).toFixed(0)} KB in ${ms(event.ms)}`,
-            ]);
-          if (event.type === 'error') setError(event.message);
+          onEvent(event);
+          if (event.type === 'done') {
+            setLines((current) => [...current, `${event.name} · ${size(event.bytes)} in ${ms(event.ms)}`]);
+          }
         },
       },
     )
       .then((file) => {
-        /* The render came down in the response body and was never written to `out/`, so
+        /* The render came down in the answer and was never written to `out/`, so
            there is nothing to fetch — a target is used once and should not leave a
            directory to sweep up. */
         onRendered(file);
@@ -152,9 +249,9 @@ export function ModelPanel({
       })
       .finally(() => {
         if (abort.current === controller) abort.current = null;
-        setRunning(false);
+        setRunning(null);
       });
-  }, [prompt, seed, seconds, status, onRendered, t]);
+  }, [prompt, seed, seconds, repo, onEvent, onRendered, t]);
 
   const play = useCallback(() => {
     playback.current?.stop();
@@ -168,29 +265,144 @@ export function ModelPanel({
     window.setTimeout(() => setPlaying(false), render.buffer.duration * 1000 + 120);
   }, [render, playing]);
 
-  /* `pnpm dev` and the README path are commands, not prose: they are typed verbatim, so
-     they stay out of the dictionary and are spliced back in as `<code>`. */
-  if (!stableAudioSupported) {
-    return <p className="teach">{splice(t('model.needsDev'), { command: <code>pnpm dev</code> })}</p>;
-  }
+  const stop = useCallback(() => abort.current?.abort(), []);
+
+  const logBlock =
+    lines.length === 0 && error === null ? null : (
+      <>
+        {error === null ? null : <div className="run-log-line bad">✗ {error}</div>}
+        {lines.length === 0 ? null : (
+          <pre className="model-log" ref={log}>
+            {lines.join('\n')}
+          </pre>
+        )}
+      </>
+    );
+
+  /* --- no door -------------------------------------------------------------- */
 
   if (status === null) {
     return (
-      <p className="teach">
-        {splice(t('model.noEndpoint'), {
-          command: <code>pnpm dev</code>,
-          readme: <code>test/stable-audio/README.md</code>,
-        })}
-      </p>
+      <div className="model">
+        <p className="teach">
+          {splice(t(asked ? 'model.noBridge' : 'model.looking'), {
+            command: <code>npx txt2sfx-bridge</code>,
+            dev: <code>pnpm dev</code>,
+          })}
+        </p>
+        {devEndpointPossible ? null : <p className="caption">{t('model.noBridgeWhy')}</p>}
+        <div className="transport">
+          <button type="button" onClick={() => void refresh()}>
+            {t('model.recheck')}
+          </button>
+        </div>
+      </div>
     );
   }
 
+  /* --- not installed -------------------------------------------------------- */
+
+  if (!status.ready) {
+    const installing = running === 'provision';
+    return (
+      <div className="model">
+        <div className="model-setup">
+          <h3 className="model-setup-title">{t('model.setupTitle')}</h3>
+          <p className="teach">{t(STAGE_KEY[status.stage] ?? STAGE_KEY['needs-venv'])}</p>
+          {status.reason === undefined ? null : <p className="caption warn">{status.reason}</p>}
+
+          {status.gated && !status.hasToken ? (
+            <ol className="model-steps">
+              <li>
+                {t('model.licenceStep')}{' '}
+                <a href={status.licenceUrl} target="_blank" rel="noreferrer noopener">
+                  {status.weights.repo}
+                </a>
+              </li>
+              <li>
+                {t('model.tokenStep')}{' '}
+                <a href={status.tokensUrl} target="_blank" rel="noreferrer noopener">
+                  huggingface.co/settings/tokens
+                </a>
+              </li>
+              <li>{t('model.pasteStep')}</li>
+            </ol>
+          ) : null}
+
+          <div className="model-fields">
+            {status.gated ? (
+              <label className="field wide">
+                {t('model.token')}
+                <input
+                  type="password"
+                  name="hf-token"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={status.hasToken ? t('model.tokenFound', { source: status.tokenSource ?? '' }) : 'hf_…'}
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  disabled={installing}
+                />
+              </label>
+            ) : null}
+            <label className="field wide">
+              {t('model.repo')}
+              <input
+                type="text"
+                name="hf-repo"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={status.defaults.repo}
+                value={repo}
+                onChange={(event) => setRepo(event.target.value)}
+                /* On blur rather than on every keystroke: each check walks a cache
+                   directory, and half a repo id names nothing. */
+                onBlur={(event) => void refresh(event.target.value)}
+                disabled={installing}
+              />
+            </label>
+            <p className="caption">{t('model.repoHint')}</p>
+          </div>
+
+          <Facts status={status} />
+
+          <div className="transport">
+            {installing ? (
+              <button type="button" onClick={stop}>
+                ■ {t('model.stop')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="amber-button big"
+                onClick={install}
+                disabled={status.stage === 'unavailable' || status.busy}
+              >
+                ⤓ {t('model.install')}
+              </button>
+            )}
+            <div className="spacer" />
+            <button type="button" onClick={() => void refresh()} disabled={installing}>
+              {t('model.recheck')}
+            </button>
+          </div>
+
+          <p className="caption">{t('model.installCaption')}</p>
+        </div>
+        {logBlock}
+      </div>
+    );
+  }
+
+  /* --- ready ---------------------------------------------------------------- */
+
   const values = render === null ? ghostBars('model', BAR_COUNT) : bars(render.buffer, BAR_COUNT);
+  const rendering = running === 'render';
 
   return (
     <div className="model">
       <div className="model-controls mono">
-        <span className="chip chip-amber selected">stable-audio-open-small</span>
+        <span className="chip chip-amber selected">{status.weights.repo}</span>
         <span className="amber">· {render === null ? t('model.nothing') : ms(render.buffer.duration * 1000)}</span>
         <label className="field tight">
           {t('model.seconds')}
@@ -204,7 +416,6 @@ export function ModelPanel({
           />
         </label>
         <span className="faint">{t('model.seed', { value: seed })}</span>
-        {status.ready ? null : <span className="warn">{status.reason ?? t('model.notProvisioned')}</span>}
       </div>
 
       <div className="model-wave">
@@ -222,12 +433,12 @@ export function ModelPanel({
         <button type="button" className="amber-button big" onClick={play} disabled={render === null}>
           {playing ? '❚❚' : '▶'} {t('model.play')}
         </button>
-        {running ? (
-          <button type="button" onClick={() => abort.current?.abort()}>
+        {rendering ? (
+          <button type="button" onClick={stop}>
             ■ {t('model.stop')}
           </button>
         ) : (
-          <button type="button" onClick={run} disabled={!status.ready || status.busy}>
+          <button type="button" onClick={run} disabled={status.busy}>
             ⤓ {t('model.render')}
           </button>
         )}
@@ -246,11 +457,56 @@ export function ModelPanel({
 
       <p className="caption">{t('model.caption')}</p>
 
-      {error === null ? null : <div className="run-log-line bad">✗ {error}</div>}
-      {lines.length === 0 ? null : (
-        <pre className="model-log">{lines.join('\n')}</pre>
-      )}
+      {logBlock}
+
+      <Facts status={status} />
     </div>
+  );
+}
+
+/**
+ * Where the gigabytes went.
+ *
+ * Shown in both states and not folded away, because an install that quietly occupies
+ * six gigabytes of somebody's disk is a thing they find out when the disk is full, and
+ * the tab that started it is the honest place to say where. The venv is listed next to
+ * the weights for the same reason: the checkpoint is the famous 1.7 GB, and the CUDA
+ * torch build beside it is twice that and nobody warns you about it.
+ */
+function Facts({ status }: { readonly status: ModelStatus }): React.JSX.Element {
+  const { t } = useI18n();
+  const rows: readonly (readonly [string, string, string | null])[] = [
+    [
+      t('model.factWeights'),
+      status.weights.present ? size(status.weights.bytes) : t('model.notDownloaded'),
+      status.weights.dir,
+    ],
+    [
+      t('model.factEnv'),
+      status.venv.present
+        ? `${size(status.venv.bytes)}${status.venv.torch === null || status.venv.torch === '' ? '' : ` · torch/${status.venv.torch}`}`
+        : t('model.notInstalled'),
+      status.venv.path,
+    ],
+    [
+      t('model.factVia'),
+      status.transport === 'bridge' ? t('model.viaBridge') : t('model.viaDev'),
+      status.launcher,
+    ],
+  ];
+
+  return (
+    <dl className="model-facts mono">
+      {rows.map(([label, value, detail]) => (
+        <div className="model-fact" key={label}>
+          <dt className="faint">{label}</dt>
+          <dd>
+            <span className="amber">{value}</span>
+            {detail === null || detail === '' ? null : <span className="model-path">{detail}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -258,8 +514,8 @@ export function ModelPanel({
  * Substitute `{name}` placeholders with React elements rather than with strings.
  *
  * `t()` cannot do this — its return type is a string, and a string cannot carry a `<code>`
- * tag. The sentences that need it are the two that name a command the reader has to type,
- * where losing the monospace would make `pnpm dev` read as English prose.
+ * tag. The sentences that need it are the ones that name a command the reader has to type,
+ * where losing the monospace would make `npx txt2sfx-bridge` read as English prose.
  */
 function splice(
   template: string,

@@ -163,14 +163,9 @@ export const de: Partial<Readonly<Record<Key, string>>> = {
   'format.downloadTitle': '{label} herunterladen',
   'format.chooseAria': 'Format wählen',
 
-  'model.needsDev':
-    'Diese Ansicht steuert ein Diffusionsmodell auf diesem Rechner, das es nur unter {command} gibt. Ein statischer Build hat keinen Prozess zum Reden.',
-  'model.noEndpoint':
-    'Kein lokaler Modell-Endpunkt. Unter {command} rendert diese Ansicht eine Referenz zum selben Prompt mit Stable Audio Open Small — die einmalige Einrichtung steht in {readme}.',
   'model.nothing': 'nichts gerendert',
   'model.seconds': 'Sekunden',
   'model.seed': 'Seed {value}',
-  'model.notProvisioned': 'nicht eingerichtet',
   'model.play': 'Abspielen',
   'model.stop': 'Stopp',
   'model.render': 'Ziel rendern',

@@ -46,6 +46,7 @@ import { log } from './log.js';
 import { createMcpServer } from './mcp.js';
 import { PROTOCOL_VERSION, looksLikeBridge, type HealthPayload } from './protocol.js';
 import { createNativeRenderer, resolveRenderer } from './render.js';
+import { StableAudio, formatBytes } from './stable-audio.js';
 import { describeMode, ensureState, loadState, saveState, stateFilePath } from './state.js';
 import { TOOL_NAMES, type ToolContext } from './tools.js';
 import { VERSION } from './version.js';
@@ -189,7 +190,9 @@ interface RunningBridge {
 /** Bind the daemon. Rejects with the listen error (EADDRINUSE included). */
 function startBridge(options: CliOptions, token: string): Promise<RunningBridge> {
   const native = createNativeRenderer();
-  const hub = new Hub({ version: VERSION, native, log });
+  /* One instance for the process: the lock inside it is what stops two renders from
+     each taking twice as long, and torch takes every core a machine has. */
+  const hub = new Hub({ version: VERSION, native, log, model: new StableAudio({ log }) });
   /* One context for both doors: the HTTP `/tools/<name>` route and, when this
      process is also the MCP server, stdio. Two would mean two native-module
      imports and two chances for them to disagree about what can render. */
@@ -464,6 +467,16 @@ async function doctor(options: CliOptions): Promise<number> {
   } catch (error) {
     print(`  token file    BROKEN: ${error instanceof Error ? error.message : String(error)}`);
     broken = true;
+  }
+
+  /* The reference model is the one part of the bridge that can occupy several
+     gigabytes of somebody's disk, so doctor names the directories and the sizes
+     rather than reporting a word. */
+  const model = await new StableAudio({ log }).status();
+  print(`  model         ${model.stage}${model.ready ? '' : ` — ${model.reason ?? 'run the Model tab’s install button'}`}`);
+  if (model.workDir !== '') {
+    print(`  model files   ${model.weights.dir} (${formatBytes(model.weights.bytes)})`);
+    print(`  model venv    ${model.venv.path} (${formatBytes(model.venv.bytes)}${model.venv.torch === null || model.venv.torch === '' ? '' : `, torch/${model.venv.torch}`})`);
   }
 
   try {

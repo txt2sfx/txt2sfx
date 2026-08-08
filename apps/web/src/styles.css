@@ -262,6 +262,18 @@ button.primary:hover:not(:disabled) {
   color: var(--accent-ink);
 }
 
+/* A latched control: it is not "hovered" or "focused" but *engaged*, and it stays that
+   way with the pointer elsewhere, so the state has to read from across the panel. */
+button.on {
+  background: oklch(0.32 0.06 var(--cyan));
+  border-color: oklch(0.62 0.11 var(--cyan));
+  color: oklch(0.93 0.09 var(--cyan));
+}
+button.on:hover:not(:disabled) {
+  border-color: oklch(0.74 0.13 var(--cyan));
+  color: oklch(0.97 0.06 var(--cyan));
+}
+
 button.big {
   height: 38px;
   padding: 0 18px;
@@ -908,6 +920,12 @@ input[type='range'] {
   background: oklch(0.94 0.09 var(--cyan));
   box-shadow: 0 0 12px oklch(0.85 0.14 var(--cyan));
   animation: sweep linear 1 forwards;
+}
+/* `forwards` is what parks the head at the right edge after one pass; a looping playhead
+   has to give that up as well as the iteration count, or it holds the last frame. */
+.bars-head-loop {
+  animation-iteration-count: infinite;
+  animation-fill-mode: none;
 }
 .bars-card {
   height: 44px;
@@ -1758,6 +1776,86 @@ input[type='range'] {
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+/* The install screen. A card rather than loose rows, because it is a form with
+   consequences — a few gigabytes of somebody's disk — and it should read as one
+   decision rather than as controls scattered through a panel. */
+.model-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 15px 16px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.model-setup-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-1);
+}
+.model-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.model-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.field.wide {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  font-size: 11.5px;
+}
+.field.wide input {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+/* Where the gigabytes went. Monospace and dim: it is a receipt, not a control. */
+.model-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  background: oklch(0.15 0.012 265);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.model-fact {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.model-fact dt {
+  flex: 0 0 84px;
+}
+.model-fact dd {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+/* The path is the answer to "where did it go", so it must not be truncated into a
+   riddle — it wraps, at any character, because a Windows path has no spaces to break at. */
+.model-path {
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
 .model-log {
   margin: 0;
   max-height: 160px;

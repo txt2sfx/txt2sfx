@@ -17,36 +17,49 @@ highest bitrate LAME offers. `--format wav` gives the bit-exact render back.
 
 ## From the playground
 
-Once the venv exists, `pnpm dev` can drive this script directly: the Compare panel grows a
-**⤓ Render target** button that renders the prompt in the prompt bar and loads the result as
-the reference — so the diffusion take is one click from the A/B player, the spectrogram diff,
-`⌖ Fit to reference`, and the **match reference** box on a generate run.
+This script is not only run by hand: the playground's **Model** tab drives it, and so does
+`window.txt2sfx.target(…)`. The renders go to the same place a dropped file does — the B
+side of Compare — so the diffusion take is one click from the A/B player, the spectrogram
+diff, `⌖ Fit to reference`, and the **match reference** box on a generate run.
 
-A render started from the page **is not saved**: the endpoint runs `run.py --stdout` and the
-audio comes back inside the response, ~130 KB of base64 on the stream's last line. A target
-is consumed once, by the reference slot, and a session of clicking that button should not
-leave a directory to sweep up. Renders a *terminal* run left in `out/` are a different thing
-and are still in the dropdown next to the button — re-rendering yesterday's prompt is waste.
+**The bridge is what drives it for anyone who does not have this repository.**
+`npx txt2sfx-bridge` carries its own copy of `run.py` and `requirements.txt` (packed into
+the published tarball by `packages/bridge/scripts/pack-assets.mjs`), writes them to
+`~/.txt2sfx/stable-audio/`, and provisions there. Run from a checkout it uses *this*
+directory instead, so a venv built from a terminal and one built from the Model tab are
+the same venv and nobody ends up with two five-gigabyte copies. `TXT2SFX_STABLE_AUDIO_DIR`
+overrides both. The implementation is `packages/bridge/src/stable-audio.ts`, and the
+dev-only Vite endpoint (`apps/web/plugins/stable-audio.ts`, `apply: 'serve'`) is now a thin
+HTTP shim over that same module — kept only so `pnpm dev` needs no second terminal.
 
-The endpoint (`apps/web/plugins/stable-audio.ts`, dev-only, `apply: 'serve'`) deliberately
-does **not** provision anything — it drives an installation that is already there, because a
-1.7 GB download and a licence gate behind a spinner in a browser tab is the wrong shape.
-Run the command above once, then the button works.
+**The Model tab will provision.** That used to be refused, and the reversal is narrow: the
+objection was to a 1.7 GB download and a licence gate behind a *spinner*, not to the
+download. The tab now shows what will be fetched, where it will land, the licence link,
+the token field, and every line this script prints while it works — so there is nothing
+left to hide. It runs `run.py --provision`, which builds the venv and downloads the
+weights and renders nothing.
 
-Two things live in the dev server's environment rather than in the page:
+A render started from the page **is not saved**: it runs `run.py --stdout` and the audio
+comes back inside the answer, ~130 KB of base64. A target is consumed once, by the
+reference slot, and a session of clicking that button should not leave a directory to
+sweep up. Renders a *terminal* run left in `out/` are a different thing and are still
+listed in the status — re-rendering yesterday's prompt is waste.
+
+Two things can live in the environment of whichever process drives this — the bridge or
+the dev server — rather than in the page:
 
 ```powershell
 $env:HF_TOKEN = "hf_..."                                    # gated weights
 $env:STABLE_AUDIO_REPO = "someone/stable-audio-open-small"  # optional: default repo
-pnpm dev
+npx txt2sfx-bridge      # or: pnpm dev
 ```
 
-`HF_TOKEN` has to be exported *before* the dev server starts — a token in the terminal where
-you first ran `run.py` is not visible to it, and the panel says so when it is missing. If the
-gate is in the way, the `repo` box next to the button is the `--repo` flag: point it at a
-mirror your Hugging Face cache already holds and no token is needed. That choice is
-remembered in `localStorage` (it is a repo id, not a credential), and `STABLE_AUDIO_REPO`
-sets the default for a machine.
+Neither is required any more: the Model tab has a token field and a repo field, and the
+token it sends is used for that one request and never written down. `HF_TOKEN` still has
+to be exported *before* the process starts if you prefer it there, and a token left by
+`huggingface-cli login` is found too. If the gate is in the way, the repo field is the
+`--repo` flag: point it at a mirror your Hugging Face cache already holds and no token is
+needed.
 
 ## What the first run does
 
@@ -106,6 +119,7 @@ python test/stable-audio/run.py "coin pickup" --stdout > target.mp3    # nothing
 | `--repo` | — | any Hugging Face repo id in stable-audio-tools layout |
 | `--no-chunked` | — | decode in one piece; needs several GB free, and pages on a 16 GB box |
 | `--reinstall` | — | delete and rebuild the venv |
+| `--provision` | — | build the venv and download the weights, then exit; what the Model tab's install button runs |
 
 `--model sfx3` points at [`stabilityai/stable-audio-3-small-sfx`][sfx3], which is a
 text-to-SFX model rather than a music one and therefore the more interesting comparison —

@@ -162,14 +162,9 @@ export const es: Partial<Readonly<Record<Key, string>>> = {
   'format.downloadTitle': 'descargar {label}',
   'format.chooseAria': 'elegir un formato',
 
-  'model.needsDev':
-    'Esta vista maneja un modelo de difusión que corre en esta máquina y que solo existe bajo {command}. Una compilación estática no tiene con qué proceso hablar.',
-  'model.noEndpoint':
-    'No hay endpoint de modelo local. Bajo {command} esta vista renderiza una referencia del mismo prompt con Stable Audio Open Small — la preparación, una sola vez, está en {readme}.',
   'model.nothing': 'nada renderizado',
   'model.seconds': 'segundos',
   'model.seed': 'semilla {value}',
-  'model.notProvisioned': 'sin preparar',
   'model.play': 'Reproducir',
   'model.stop': 'Parar',
   'model.render': 'Renderizar objetivo',

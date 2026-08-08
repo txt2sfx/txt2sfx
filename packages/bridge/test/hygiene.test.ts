@@ -36,12 +36,32 @@ describe('the package manifest', () => {
     expect((manifest['bin'] as Record<string, string>)['txt2sfx-bridge']).toBe('dist/txt2sfx-bridge.mjs');
   });
 
-  it('ships the bundle and nothing else from dist', () => {
+  it('ships the bundle, the installer scripts, and nothing else from dist', () => {
     // `tsc -b` fills dist with modules that import `@txt2sfx/*`, and those
     // packages are private and unpublishable. Shipping the whole directory
     // put files in the tarball that throw ERR_MODULE_NOT_FOUND on the first
-    // import — plus a source map for every one of them.
-    expect(manifest['files']).toEqual(['dist/txt2sfx-bridge.mjs', 'README.md', 'LICENSE']);
+    // import — plus a source map for every one of them. So the list is
+    // enumerated, and every entry has to earn its place.
+    //
+    // The two Python files are the reason `npx txt2sfx-bridge` can install the
+    // reference model for someone who has never cloned this repository: they are
+    // the entire installer, `scripts/pack-assets.mjs` copies them out of
+    // `test/stable-audio/`, and `src/stable-audio.ts` looks for them beside the
+    // bundle before falling back to a checkout. Drop them and the Model tab's
+    // install button has nothing to run.
+    expect(manifest['files']).toEqual([
+      'dist/txt2sfx-bridge.mjs',
+      'dist/stable-audio/run.py',
+      'dist/stable-audio/requirements.txt',
+      'README.md',
+      'LICENSE',
+    ]);
+  });
+
+  it('packs those scripts as part of the bundle step, not by hand', () => {
+    // A `files` entry naming a file no build step produces is a tarball that is
+    // missing it — npm does not fail on the absence, it just ships without.
+    expect(manifest['scripts']).toMatchObject({ bundle: expect.stringContaining('pack-assets.mjs') });
   });
 
   it('advertises no library entry, because the unbundled one cannot resolve for a consumer', () => {

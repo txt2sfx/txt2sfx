@@ -210,14 +210,44 @@ export const en = {
 
   /* --- the model view ----------------------------------------------------- */
 
-  'model.needsDev':
-    'This view drives a diffusion model running on this machine, which only exists under {command}. A static build has no process to talk to.',
-  'model.noEndpoint':
-    'No local model endpoint. Under {command} this view renders a reference from the same prompt with Stable Audio Open Small — see {readme} for the one-time provisioning.',
+  'model.looking': 'Looking for a model on this machine…',
+  'model.noBridge':
+    'This view renders a reference from the same prompt with Stable Audio Open Small, on your machine. Nothing here is listening yet — run {command} in a terminal and this page will find it. Under {dev} the dev server answers instead.',
+  'model.noBridgeWhy':
+    'The model is a local program, not a service we host: the bridge is how a page reaches one. It also installs the model for you, from the button that appears once it is running.',
+  'model.recheck': 'Check again',
+
+  'model.setupTitle': 'Install the reference model',
+  'model.stage.unavailable':
+    'This bridge carries no copy of the installer. Upgrade txt2sfx-bridge, or point TXT2SFX_STABLE_AUDIO_DIR at a checkout of test/stable-audio.',
+  'model.stage.needsPython':
+    'Nothing on this machine can build the environment yet. Install uv — `winget install --id astral-sh.uv`, or `pip install uv` — and check again; it fetches the CPython 3.10 the toolkit pins, so no system Python is touched.',
+  'model.stage.needsVenv':
+    'Not installed yet. One button builds an isolated CPython 3.10 environment and downloads the checkpoint. It runs once; every render after it is offline.',
+  'model.stage.needsWeights':
+    'The environment is ready and the weights are not on this machine yet — about 1.7 GB, into the shared Hugging Face cache.',
+  'model.stage.ready': 'Installed and ready.',
+  'model.licenceStep': 'Accept the Stability AI Community License at',
+  'model.tokenStep': 'Create a read token at',
+  'model.pasteStep': 'Paste it below. It travels with this one request and is never stored.',
+  'model.token': 'Hugging Face token',
+  'model.tokenFound': 'already found ({source})',
+  'model.repo': 'Repo',
+  'model.repoHint':
+    'Leave empty for the official checkpoint. A community mirror of the same weights needs no token and no licence click — the licence still governs what you do with the audio.',
+  'model.install': 'Download and install',
+  'model.installCaption':
+    'A few gigabytes, once, over your own connection. Every line the installer prints is shown below — including anything that stops it.',
+  'model.factWeights': 'weights',
+  'model.factEnv': 'environment',
+  'model.factVia': 'served by',
+  'model.viaBridge': 'the local bridge',
+  'model.viaDev': 'the dev server',
+  'model.notDownloaded': 'not downloaded',
+  'model.notInstalled': 'not installed',
   'model.nothing': 'nothing rendered',
   'model.seconds': 'seconds',
   'model.seed': 'seed {value}',
-  'model.notProvisioned': 'not provisioned',
   'model.play': 'Play',
   'model.stop': 'Stop',
   'model.render': 'Render target',
@@ -232,7 +262,7 @@ export const en = {
   'compare.model': 'Model render',
   'compare.file': 'File',
   'compare.take': 'Another take',
-  'compare.modelBlocked': 'needs the local diffusion model — see test/stable-audio/README.md',
+  'compare.modelBlocked': 'needs the local diffusion model — install it from the Model tab',
   'compare.nothingLoaded': 'nothing loaded',
   'compare.hintModel': 'rendered by a diffusion model from the same prompt — a target, not a competitor',
   'compare.hintUpload': 'your own file, onset-aligned and peak-normalized on load',
@@ -241,7 +271,7 @@ export const en = {
   'compare.dropzone':
     'Nothing to compare against yet. Drop an audio file here, pick “{take}” to render this recipe with a new seed, or {model}.',
   'compare.dropzoneModelReady': 'let the local model render a target',
-  'compare.dropzoneModelMissing': 'provision the local model',
+  'compare.dropzoneModelMissing': 'install the local model in the Model tab',
   'compare.candidate': 'candidate',
   'compare.alignment':
     'both onsets shifted to {onset} ms · peak-normalized · log frequency {min} Hz – {max}',

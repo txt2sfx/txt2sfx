@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { Hub, silentLog, createNativeRenderer } from '../src/index.js';
-import type { Frame, PlaygroundPort } from '../src/index.js';
+import type { Frame, ModelPort, ModelStatus, PlaygroundPort } from '../src/index.js';
 
 /** A tab that never renders: enough for every switchboard concern. */
 function fakeTab(): { port: PlaygroundPort; frames: Frame[] } {
@@ -304,5 +304,95 @@ describe('sampling fulfilment', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const next = await hub.nextRequest(1000);
     expect('request' in next).toBe(true);
+  });
+});
+
+describe('the reference model over the socket', () => {
+  /* Everything real here is a multi-gigabyte download and twenty seconds of CPU, so
+     what is under test is the wiring: which frames come back, to whom, and what a
+     daemon without an installer says instead of hanging. */
+  function fakeModel(overrides: Partial<ModelPort> = {}): ModelPort {
+    const status = { stage: 'ready', ready: true, weights: { repo: 'owner/name' } } as unknown as ModelStatus;
+    return {
+      status: () => Promise.resolve(status),
+      provision: (_params, onEvent) => {
+        onEvent({ type: 'log', line: 'Downloading model.safetensors' });
+        return Promise.resolve({ status });
+      },
+      render: (_params, onEvent) => {
+        onEvent({ type: 'start', argv: ['thud', '--stdout'] });
+        return Promise.resolve({
+          name: 'thud-42.mp3',
+          mime: 'audio/mpeg',
+          bytes: 3,
+          ms: 21_000,
+          audio: Buffer.from([1, 2, 3]),
+        });
+      },
+      cancel: () => true,
+      ...overrides,
+    };
+  }
+
+  function modelHub(model: ModelPort): Hub {
+    return new Hub({ version: '0.0.0-test', native: noNative, log: silentLog, model });
+  }
+
+  it('answers model.status with what is installed', async () => {
+    const hub = modelHub(fakeModel());
+    const tab = await greet(hub);
+    hub.handleFrame(tab.port, { t: 'call', id: 'm1', method: 'model.status', params: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tab.frames.at(-1)).toMatchObject({ t: 'result', id: 'm1', result: { stage: 'ready' } });
+  });
+
+  /* The audio never touched the disk, so it has to travel in the answer — a caller
+     that got a name and no bytes would have nothing to play. */
+  it('hands the render back as base64 in the result', async () => {
+    const hub = modelHub(fakeModel());
+    const tab = await greet(hub);
+    hub.handleFrame(tab.port, { t: 'call', id: 'm2', method: 'model.render', params: { prompt: 'thud' } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tab.frames.at(-1)).toMatchObject({
+      t: 'result',
+      id: 'm2',
+      result: { name: 'thud-42.mp3', audio: Buffer.from([1, 2, 3]).toString('base64') },
+    });
+  });
+
+  /* An install is minutes of downloading, and the child's own lines are the only
+     honest progress there is. They go to the tab that asked and to no other. */
+  it('streams the child’s output to the asking tab alone', async () => {
+    const hub = modelHub(fakeModel());
+    const watcher = await greet(hub);
+    const asker = await greet(hub);
+    hub.handleFrame(asker.port, { t: 'call', id: 'm3', method: 'model.provision', params: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(asker.frames).toContainEqual({
+      t: 'event',
+      event: 'model.log',
+      data: { type: 'log', line: 'Downloading model.safetensors' },
+    });
+    expect(watcher.frames.some((frame) => frame.t === 'event' && frame.event === 'model.log')).toBe(false);
+  });
+
+  /* A failure is the licence gate, a full disk or a missing interpreter — each with a
+     different fix, and the message is the only place that fix is written down. */
+  it('passes the failure’s own words back rather than a code', async () => {
+    const hub = modelHub(fakeModel({ provision: () => Promise.reject(new Error('accept the licence at …')) }));
+    const tab = await greet(hub);
+    hub.handleFrame(tab.port, { t: 'call', id: 'm4', method: 'model.provision', params: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tab.frames.at(-1)).toMatchObject({ t: 'error', id: 'm4', error: { message: 'accept the licence at …' } });
+  });
+
+  /* A bridge too old to know these methods must say so in one sentence, not drop the
+     frame: a dropped frame is a timeout the caller cannot tell from a hang. */
+  it('names the upgrade when the daemon has no installer at all', async () => {
+    const hub = makeHub();
+    const tab = await greet(hub);
+    hub.handleFrame(tab.port, { t: 'call', id: 'm5', method: 'model.status', params: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tab.frames.at(-1)).toMatchObject({ t: 'error', id: 'm5', error: { code: 'unsupported' } });
   });
 });

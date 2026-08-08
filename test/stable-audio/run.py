@@ -581,6 +581,47 @@ def generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def provision(args: argparse.Namespace) -> int:
+    """Build the venv, fetch the weights, and say where they landed — then stop.
+
+    Separate from generate() because the two failures are separate: provisioning fails on a
+    licence gate, a missing interpreter or a full disk, and generation fails on a prompt. A
+    caller driving this from a button (the bridge, and through it the playground's Model tab)
+    has to be able to run the first without asking for a sound, and to show the licence
+    instructions download_model() prints rather than burying them under a spinner.
+
+    torch is imported even though nothing is rendered: it is the only proof the venv actually
+    works, and finding out otherwise on the human's first prompt is the wrong moment. It also
+    supplies the device, which is the difference between a half-second render and twenty.
+    """
+    import torch
+
+    preset = PRESETS[args.model]
+    repo = args.repo or preset["repo"]
+    say(f"model  {repo}")
+    model_dir = download_model(repo, args.revision)
+    weights = sum(p.stat().st_size for p in model_dir.rglob("*") if p.is_file())
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    say(f"weights in {model_dir} ({human_bytes(weights)}), torch {torch.__version__} on {device}")
+
+    # One machine-readable line, same contract as txt2sfx-result: the caller gets the paths
+    # and the sizes it has to show without reimplementing the Hugging Face cache layout.
+    say(
+        "txt2sfx-provisioned "
+        + json.dumps(
+            {
+                "repo": repo,
+                "model_dir": str(model_dir),
+                "model_bytes": weights,
+                "venv": str(VENV),
+                "torch": torch.__version__,
+                "device": device,
+            }
+        )
+    )
+    return 0
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="run.py",
@@ -610,6 +651,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                    help="provision the CPU-only torch wheels even with an NVIDIA GPU present")
     p.add_argument("--no-chunked", action="store_true", help="decode the render in one piece (needs RAM)")
     p.add_argument("--reinstall", action="store_true", help="rebuild the venv, then run")
+    p.add_argument("--provision", action="store_true",
+                   help="build the venv and download the weights, then exit without rendering")
     return p.parse_args(argv)
 
 
@@ -626,12 +669,17 @@ def main() -> int:
             sys.exit("--stdout writes one sound to one stream; drop --count")
 
     if not running_in_venv():
-        if not (args.reinstall or args.cpu_torch) and not args.prompt:
+        if not (args.reinstall or args.cpu_torch or args.provision) and not args.prompt:
             parse_args(["--help"])
         skip = {"--reinstall", "--cpu-torch"}
+        # --provision is *not* skipped: the re-exec is what runs it, because downloading the
+        # weights needs huggingface_hub, which only exists inside the venv this just built.
         # Deliberately *not* claiming stdout here: the re-exec below inherits fd 1, and the
         # child is the process that renders. Provisioning output is on stderr already.
         return bootstrap([a for a in argv if a not in skip], args.reinstall, args.cpu_torch)
+
+    if args.provision:
+        return provision(args)
 
     if not args.prompt:
         parse_args(["--help"])

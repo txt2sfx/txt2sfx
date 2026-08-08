@@ -26,6 +26,12 @@ import type {
   ChatMessage,
   CompleteParams,
   Frame,
+  ModelEvent,
+  ModelProvisionParams,
+  ModelProvisionResult,
+  ModelRenderParams,
+  ModelRenderResult,
+  ModelStatus,
   NextResult,
   ParkedRequest,
 } from './protocol.js';
@@ -63,6 +69,24 @@ export interface ToolHub {
 /** How a sampling-capable MCP client fulfils a job without polling. */
 export type SamplingFulfiller = (request: ParkedRequest) => Promise<string>;
 
+/**
+ * The local reference generator, as the hub needs it.
+ *
+ * An interface rather than the class, for the reason everything else here is
+ * injected: the hub must be testable without a 1.7 GB checkpoint on the machine, and
+ * a fake that answers `status` is all a frame-level test needs. `StableAudio`
+ * satisfies it structurally.
+ */
+export interface ModelPort {
+  status(params: { readonly repo?: string }): Promise<ModelStatus>;
+  provision(params: ModelProvisionParams, onEvent: (event: ModelEvent) => void): Promise<ModelProvisionResult>;
+  render(
+    params: ModelRenderParams,
+    onEvent: (event: ModelEvent) => void,
+  ): Promise<ModelRenderResult & { readonly audio: Buffer }>;
+  cancel(): boolean;
+}
+
 interface PendingRelay {
   resolve(result: unknown): void;
   reject(error: Error): void;
@@ -90,6 +114,8 @@ export interface HubOptions {
   readonly version: string;
   readonly native: NativeRenderer;
   readonly log: Log;
+  /** The local diffusion model, when this daemon offers one. */
+  readonly model?: ModelPort;
 }
 
 /** The one place all three participants meet. */
@@ -97,6 +123,7 @@ export class Hub {
   private readonly version: string;
   private readonly native: NativeRenderer;
   private readonly log: Log;
+  private readonly model: ModelPort | undefined;
 
   /** Insertion-ordered; relays go to the most recently greeted tab. */
   private readonly playgrounds = new Map<PlaygroundPort, { app: string; helloed: boolean }>();
@@ -119,6 +146,7 @@ export class Hub {
     this.version = options.version;
     this.native = options.native;
     this.log = options.log;
+    this.model = options.model;
   }
 
   /* --- playground lifecycle ---------------------------------------------- */
@@ -228,6 +256,12 @@ export class Hub {
       case 'agent.complete':
         this.complete(port, id, params as CompleteParams);
         return;
+      case 'model.status':
+      case 'model.provision':
+      case 'model.render':
+      case 'model.cancel':
+        this.modelCall(port, id, method, (params ?? {}) as Record<string, unknown>);
+        return;
       default:
         port.send({
           t: 'error',
@@ -235,6 +269,79 @@ export class Hub {
           error: { message: `the bridge does not implement ${method}`, code: 'unsupported' },
         });
     }
+  }
+
+  /* --- the reference model ------------------------------------------------- */
+
+  /**
+   * `model.*` from the playground: what is installed, install it, render with it.
+   *
+   * The odd one out among the hub's methods, because it is the only work the daemon
+   * does *itself* rather than passing between two participants. It lives here anyway
+   * for the reason the bridge exists at all: this is code that must run on the human's
+   * machine, reached from a page that may be served from anywhere, and the socket that
+   * already carries `agent.complete` is the door that is already open.
+   *
+   * Progress goes to the asking tab alone, never `broadcast`: a second window watching
+   * someone else's install scroll past would be noise, and the events are answers to a
+   * question only one of them asked.
+   *
+   * There is no deadline here. The child has its own — ten minutes for a render, two
+   * hours for an install — and a second, shorter one in the hub would turn a working
+   * download into a mystery abort. The browser's call timeout is the caller's business.
+   */
+  private modelCall(port: PlaygroundPort, id: string, method: string, params: Record<string, unknown>): void {
+    const model = this.model;
+    if (model === undefined) {
+      port.send({
+        t: 'error',
+        id,
+        error: {
+          code: 'unsupported',
+          message:
+            'this bridge was built without the reference model — upgrade txt2sfx-bridge, or run the playground under `pnpm dev`',
+        },
+      });
+      return;
+    }
+
+    const onEvent = (event: ModelEvent): void => {
+      port.send({ t: 'event', event: 'model.log', data: event });
+    };
+    const repo = typeof params['repo'] === 'string' ? params['repo'] : undefined;
+    const token = typeof params['token'] === 'string' ? params['token'] : undefined;
+
+    const work = async (): Promise<unknown> => {
+      switch (method) {
+        case 'model.status':
+          return model.status(repo === undefined ? {} : { repo });
+        case 'model.provision':
+          return model.provision(
+            { ...(repo === undefined ? {} : { repo }), ...(token === undefined ? {} : { token }) },
+            onEvent,
+          );
+        case 'model.render': {
+          const result = await model.render(params as ModelRenderParams, onEvent);
+          /* Base64 in the answer, because the render was never written anywhere to be
+             fetched from. The alternative — a temp file and a second request — is a
+             file to clean up and a window in which anything on the machine can read
+             it, in exchange for saving a third of a few hundred kilobytes. */
+          const { audio, ...rest } = result;
+          return { ...rest, audio: audio.toString('base64') };
+        }
+        default:
+          return { stopped: model.cancel() };
+      }
+    };
+
+    void work().then(
+      (result) => port.send({ t: 'result', id, result: result ?? null }),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log(`model: ${method} failed — ${message}`);
+        port.send({ t: 'error', id, error: { message } });
+      },
+    );
   }
 
   /* --- direction A: relay to the tab -------------------------------------- */

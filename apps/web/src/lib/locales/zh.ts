@@ -158,13 +158,9 @@ export const zh: Partial<Readonly<Record<Key, string>>> = {
   'format.downloadTitle': '下载 {label}',
   'format.chooseAria': '选择格式',
 
-  'model.needsDev': '这个视图驱动的是本机上的扩散模型，而它只在 {command} 下存在。静态构建没有可对话的进程。',
-  'model.noEndpoint':
-    '没有本地模型端点。在 {command} 下，这个视图会用 Stable Audio Open Small 按同一句提示词渲染一个参考 —— 一次性的准备工作见 {readme}。',
   'model.nothing': '尚未渲染',
   'model.seconds': '秒数',
   'model.seed': '种子 {value}',
-  'model.notProvisioned': '尚未准备',
   'model.play': '播放',
   'model.stop': '停止',
   'model.render': '渲染目标',

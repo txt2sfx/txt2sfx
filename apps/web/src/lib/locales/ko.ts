@@ -160,14 +160,9 @@ export const ko: Partial<Readonly<Record<Key, string>>> = {
   'format.downloadTitle': '{label} 다운로드',
   'format.chooseAria': '형식 선택',
 
-  'model.needsDev':
-    '이 화면은 이 컴퓨터에서 도는 디퓨전 모델을 다루는데, 그것은 {command} 아래에서만 존재합니다. 정적 빌드에는 말을 걸 프로세스가 없습니다.',
-  'model.noEndpoint':
-    '로컬 모델 엔드포인트가 없습니다. {command} 아래에서는 이 화면이 같은 프롬프트로 Stable Audio Open Small을 써서 레퍼런스를 렌더링합니다 —— 한 번만 하면 되는 준비 과정은 {readme}에 있습니다.',
   'model.nothing': '렌더링된 것 없음',
   'model.seconds': '초',
   'model.seed': '시드 {value}',
-  'model.notProvisioned': '준비되지 않음',
   'model.play': '재생',
   'model.stop': '정지',
   'model.render': '타깃 렌더링',
