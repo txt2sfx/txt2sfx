@@ -16,7 +16,7 @@
     "dump": "tsc -b && node dist/dump.js"
   },
   "dependencies": {
-    "@fastify/cors": "^10.1.0",
+    "@fastify/cors": "^11.3.0",
     "@txt2sfx/agent": "workspace:*",
     "@txt2sfx/analyzer": "workspace:*",
     "@txt2sfx/core": "workspace:*",
