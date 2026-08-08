@@ -59,6 +59,8 @@ export interface SoundPanelProps {
   readonly rendered: RenderResult | null;
   readonly seed: number;
   readonly playing: boolean;
+  /** Playback is the looping kind, which the playhead and the Loop button both show. */
+  readonly looping: boolean;
   readonly formatId: string;
   readonly onFormat: (id: string) => void;
   readonly onDownload: (format: Format) => Promise<unknown> | void;
@@ -74,6 +76,7 @@ export function SoundPanel({
   rendered,
   seed,
   playing,
+  looping,
   formatId,
   onFormat,
   onDownload,
@@ -101,6 +104,7 @@ export function SoundPanel({
           values={master}
           muted={rendered === null}
           playing={playing}
+          loop={looping}
           durationMs={totalMs}
           className="bars-master"
           color={rendered === null ? undefined : layerColor(0, 0.74, 0.12)}
@@ -118,6 +122,7 @@ export function SoundPanel({
               <Bars
                 values={lane.values}
                 playing={playing}
+                loop={looping}
                 durationMs={totalMs}
                 className="bars-lane"
                 color={layerColor(index)}
@@ -135,7 +140,14 @@ export function SoundPanel({
         <button type="button" className="primary big" onClick={onPlay} disabled={ast === null}>
           {playing ? '❚❚' : '▶'} {t('sound.play')}
         </button>
-        <button type="button" onClick={onLoop} disabled={rendered === null} title={t('sound.loopTitle')}>
+        <button
+          type="button"
+          className={looping ? 'on' : ''}
+          aria-pressed={looping}
+          onClick={onLoop}
+          disabled={rendered === null}
+          title={t('sound.loopTitle')}
+        >
           ↻ {t('sound.loop')}
         </button>
         <FormatMenu

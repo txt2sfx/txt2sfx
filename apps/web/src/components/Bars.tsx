@@ -28,6 +28,8 @@ export interface BarsProps {
   readonly color?: string | undefined;
   /** Draw the sweeping playhead. */
   readonly playing?: boolean;
+  /** The playhead wraps instead of stopping at the right edge. Ignored unless `playing`. */
+  readonly loop?: boolean;
   /** How long the sweep takes. Ignored unless `playing`. */
   readonly durationMs?: number;
   /** Extra class, for the size and spacing variants in the stylesheet. */
@@ -43,11 +45,20 @@ export function Bars({
   values,
   color,
   playing = false,
+  loop = false,
   durationMs = 0,
   className = '',
   muted = false,
 }: BarsProps): React.JSX.Element {
-  const sweep = Math.max(durationMs, MIN_SWEEP_MS);
+  const period = durationMs > 0 ? durationMs : MIN_SWEEP_MS;
+  /* Looping, the sweep *is* the loop's period — the head reaching the left edge and the
+     buffer restarting are one event, and the whole claim of a position indicator is that
+     where it points is where the sound is. The floor is deliberately not applied: it was,
+     and a 105 ms loop then swept once per four repeats, which is what a slow, comfortable
+     lie looks like. A short loop strobes because a short loop *is* a strobe. The floor
+     still belongs to a single pass, where the failure is the opposite one — a 2 ms click
+     would flash for one frame and be missed. */
+  const sweep = loop ? period : Math.max(period, MIN_SWEEP_MS);
 
   return (
     <div
@@ -63,7 +74,12 @@ export function Bars({
           style={{ height: `${String(Math.max(3, Math.round(height * 100)))}%` }}
         />
       ))}
-      {playing ? <span className="bars-head" style={{ animationDuration: `${String(sweep)}ms` }} /> : null}
+      {playing ? (
+        <span
+          className={`bars-head${loop ? ' bars-head-loop' : ''}`}
+          style={{ animationDuration: `${String(sweep)}ms` }}
+        />
+      ) : null}
     </div>
   );
 }
