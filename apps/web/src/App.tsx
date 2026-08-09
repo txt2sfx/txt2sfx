@@ -59,7 +59,7 @@ import { Gallery, type GalleryItem } from './screens/Gallery.js';
 import { Loop } from './screens/Loop.js';
 import { Share } from './screens/Share.js';
 import { Studio } from './screens/Studio.js';
-import { chooseProvider, providerFor, renderSignalFor, targetFromBuffer } from './lib/agent.js';
+import { chooseProvider, providerFor, recipeName, renderSignalFor, targetFromBuffer } from './lib/agent.js';
 import { decodeAudioFile, metricsOf, signalOf, type Reference } from './lib/analysis.js';
 import { useAccount } from './lib/account.js';
 import { BankError, bankClient, DEFAULT_BANK_URL, type BankHealth } from './lib/bank.js';
@@ -76,11 +76,15 @@ import { renderLayers } from './lib/layers.js';
 import { loadLibrary, saveLibrary, type Library } from './lib/library.js';
 import { startRecording, type Recorder } from './lib/record.js';
 import {
-  MASTER_CENTER,
   MASTER_KINDS,
+  MASTER_REST,
+  anchorMasters,
   applyMaster,
-  positionToRatio,
+  atRest,
+  moveMaster,
+  type MasterAnchor,
   type MasterKind,
+  type MasterPositions,
 } from './lib/master.js';
 import { loadSession, saveSession } from './lib/session.js';
 import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
@@ -742,40 +746,51 @@ export function App(): React.JSX.Element {
   );
 
   /**
-   * The text a master gesture multiplies, captured when the gesture starts.
+   * The recipe the master knobs are measured against, and where they stand on it.
    *
    * A ref and not state: it must be readable and writable inside the same event that
-   * writes the source, and it is not something the interface draws. One base for all
-   * three knobs is enough because a pointer can only hold one slider, and a keyboard
-   * gesture is a single key press that commits on its own key-up.
+   * writes the source. The positions are duplicated into state below because those the
+   * interface *does* draw, and the anchor is not a thing a render can depend on — it is
+   * only ever consulted by the handler that is about to replace it.
+   *
+   * `null` means "whatever the editor holds is the new zero", which is the state after
+   * every edit that did not come from a master. The anchor is not taken eagerly on load
+   * because most recipes are opened, listened to and closed without a knob being touched,
+   * and an anchor nobody used is a string held for nothing.
    */
-  const masterBase = useRef<string | null>(null);
-  const [masters, setMasters] = useState<Readonly<Record<MasterKind, number>>>({
-    pitch: MASTER_CENTER,
-    length: MASTER_CENTER,
-    brightness: MASTER_CENTER,
-  });
+  const masterAnchor = useRef<MasterAnchor | null>(null);
+  const [masters, setMasters] = useState<MasterPositions>(MASTER_REST);
+
+  /** Forget the base and put the knobs back in the middle, without touching the text. */
+  const restMasters = useCallback(() => {
+    masterAnchor.current = null;
+    setMasters((current) => (atRest(current) ? current : MASTER_REST));
+  }, []);
+
+  /**
+   * Re-anchor whenever the text moved under the knobs.
+   *
+   * Typing, a fit, a variation, a generated recipe, opening another one: all of them
+   * leave `source` different from what the anchor produced, and a knob still claiming
+   * "×2 of a base" that nothing on screen resembles any more would be the lie the old jog
+   * was avoiding. Comparing texts rather than counting edits means every one of those
+   * paths is covered without any of them having to know the masters exist.
+   */
+  useEffect(() => {
+    if (masterAnchor.current?.source !== source) restMasters();
+  }, [source, restMasters]);
 
   const onMaster = useCallback(
     (kind: MasterKind, position: number) => {
-      /* Always one multiplication of the base, never a chain of deltas: inside a gesture
-         the result is `round(base × ratio)`, so writing precision cannot accumulate. */
-      const base = masterBase.current ?? source;
-      masterBase.current = base;
-      setMasters((current) => ({ ...current, [kind]: position }));
-      setSource(applyMaster(base, kind, positionToRatio(position)).source);
+      const held = masterAnchor.current;
+      const anchor = held !== null && held.source === source ? held : anchorMasters(source);
+      const moved = moveMaster(anchor, kind, position);
+      masterAnchor.current = moved;
+      setMasters(moved.positions);
+      setSource(moved.source);
     },
     [source, setSource],
   );
-
-  const onMasterCommit = useCallback((kind: MasterKind) => {
-    /* The editor already holds the result — the text is the state from here on — so
-       committing is only forgetting the base and returning the knob to centre. */
-    masterBase.current = null;
-    setMasters((current) =>
-      current[kind] === MASTER_CENTER ? current : { ...current, [kind]: MASTER_CENTER },
-    );
-  }, []);
 
   const onVariation = useCallback(() => {
     setSource(vary(source, (Math.random() * 0x100000000) >>> 0));
@@ -953,6 +968,32 @@ export function App(): React.JSX.Element {
   );
 
   /* --- persistence -------------------------------------------------------- */
+
+  /**
+   * File what the editor holds as a new recipe of this session.
+   *
+   * The masters are why this exists. They are anchored on the recipe as it was opened, so
+   * a shifted recipe is a *view* of that one — reversible, and only one at a time. Fork is
+   * how a view becomes a thing: the text is copied under its own name, the copy becomes
+   * the selection, and the knobs re-anchor on it, which is what puts them back in the
+   * middle. Keeping the original untouched is the point; without it, "make this one an
+   * octave down as well" means giving up the sound it started from.
+   *
+   * A session entry rather than a file or a bank record, exactly like `adopt`: this is a
+   * candidate somebody is working on, and both of the durable stores are deliberate acts
+   * with their own buttons. The text is copied byte for byte — the header keeps the name
+   * the model chose, and only the catalog entry is suffixed, which is the same split
+   * `recipeName` already makes for a generated recipe.
+   */
+  const fork = useCallback(() => {
+    if (source.trim() === '') return;
+    const name = recipeName(source, prompt, takenNames);
+    setSession((currentSession) => [...currentSession, { name, source, origin: 'session' as const, prompt }]);
+    setSelected(name);
+    touch(name);
+    restMasters();
+    setStatus(t('master.forked', { name }));
+  }, [prompt, restMasters, source, t, takenNames, touch]);
 
   /* Keep this tab's unsaved recipes across a reload. A generated recipe cost a model call
      and a population of renders per generation of the fit, and until it is saved to
@@ -1556,7 +1597,8 @@ export function App(): React.JSX.Element {
           masters={masters}
           masterAvailable={masterAvailable}
           onMaster={onMaster}
-          onMasterCommit={onMasterCommit}
+          onFork={fork}
+          forkBlocked={source.trim() === '' ? t('master.forkBlocked') : null}
           onVariation={onVariation}
           view={view}
           onView={setView}

@@ -256,6 +256,10 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'master.brightness': 'яркость',
   'master.noFreq': 'в этом рецепте нечего двигать по частоте',
   'master.noFilters': 'в этом рецепте нет фильтров lp/hp',
+  'master.fork': 'в новый',
+  'master.forkTitle': 'Скопировать рецепт так, как он звучит сейчас, в новый рецепт этой сессии — мастера встанут в центр относительно него, исходный останется со своими числами',
+  'master.forkBlocked': 'нечего копировать',
+  'master.forked': 'скопировано в {name}',
 
   'export.title': 'ЭКСПОРТ',
   'export.copyJs': 'Копировать JS',

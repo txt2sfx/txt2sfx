@@ -316,6 +316,10 @@ export const en = {
   'master.brightness': 'brightness',
   'master.noFreq': 'this recipe has no frequency to move',
   'master.noFilters': 'this recipe has no lp/hp filter to move',
+  'master.fork': 'to a new one',
+  'master.forkTitle': 'Copy this recipe, as it now sounds, into a new one of this session — the masters re-centre on it and the original keeps its numbers',
+  'master.forkBlocked': 'nothing to copy',
+  'master.forked': 'copied into {name}',
 
   /* --- the export card ---------------------------------------------------- */
 

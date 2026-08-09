@@ -23,9 +23,14 @@
  *
  * The masters are not slots and are drawn apart from them: a slot is one number the
  * author marked as uncertain, a master moves every number of a kind at once. They are
- * *jogs* — they show no absolute position, because between two gestures the text is
- * the state (see `lib/master.ts`) — so the control returns to centre on release and
- * this component reports the release rather than tracking it.
+ * *anchored* (see `lib/master.ts`): centre is the recipe as it was opened, the ratio
+ * beside each label says how far it has been taken from there, and putting a knob back
+ * in the middle puts the recipe's own numbers back. Nothing snaps back on release.
+ *
+ * Which is why the fork button sits in their header rather than in the panel's. An
+ * anchored master is a view of one recipe, not a second recipe; the button is how the
+ * shifted version becomes a recipe of its own — and the knobs, having a new zero, return
+ * to the middle.
  *
  * @packageDocumentation
  */
@@ -33,7 +38,7 @@
 import { formatNumber } from '@txt2sfx/core';
 import { layerColor } from '../lib/design.js';
 import { useI18n, type Key } from '../lib/i18n.js';
-import { MASTER_KINDS, type MasterKind } from '../lib/master.js';
+import { MASTER_CENTER, MASTER_KINDS, formatRatio, type MasterKind, type MasterPositions } from '../lib/master.js';
 import { positionToValue, valueToPosition, type Slot } from '../lib/slots.js';
 
 /**
@@ -58,13 +63,15 @@ export interface SlotsCardProps {
   readonly slots: readonly Slot[];
   readonly layerNames: readonly string[];
   readonly onChange: (slot: Slot, value: number) => void;
-  /** Current jog position of each master, 0..1; the centre (`0.5`) when at rest. */
-  readonly masters: Readonly<Record<MasterKind, number>>;
+  /** Where each master stands relative to the anchored recipe; `0.5` is ×1. */
+  readonly masters: MasterPositions;
   /** A master with nothing to turn is muted rather than hidden — see the header. */
   readonly masterAvailable: Readonly<Record<MasterKind, boolean>>;
   readonly onMaster: (kind: MasterKind, position: number) => void;
-  /** The gesture ended: the text already holds the result, the knob goes back to centre. */
-  readonly onMasterCommit: (kind: MasterKind) => void;
+  /** Make what the masters produced a recipe of its own, and re-anchor on it. */
+  readonly onFork: () => void;
+  /** `null` when forking is available, otherwise why it is not. */
+  readonly forkBlocked: string | null;
   /** Roll every slot inside its own range. */
   readonly onVariation: () => void;
   /** Progress or verdict of a fit, or `null` if none has run. */
@@ -83,7 +90,8 @@ export function SlotsCard({
   masters,
   masterAvailable,
   onMaster,
-  onMasterCommit,
+  onFork,
+  forkBlocked,
   onVariation,
   fitting,
   fitRunning,
@@ -134,32 +142,44 @@ export function SlotsCard({
 
       <div className="panel-body">
         <div className="sliders masters">
-          <span className="mono faint slider-label">{t('master.title')}</span>
+          <span className="slider-head">
+            <span className="mono faint slider-label">{t('master.title')}</span>
+            <span className="spacer" />
+            <button
+              type="button"
+              onClick={onFork}
+              disabled={forkBlocked !== null}
+              title={forkBlocked ?? t('master.forkTitle')}
+            >
+              ⎘ {t('master.fork')}
+            </button>
+          </span>
           {MASTER_KINDS.map((kind) => {
             const available = masterAvailable[kind];
             const blocked = MASTER_BLOCKED[kind];
+            const moved = masters[kind];
             return (
               <label className="slider" key={kind}>
-                {/* No value readout: a jog has no absolute position to report, and a
-                    number that snapped back to ×1 on every release would read as a bug. */}
-                <span className="mono slider-label">{t(MASTER_LABEL[kind])}</span>
+                <span className="slider-head">
+                  <span className="mono slider-label">{t(MASTER_LABEL[kind])}</span>
+                  <span className="spacer" />
+                  {/* The readout an anchored knob has and a jog did not: how far this
+                      recipe has been taken from the one that was opened. Faint at rest,
+                      so a row of ×1 does not read as three numbers worth reading. */}
+                  <span className={`mono slider-value${moved === MASTER_CENTER ? ' faint' : ''}`}>
+                    {formatRatio(moved)}
+                  </span>
+                </span>
                 <input
                   type="range"
                   min={0}
                   max={1}
                   step={0.001}
-                  value={masters[kind]}
+                  value={moved}
                   disabled={!available}
                   aria-label={t(MASTER_LABEL[kind])}
                   title={available || blocked === undefined ? undefined : t(blocked)}
                   onChange={(event) => onMaster(kind, event.target.valueAsNumber)}
-                  /* Three ways a gesture can end, and all three have to commit: the
-                     pointer released, an arrow key released, or focus leaving mid-drag
-                     (a pointer that went up outside the window). Missing one would
-                     leave the knob off-centre with a stale base behind it. */
-                  onPointerUp={() => onMasterCommit(kind)}
-                  onKeyUp={() => onMasterCommit(kind)}
-                  onBlur={() => onMasterCommit(kind)}
                 />
               </label>
             );

@@ -50,7 +50,7 @@ import { catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
 import type { Format } from '../lib/download.js';
-import type { MasterKind } from '../lib/master.js';
+import type { MasterKind, MasterPositions } from '../lib/master.js';
 import type { Slot } from '../lib/slots.js';
 import type { FreesoundSound } from '../lib/freesound.js';
 import type { Generation, ProviderSettings } from '../lib/useGenerate.js';
@@ -83,12 +83,14 @@ export interface StudioProps {
   readonly seed: number;
   readonly slots: readonly Slot[];
   readonly onSlotChange: (slot: Slot, value: number) => void;
-  /** Jog position of each master slider; the centre while no gesture is running. */
-  readonly masters: Readonly<Record<MasterKind, number>>;
+  /** Where each master stands relative to the recipe it was anchored on; `0.5` is ×1. */
+  readonly masters: MasterPositions;
   /** Whether each master has anything of its kind to move in this recipe. */
   readonly masterAvailable: Readonly<Record<MasterKind, boolean>>;
   readonly onMaster: (kind: MasterKind, position: number) => void;
-  readonly onMasterCommit: (kind: MasterKind) => void;
+  /** File the shifted recipe as one of this session's own, and re-anchor on it. */
+  readonly onFork: () => void;
+  readonly forkBlocked: string | null;
   readonly onVariation: () => void;
 
   /* --- views --- */
@@ -414,7 +416,8 @@ export function Studio(props: StudioProps): React.JSX.Element {
                       masters={props.masters}
                       masterAvailable={props.masterAvailable}
                       onMaster={props.onMaster}
-                      onMasterCommit={props.onMasterCommit}
+                      onFork={props.onFork}
+                      forkBlocked={props.forkBlocked}
                       onVariation={props.onVariation}
                       fitting={props.fitting}
                       fitRunning={props.fitRunning}
