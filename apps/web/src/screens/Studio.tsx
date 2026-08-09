@@ -50,6 +50,7 @@ import { catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
 import type { Format } from '../lib/download.js';
+import type { MasterKind } from '../lib/master.js';
 import type { Slot } from '../lib/slots.js';
 import type { FreesoundSound } from '../lib/freesound.js';
 import type { Generation, ProviderSettings } from '../lib/useGenerate.js';
@@ -82,6 +83,13 @@ export interface StudioProps {
   readonly seed: number;
   readonly slots: readonly Slot[];
   readonly onSlotChange: (slot: Slot, value: number) => void;
+  /** Jog position of each master slider; the centre while no gesture is running. */
+  readonly masters: Readonly<Record<MasterKind, number>>;
+  /** Whether each master has anything of its kind to move in this recipe. */
+  readonly masterAvailable: Readonly<Record<MasterKind, boolean>>;
+  readonly onMaster: (kind: MasterKind, position: number) => void;
+  readonly onMasterCommit: (kind: MasterKind) => void;
+  readonly onVariation: () => void;
 
   /* --- views --- */
   readonly view: StudioView;
@@ -130,6 +138,9 @@ export interface StudioProps {
   readonly onModelReady: (ready: boolean) => void;
   readonly onLoadFile: (file: File) => void;
   readonly onNewTake: () => void;
+  /** A microphone recording is running; both of the compare panel's record controls say so. */
+  readonly recording: boolean;
+  readonly onRecord: (thenFit: boolean) => void;
   readonly onModelRendered: (file: File) => void;
   /**
    * A run is in flight for a recipe that does not exist yet, started from the gallery.
@@ -154,6 +165,8 @@ export interface StudioProps {
   readonly fitting: string | null;
   readonly fitRunning: boolean;
   readonly fitBlocked: string | null;
+  /** Why record → Fit cannot work — the same reasons minus the missing B. */
+  readonly recordFitBlocked: string | null;
   readonly onFit: () => void;
   readonly onStopFit: () => void;
 
@@ -365,8 +378,11 @@ export function Studio(props: StudioProps): React.JSX.Element {
                     onLoadFile={props.onLoadFile}
                     onFindLibrary={() => props.onView('search')}
                     onNewTake={props.onNewTake}
+                    recording={props.recording}
+                    onRecord={props.onRecord}
                     onFit={props.onFit}
                     fitBlocked={props.fitBlocked}
+                    recordFitBlocked={props.recordFitBlocked}
                     matchReference={props.matchReference}
                     onMatchReference={props.onMatchReference}
                     maxPeak={props.maxPeak}
@@ -395,6 +411,11 @@ export function Studio(props: StudioProps): React.JSX.Element {
                       slots={props.slots}
                       layerNames={layerNames}
                       onChange={props.onSlotChange}
+                      masters={props.masters}
+                      masterAvailable={props.masterAvailable}
+                      onMaster={props.onMaster}
+                      onMasterCommit={props.onMasterCommit}
+                      onVariation={props.onVariation}
                       fitting={props.fitting}
                       fitRunning={props.fitRunning}
                       fitBlocked={props.fitBlocked}

@@ -1,0 +1,9 @@
+# prompt: heavy armored landing, metallic clatter
+# tags: land, heavy, armor, clatter
+# Armour is the same landing as `land-thump` with plates on it: a lower sub, a
+# metal bank ringing under the impact, and a slow grain field for the pieces
+# settling against each other after the feet have stopped.
+sound "heavy landing" 540ms impact
+  thump: sub ~60Hz[35..110] -> 32Hz in 140ms | gain 0.45 attack 5ms decay 380ms
+  plates: modal metal ~520Hz[260..1000] Q90 | gain 0.26 decay 420ms delay 15ms
+  clatter: grains ~3200Hz[1400..7000] rate ~60[20..180] width 5ms spread 2.5 bend 1 | gain 0.22 decay 420ms delay 60ms

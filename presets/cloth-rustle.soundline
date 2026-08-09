@@ -1,0 +1,8 @@
+# prompt: short cloth rustle
+# tags: cloth, rustle, fabric, foley
+# The attack is the whole design: fabric has no transient, so an envelope that
+# opens over 20 ms is what stops this reading as a burst of hiss. The grain
+# layer is the individual fibres letting go.
+sound "cloth rustle" 300ms foley
+  rustle: noise pink >> bp ~3200Hz[1500..7000] Q1 | gain 0.46 attack 20ms decay 240ms
+  fibre: grains ~4200Hz[2000..9000] rate ~200[80..500] width 2ms spread 2 bend 1 | gain 0.24 attack 15ms decay 200ms delay 30ms

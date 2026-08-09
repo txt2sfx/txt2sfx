@@ -65,17 +65,27 @@ import { useAccount } from './lib/account.js';
 import { BankError, bankClient, DEFAULT_BANK_URL, type BankHealth } from './lib/bank.js';
 import { bridge } from './lib/bridge.js';
 import { bridgeClient, type BridgeStatus } from './lib/bridge-client.js';
-import { bankEntries, exampleEntries, mergeCatalog, type Entry } from './lib/catalog.js';
+import { bankEntries, exampleEntries, mergeCatalog, presetEntries, type Entry } from './lib/catalog.js';
 import { download, loadFormat, saveFormat, type Format } from './lib/download.js';
 import { fetchPreview, type FreesoundSound } from './lib/freesound.js';
 import { playBuffer, playLive, render, type Playback } from './lib/engine.js';
 import { bundledRecipes, canSave, fetchRecipes, saveRecipe } from './lib/examples.js';
+import { bundledPresets } from './lib/presets.js';
 import { useI18n } from './lib/i18n.js';
 import { renderLayers } from './lib/layers.js';
 import { loadLibrary, saveLibrary, type Library } from './lib/library.js';
+import { startRecording, type Recorder } from './lib/record.js';
+import {
+  MASTER_CENTER,
+  MASTER_KINDS,
+  applyMaster,
+  positionToRatio,
+  type MasterKind,
+} from './lib/master.js';
 import { loadSession, saveSession } from './lib/session.js';
 import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
+import { vary } from './lib/variation.js';
 import { modelStatus, renderTarget } from './lib/stable-audio.js';
 import { DEFAULT_SETTINGS, useGenerate, type ProviderSettings } from './lib/useGenerate.js';
 import { useLoop } from './lib/useLoop.js';
@@ -86,6 +96,18 @@ const RENDER_DEBOUNCE_MS = 140;
 
 /** How long to wait after the last edit before an auto-play retrigger. */
 const AUTOPLAY_DEBOUNCE_MS = 260;
+
+/**
+ * How long to wait after the last keystroke in the gallery's search box before asking
+ * the bank.
+ *
+ * The pace of typing rather than of rendering, so it is more than double
+ * {@link RENDER_DEBOUNCE_MS}: a search is a round trip to another host, and every
+ * character sent while a word is still being typed is an answer that is already stale
+ * when it arrives. 300 ms is about the longest gap inside a word at ordinary typing
+ * speed, so it fires when somebody stops rather than when they pause.
+ */
+const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * How long to wait after the last edit before writing this tab's unsaved recipes down.
@@ -138,6 +160,13 @@ export function App(): React.JSX.Element {
   const [session, setSession] = useState<readonly Entry[]>(() =>
     loadSession().map((recipe) => ({ ...recipe, origin: 'session' as const })),
   );
+  /**
+   * The shipped catalog, bundled at build time.
+   *
+   * Not state: nothing can change it while the tab is open — a preset is read-only
+   * by contract, and saving an edited one writes a copy into `examples/`.
+   */
+  const presets = useMemo<readonly Entry[]>(() => presetEntries(bundledPresets()), []);
   const [bankList, setBankList] = useState<readonly Entry[]>([]);
   const [bankUrl] = useState(DEFAULT_BANK_URL);
   const [bankHealth, setBankHealth] = useState<BankHealth | null>(null);
@@ -161,6 +190,15 @@ export function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('gallery');
   const [view, setView] = useState<StudioView>('sound');
   const [railMode, setRailMode] = useState<RailMode>('recent');
+  /**
+   * The gallery's search box and category chip.
+   *
+   * React state and not the address bar, deliberately. There is no router here — screens
+   * are a `useState` — and the URL is already carrying two payloads that must survive a
+   * reload untouched: a shared recipe and the auth hand-off code (`lib/share.ts`,
+   * `code` / `return`). Adding `?q=` next to those buys a shareable search nobody asked
+   * for and risks colliding with the two mechanisms that *are* load-bearing.
+   */
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [bridgeOpen, setBridgeOpen] = useState(false);
@@ -214,6 +252,17 @@ export function App(): React.JSX.Element {
   const [layerBuffers, setLayerBuffers] = useState<readonly (AudioBuffer | null)[]>([]);
   const [modelAvailable, setModelAvailable] = useState(false);
   const [libraryLoaded, setLibraryLoaded] = useState(false);
+
+  /* The open microphone, in a ref because it is a device and not something the interface
+     draws — what the interface draws is `recording`, and the two must not be able to
+     disagree: a stale copy of a stopped recorder would keep a capture running with no way
+     left to end it. */
+  const recorder = useRef<Recorder | null>(null);
+  /* Between the press and the user's answer to the permission prompt there is no recorder
+     yet and nothing on screen has changed, so a second press would ask for a second
+     stream and leave the first one running with nobody holding it. */
+  const opening = useRef(false);
+  const [recording, setRecording] = useState(false);
 
   /* --- who answers -------------------------------------------------------- */
 
@@ -283,27 +332,62 @@ export function App(): React.JSX.Element {
   const account = useAccount(bank, sessionToken);
 
   /* The bank is optional. Health decides whether the agent gets few-shot examples at all,
-     so it is asked first and the listing only follows a live answer — otherwise a wrong
-     URL costs two failed requests instead of one. Not polled: repeatedly calling a URL
-     somebody typed is noise. */
+     and whether the gallery's search is answered by a server or by this page, so it is
+     asked first and the listing only follows a live answer — otherwise a wrong URL costs
+     two failed requests instead of one. Not polled: repeatedly calling a URL somebody
+     typed is noise. */
   useEffect(() => {
     let cancelled = false;
-    void bank.health().then(async (health) => {
-      if (cancelled) return;
-      setBankHealth(health);
-      if (health === null) {
-        setBankList([]);
-        return;
-      }
-      const listed = await bank.list();
-      if (cancelled) return;
-      setBankList(bankEntries(listed.recipes));
-      setLiked(listed.liked);
+    void bank.health().then((health) => {
+      if (!cancelled) setBankHealth(health);
     });
     return () => {
       cancelled = true;
     };
   }, [bank, bankNonce, account.account]);
+
+  /**
+   * The bank's half of the gallery, which is also the search.
+   *
+   * One effect owns the listing rather than two, and that is the whole design here: a
+   * listing fired at mount and a search debounced behind it are two requests whose
+   * answers arrive in whatever order the network chose, and the last one to land wins.
+   * With a single owner, the query and the category are simply part of what is asked
+   * for, and cancelling the previous timer cancels the previous question.
+   *
+   * The server answers it because the index is there — `q` runs against FTS5 over
+   * prompts and tags, which a page holding a hundred of the bank's recipes does not
+   * have. When the bank is down this effect clears its half and the gallery filters the
+   * bundle by substring, exactly as it always did.
+   */
+  useEffect(() => {
+    if (bankHealth === null) {
+      setBankList([]);
+      return;
+    }
+    let cancelled = false;
+    const q = query.trim();
+    const category = filter === 'all' || filter === 'trash' ? undefined : filter;
+
+    const ask = (): void => {
+      void bank
+        .list({ ...(q === '' ? {} : { q }), ...(category === undefined ? {} : { category }) })
+        .then((listed) => {
+          if (cancelled) return;
+          setBankList(bankEntries(listed.recipes));
+          setLiked(listed.liked);
+        });
+    };
+
+    /* Only typing needs the delay. A chip click and the first listing are single events,
+       and making the catalog appear a third of a second after the screen does would be
+       paying the cost of debouncing without the reason for it. */
+    const timer = window.setTimeout(ask, q === '' ? 0 : SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [bank, bankHealth, bankNonce, account.account, query, filter]);
 
   /* Re-asked whenever the bridge's state changes, not once at mount: the ordinary way
      this goes from "no model" to "ready" is somebody running `npx txt2sfx-bridge` while
@@ -339,21 +423,62 @@ export function App(): React.JSX.Element {
 
   /* --- derived ------------------------------------------------------------ */
 
-  const entries = useMemo(
-    () => mergeCatalog(session, [...examples, ...bankList.filter((b) => !examples.some((e) => e.name === b.name))]),
-    [session, examples, bankList],
-  );
+  /**
+   * The catalog, in falling order of authority: session, examples, bank, preset.
+   *
+   * Each store only contributes a name the ones before it did not claim. Presets are
+   * last because the bank ships them too, with an id, a rating and a comment thread
+   * the bundled copy does not have — but they are *present*, which is what makes the
+   * gallery a catalog rather than an empty page when there is no bank to ask.
+   */
+  const entries = useMemo(() => {
+    const stored: Entry[] = [...examples];
+    for (const list of [bankList, presets]) {
+      for (const entry of list) {
+        if (!stored.some((seen) => seen.name === entry.name)) stored.push(entry);
+      }
+    }
+    return mergeCatalog(session, stored);
+  }, [session, examples, bankList, presets]);
   const pristine = useMemo(() => new Map(entries.map((entry) => [entry.name, entry.source])), [entries]);
-  const source = edits[selected] ?? pristine.get(selected) ?? '';
+  /**
+   * The last recipe that was selected while it was still in the catalog.
+   *
+   * The bank half of the catalog is now the answer to the gallery's search box, so it can
+   * stop containing a recipe that is open in the studio — go back, type something else,
+   * return, and the editor would have emptied itself under a name that is still selected.
+   * Holding the entry costs one reference and makes the studio depend on what was opened
+   * rather than on what a search on another screen is currently listing. Written during
+   * render, like the bridge's `live` ref above and for the same reason: it must be correct
+   * for *this* pass, not for the one after an effect.
+   */
+  const held = useRef<Entry | null>(null);
+  const current = useMemo(() => entries.find((entry) => entry.name === selected), [entries, selected]);
+  if (current !== undefined) held.current = current;
+  const source =
+    edits[selected] ??
+    pristine.get(selected) ??
+    (held.current?.name === selected ? held.current.source : '');
   const dirty = useMemo(
     () => Object.keys(edits).filter((name) => pristine.has(name) && edits[name] !== pristine.get(name)),
     [edits, pristine],
   );
-  const current = useMemo(() => entries.find((entry) => entry.name === selected), [entries, selected]);
 
   const parsed = useMemo(() => parseWithDiagnostics(source), [source]);
   const ast = parsed.ast;
   const slots = useMemo(() => (ast === null ? [] : collectSlots(ast)), [ast]);
+
+  /* Which masters have anything to turn. Derived here rather than inside the card so the
+     three probe transforms run once per edit instead of once per render — each of them
+     parses the recipe, which is cheap but not free at sixty frames of a drag. */
+  const masterAvailable = useMemo<Readonly<Record<MasterKind, boolean>>>(
+    () =>
+      Object.fromEntries(
+        MASTER_KINDS.map((kind) => [kind, applyMaster(source, kind, 1).touched > 0]),
+      ) as Record<MasterKind, boolean>,
+    [source],
+  );
+
   /* The same invariants the agent loop enforces, applied to hand edits too. A playground
      that let you write a 400 ms `pop` in silence would teach the wrong thing about what
      the pipeline accepts. */
@@ -525,20 +650,37 @@ export function App(): React.JSX.Element {
 
   /* --- the reference and the B side --------------------------------------- */
 
-  const loadReference = useCallback((file: File, fromLibrary = false) => {
-    setReferenceError(null);
-    /* Remembered here rather than derived from `bKind`, which is a *label* for what is
-       loaded and moves whenever someone flips a chip to read a different hint. The
-       Compare panel needs the fact — is the thing on screen a library recording — to
-       decide whether its Library chip should go looking for one. */
-    setLibraryLoaded(fromLibrary);
-    void decodeAudioFile(file)
-      .then((buffer) => setReference({ name: file.name, buffer }))
-      .catch((error: unknown) => {
-        setReference(null);
-        setReferenceError(t('warn.decodeFail', { file: file.name, error: String(error) }));
-      });
-  }, [t]);
+  /**
+   * Decode a file and make it the B side.
+   *
+   * Returns the reference it loaded, and null when the decode failed. Not for the
+   * callers that only press a button — every one of them ignores it — but for the
+   * microphone, which has to fit against what it just recorded and cannot read that out
+   * of `reference` in the same tick it was set. Handing back the value is cheaper than a
+   * second decoding path, and this stays the one place that knows what B is.
+   */
+  const loadReference = useCallback(
+    (file: File, fromLibrary = false): Promise<Reference | null> => {
+      setReferenceError(null);
+      /* Remembered here rather than derived from `bKind`, which is a *label* for what is
+         loaded and moves whenever someone flips a chip to read a different hint. The
+         Compare panel needs the fact — is the thing on screen a library recording — to
+         decide whether its Library chip should go looking for one. */
+      setLibraryLoaded(fromLibrary);
+      return decodeAudioFile(file)
+        .then((buffer) => {
+          const loaded: Reference = { name: file.name, buffer };
+          setReference(loaded);
+          return loaded;
+        })
+        .catch((error: unknown) => {
+          setReference(null);
+          setReferenceError(t('warn.decodeFail', { file: file.name, error: String(error) }));
+          return null;
+        });
+    },
+    [t],
+  );
 
   /**
    * Take a search result and make it the B side.
@@ -598,6 +740,46 @@ export function App(): React.JSX.Element {
     },
     [source, setSource],
   );
+
+  /**
+   * The text a master gesture multiplies, captured when the gesture starts.
+   *
+   * A ref and not state: it must be readable and writable inside the same event that
+   * writes the source, and it is not something the interface draws. One base for all
+   * three knobs is enough because a pointer can only hold one slider, and a keyboard
+   * gesture is a single key press that commits on its own key-up.
+   */
+  const masterBase = useRef<string | null>(null);
+  const [masters, setMasters] = useState<Readonly<Record<MasterKind, number>>>({
+    pitch: MASTER_CENTER,
+    length: MASTER_CENTER,
+    brightness: MASTER_CENTER,
+  });
+
+  const onMaster = useCallback(
+    (kind: MasterKind, position: number) => {
+      /* Always one multiplication of the base, never a chain of deltas: inside a gesture
+         the result is `round(base × ratio)`, so writing precision cannot accumulate. */
+      const base = masterBase.current ?? source;
+      masterBase.current = base;
+      setMasters((current) => ({ ...current, [kind]: position }));
+      setSource(applyMaster(base, kind, positionToRatio(position)).source);
+    },
+    [source, setSource],
+  );
+
+  const onMasterCommit = useCallback((kind: MasterKind) => {
+    /* The editor already holds the result — the text is the state from here on — so
+       committing is only forgetting the base and returning the knob to centre. */
+    masterBase.current = null;
+    setMasters((current) =>
+      current[kind] === MASTER_CENTER ? current : { ...current, [kind]: MASTER_CENTER },
+    );
+  }, []);
+
+  const onVariation = useCallback(() => {
+    setSource(vary(source, (Math.random() * 0x100000000) >>> 0));
+  }, [source, setSource]);
 
   const select = useCallback(
     (name: string) => {
@@ -842,16 +1024,24 @@ export function App(): React.JSX.Element {
    * is still improving (by design — see the loop's hard rule), and this is how you give
    * it more; and after hand-editing a recipe, refitting is the difference between "my
    * structure is wrong" and "my numbers are wrong".
+   *
+   * `refOverride` exists for the one caller that has a reference React has not committed
+   * yet: record → Fit decodes the recording and fits to it inside the same handler, and
+   * reading `b` there would read the *previous* B — the same stale-closure trap the
+   * bridge's ref is there to avoid, and one that would silently fit to the wrong sound
+   * rather than fail. Every other caller passes nothing and gets `b` as before. It is
+   * never wired straight to an `onClick`, which would pass a mouse event.
    */
-  const fit = useCallback(() => {
-    if (ast === null || b === null || fitRunning) return;
+  const fit = useCallback((refOverride?: Reference) => {
+    const target = refOverride ?? b;
+    if (ast === null || target === null || fitRunning) return;
     const controller = new AbortController();
     fitAbort.current = controller;
     setFitRunning(true);
     setFitting(t('slots.fitting'));
     void optimize({
       source,
-      target: targetFromBuffer(b.buffer),
+      target: targetFromBuffer(target.buffer),
       render: renderSignalFor(seed),
       generations: FIT_GENERATIONS,
       populationSize: FIT_POPULATION,
@@ -890,14 +1080,73 @@ export function App(): React.JSX.Element {
 
   const stopFit = useCallback(() => fitAbort.current?.abort(), []);
 
-  const fitBlocked =
-    b === null
-      ? t('blocked.noB')
-      : ast === null
-        ? t('blocked.noParse')
-        : slots.length === 0
-          ? t('blocked.noSlots')
-          : null;
+  /* Why a fit cannot run *for reasons the recipe owns*. Split out because record → Fit
+     is about to supply the B side itself: "no B loaded" would disable that button in
+     exactly the case it exists for, while a recipe that does not parse or has no slots
+     blocks it for real. */
+  const recordFitBlocked = ast === null ? t('blocked.noParse') : slots.length === 0 ? t('blocked.noSlots') : null;
+
+  const fitBlocked = b === null ? t('blocked.noB') : recordFitBlocked;
+
+  /* --- the microphone ----------------------------------------------------- */
+
+  /**
+   * One press starts a recording, the next one ends it and loads it as B.
+   *
+   * Both controls in the panel call this, and the press that *stops* decides whether a
+   * fit follows — so starting from the chip and stopping from `record → Fit` does what
+   * the button that was pressed last says, rather than what the recording was opened
+   * for. There is one recorder, so there is one place to ask.
+   *
+   * The refusal path is the reference's own: no microphone, no permission and a file
+   * that will not decode are the same event as far as the user is concerned — B is not
+   * loaded, and the reason is printed where the other one is.
+   */
+  const onRecord = useCallback(
+    (thenFit: boolean) => {
+      const running = recorder.current;
+      if (running === null) {
+        if (opening.current) return;
+        opening.current = true;
+        setReferenceError(null);
+        void startRecording()
+          .then((next) => {
+            recorder.current = next;
+            setRecording(true);
+          })
+          .catch((error: unknown) => {
+            recorder.current = null;
+            setRecording(false);
+            setReferenceError(t('warn.micDenied', { error: String(error) }));
+          })
+          .finally(() => {
+            opening.current = false;
+          });
+        return;
+      }
+      /* Cleared before the stop resolves: the microphone is released inside `stop()`, and
+         a second press arriving while the file is being assembled must start a new
+         recording rather than await the old one. */
+      recorder.current = null;
+      setRecording(false);
+      void running
+        .stop()
+        .then(async (file) => {
+          const loaded = await loadReference(file);
+          if (loaded === null) return;
+          setBKind('record');
+          /* The decoded buffer, not `b`: this render's `b` is still whatever B was
+             before the recording, and state set two lines up is not readable here. */
+          if (thenFit) fit(loaded);
+        })
+        .catch((error: unknown) => setReferenceError(t('warn.micDenied', { error: String(error) })));
+    },
+    [fit, loadReference, t],
+  );
+
+  /* A recording outliving the page would keep the microphone open with nothing left to
+     close it. Cancel rather than stop: an unmounting tab has nowhere to put the file. */
+  useEffect(() => () => recorder.current?.cancel(), []);
 
   /* --- downloading -------------------------------------------------------- */
 
@@ -1243,6 +1492,12 @@ export function App(): React.JSX.Element {
           onQueryChange={setQuery}
           filter={filter}
           onFilterChange={setFilter}
+          /* The bank's rows are the answer to the query only while there *is* a query;
+             an empty box is a plain listing, and filtering that locally is what makes
+             the trash chip and the category chips work offline and online alike. */
+          serverFiltered={bankHealth !== null && query.trim() !== ''}
+          allCategories={bankHealth !== null}
+          canGenerate={model !== null}
           onboarded={library.onboarded}
           onDismissOnboarding={() => {
             setLibrary((currentLibrary) => {
@@ -1298,6 +1553,11 @@ export function App(): React.JSX.Element {
           seed={seed}
           slots={slots}
           onSlotChange={onSlotChange}
+          masters={masters}
+          masterAvailable={masterAvailable}
+          onMaster={onMaster}
+          onMasterCommit={onMasterCommit}
+          onVariation={onVariation}
           view={view}
           onView={setView}
           prompt={prompt}
@@ -1329,6 +1589,8 @@ export function App(): React.JSX.Element {
           onModelReady={setModelAvailable}
           onLoadFile={loadReference}
           onNewTake={newTake}
+          recording={recording}
+          onRecord={onRecord}
           onModelRendered={(file) => {
             setBKind('model');
             loadReference(file);
@@ -1339,6 +1601,7 @@ export function App(): React.JSX.Element {
           fitting={fitting}
           fitRunning={fitRunning}
           fitBlocked={fitBlocked}
+          recordFitBlocked={recordFitBlocked}
           onFit={fit}
           onStopFit={stopFit}
           maxPeak={GLOBAL_LIMITS.maxPeak}

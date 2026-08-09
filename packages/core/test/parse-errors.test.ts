@@ -208,7 +208,9 @@ describe('ramp and slot errors', () => {
   it('converts slot bounds written in a scalable unit of the same kind', () => {
     const ast = parse(doc('  a: noise white >> verb ~500ms[200ms..1s] mix 0.3 | gain 0.5 decay 20ms'));
     const time = ast.layers[0]?.chain[0]?.args.time;
-    expect(time?.kind === 'number' ? time.head.slot : undefined).toEqual({ min: 200, max: 1000 });
+    /* `toMatchObject`, not `toEqual`: the range also carries the spans of its own
+       bound tokens, which is what lets a transform rewrite them. */
+    expect(time?.kind === 'number' ? time.head.slot : undefined).toMatchObject({ min: 200, max: 1000 });
   });
 
   it('serializes converted bounds in the unit of the value', () => {

@@ -1,0 +1,9 @@
+# prompt: warm health pickup, soft rising chime
+# tags: health, heart, pickup, heal
+# Warmth here is the attack, not the spectrum: every layer opens over several
+# milliseconds instead of snapping, so nothing in it reads as an impact. Pure
+# sines with a fifth above them, and one quiet FM voice for the glow.
+sound "health pickup" 600ms pickup
+  body: tone sine ~523Hz[350..700] | gain 0.34 attack 8ms decay 260ms
+  chime: tone sine ~784Hz[520..1050] | gain 0.3 attack 6ms decay 340ms delay 150ms
+  glow: fm ~1046Hz[700..1500] ratio 2 index 2 -> 0.4 in 220ms | gain 0.16 attack 10ms decay 400ms delay 160ms

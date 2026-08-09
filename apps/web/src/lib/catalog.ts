@@ -1,11 +1,16 @@
 /**
  * What the gallery is showing, and where each entry came from.
  *
- * Three origins, kept distinct because they behave differently rather than to
+ * Four origins, kept distinct because they behave differently rather than to
  * decorate the list:
  *
  * - **`examples`** — the repository's reference set. Writable under `vite dev`, so
  *   this is where a recipe is authored and kept.
+ * - **`preset`** — the fifty sounds bundled with the build (`presets/`). Read-only
+ *   and always present, which is the point: without a key and without a bank the
+ *   gallery is still a catalog with something in every category. They rank *below*
+ *   the bank, because a live bank holds the same recipes with an id, a rating and a
+ *   comment thread attached, and the bundled copy would only shadow them.
  * - **`bank`** — the running bank server. Read over HTTP, searchable, and the
  *   source of the few-shot examples the agent gets; a recipe goes there to be
  *   published, not to be edited in place.
@@ -24,9 +29,10 @@
  */
 
 import type { Recipe } from '@txt2sfx/shared';
+import type { Preset } from './presets.js';
 
 /** Where an entry came from. */
-export type Origin = 'session' | 'examples' | 'bank';
+export type Origin = 'session' | 'examples' | 'bank' | 'preset';
 
 /** One entry in the gallery. */
 export interface Entry {
@@ -71,6 +77,25 @@ export function bankEntries(recipes: readonly Recipe[]): Entry[] {
 /** Turn files on disk into gallery entries. */
 export function exampleEntries(files: readonly { name: string; source: string }[]): Entry[] {
   return files.map((file) => ({ name: file.name, source: file.source, origin: 'examples' as const })).sort(byName);
+}
+
+/**
+ * Turn the bundled presets into gallery entries.
+ *
+ * The prompt is carried over because a preset has one — it is declared in the file
+ * — and the gallery's fallback of showing the leading comment would print the
+ * `prompt:` marker itself under the card.
+ */
+export function presetEntries(presets: readonly Preset[]): Entry[] {
+  return presets
+    .map((preset) => ({
+      name: preset.name,
+      source: preset.source,
+      origin: 'preset' as const,
+      prompt: preset.prompt,
+      category: preset.category,
+    }))
+    .sort(byName);
 }
 
 /**

@@ -41,6 +41,8 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'gallery.emptyCategory': 'В каталоге нет ни одного звука категории {category}.',
   'gallery.emptyQuery': 'В каталоге ничего не найдено по запросу «{query}».',
   'gallery.generateInstead': 'Сгенерировать такой звук',
+  'gallery.find': 'Найти в банке',
+  'gallery.findInstead': 'Поискать такой звук в банке',
 
   'card.trash': 'в корзину',
   'card.restore': 'вернуть',
@@ -184,9 +186,16 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'prompt.modelMissing': 'модель ещё не установлена — кнопка на вкладке «Модель»',
   'prompt.runsSearch': 'поищет запись этого звука на freesound.org',
   'prompt.searchMissing': 'сначала вставьте ключ freesound.org во вкладке «Поиск»',
+  'prompt.find': 'Найти в банке',
+  'prompt.runsRetrieve':
+    'поищет в банке и во встроенном каталоге рецепт, который уже отвечает на это описание, — новый он не пишет',
 
-  'run.noModel':
-    'Отвечать пока некому. Подключите кодового агента к мосту или вставьте ключ Gemini — значок в шапке открывает и то и другое.',
+  'run.retrieveSearching': '⌕ модели нет и ключа нет — вместо генерации ищу в банке',
+  'run.retrieved': '● «{name}» загружен из банка — найден, а не сгенерирован',
+  'run.retrievedLocal': '● «{name}» загружен из встроенного каталога — найден, а не сгенерирован',
+  'run.retrieveMissed': '● ничего не совпало — ничего не найдено и ничего не сгенерировано',
+  'run.retrieveNothing':
+    'Ни в банке, ни во встроенном каталоге нет ответа на это описание. Подключите кодового агента к мосту или вставьте ключ Gemini, чтобы рецепт написали, — шестерёнка рядом с кнопкой открывает и то и другое.',
 
   'run.accepted': 'принято',
   'run.notAccepted': 'не принято — {outcome}',
@@ -235,6 +244,18 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'slots.fitting': 'подгоняю…',
   'slots.generation': 'поколение {n}/{total} · расстояние {distance}',
   'slots.noSlots': ' — нет ~слотов для подгонки',
+  'slots.variation': 'Вариация',
+  'slots.variationTitle': 'бросить каждый ~слот внутри его диапазона',
+  'slots.variationBlocked': 'нет ~слотов, которые можно бросить',
+
+  /* --- мастер-слайдеры ----------------------------------------------------- */
+
+  'master.title': 'МАСТЕР',
+  'master.pitch': 'высота',
+  'master.length': 'длина',
+  'master.brightness': 'яркость',
+  'master.noFreq': 'в этом рецепте нечего двигать по частоте',
+  'master.noFilters': 'в этом рецепте нет фильтров lp/hp',
 
   'export.title': 'ЭКСПОРТ',
   'export.copyJs': 'Копировать JS',
@@ -359,12 +380,17 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'compare.library': 'Библиотека',
   'compare.file': 'Файл',
   'compare.take': 'Другой дубль',
+  'compare.record': 'Микрофон',
+  'compare.recordStop': 'Остановить запись',
+  'compare.recordFit': 'Записать → подогнать',
   'compare.modelBlocked': 'нужна локальная диффузионная модель — установите её во вкладке «Модель»',
   'compare.nothingLoaded': 'ничего не загружено',
   'compare.hintModel': 'отрендерено диффузионной моделью по тому же запросу — это цель, а не соперник',
   'compare.hintLibrary': 'запись с freesound.org — качество превью, лицензия указана в её строке',
   'compare.hintUpload': 'ваш файл, при загрузке выровнен по атаке и нормализован по пику',
   'compare.hintTake': 'тот же рецепт с другим seed — сколько в этом звуке от замысла?',
+  'compare.hintRecord':
+    'записано только что с вашего микрофона, с выключенными шумоподавлением и авторегулировкой громкости — они срезали бы ровно то, подо что идёт подгонка',
   'compare.colour': 'ЦВЕТ',
   'compare.dropzone':
     'Сравнивать пока не с чем. Перетащите сюда аудиофайл, выберите «{take}», чтобы отрендерить рецепт с новым seed, или {model}.',
@@ -507,6 +533,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'warn.longer': 'звук длится ~{actual} мс, а в заголовке объявлено {declared} мс',
   'warn.overBudget': 'экспорт занимает {bytes} Б при бюджете {budget} Б',
   'warn.decodeFail': 'не удалось декодировать {file}: {error}',
+  'warn.micDenied': 'запись не сделана: {error}',
 
   'dl.saved': 'сохранено {file}',
   'dl.savedSize': 'сохранено {file} · {size}',

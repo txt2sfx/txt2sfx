@@ -32,6 +32,7 @@ import { useMemo } from 'react';
 import { SOUND_CATEGORIES } from '@txt2sfx/shared';
 import { SoundCard } from '../components/SoundCard.js';
 import { Bars } from '../components/Bars.js';
+import type { Origin } from '../lib/catalog.js';
 import { catHue } from '../lib/design.js';
 import { useI18n, type Key } from '../lib/i18n.js';
 import { ghostBars } from '../lib/layers.js';
@@ -43,7 +44,9 @@ export interface GalleryItem {
   readonly prompt: string;
   readonly category: string | undefined;
   readonly durationMs: number;
-  readonly origin: 'session' | 'examples' | 'bank';
+  /* The catalog's own union, not a copy of it: a second spelling of the same set
+     is how an added origin gets a dead branch somewhere instead of a type error. */
+  readonly origin: Origin;
   readonly editedAt: number | undefined;
   readonly trashed: boolean;
   /** Present only for a recipe that lives in the bank — see {@link SoundCard}. */
@@ -64,6 +67,34 @@ export interface GalleryProps {
   readonly onQueryChange: (query: string) => void;
   readonly filter: string;
   readonly onFilterChange: (filter: string) => void;
+  /**
+   * The bank entries in `items` are the *answer to `query`*, not a plain listing.
+   *
+   * When they are, they must not be filtered again here: the server matched them on
+   * prompts and tags through its FTS index, and neither of those is inside the
+   * `name + source` this screen can see — so re-applying the substring test would throw
+   * away most of what was found. Everything else in the list is local and keeps being
+   * filtered locally.
+   */
+  readonly serverFiltered: boolean;
+  /**
+   * Offer every category, not only the ones on screen.
+   *
+   * True when a bank is answering, because then a chip is a *query* and the category it
+   * names is almost certainly in the bank even when nothing listed right now carries it.
+   * Offline it stays false and the row shows only what the bundle contains, which is the
+   * rule that keeps it from becoming a menu of dead ends.
+   */
+  readonly allCategories: boolean;
+  /**
+   * Something on this page can write a new recipe.
+   *
+   * False with no agent and no key, and then the two buttons that start a run say
+   * `Find in bank` instead of `Generate` — the run will search the catalog rather than
+   * generate anything, and a button that claimed otherwise is exactly the confusion
+   * `lib/retrieval.ts` exists to avoid.
+   */
+  readonly canGenerate: boolean;
   readonly onboarded: boolean;
   readonly onDismissOnboarding: () => void;
   readonly playing: string | null;
@@ -88,6 +119,9 @@ export function Gallery({
   onQueryChange,
   filter,
   onFilterChange,
+  serverFiltered,
+  allCategories,
+  canGenerate,
   onboarded,
   onDismissOnboarding,
   playing,
@@ -107,6 +141,10 @@ export function Gallery({
     const needle = query.trim().toLowerCase();
     const matches = (item: GalleryItem): boolean =>
       needle === '' ||
+      /* A bank row that arrived *because* of this query has already been matched, by an
+         index that can see prompts and tags. Testing it again against the text this
+         screen happens to hold would drop most of the answer. */
+      (serverFiltered && item.origin === 'bank') ||
       item.name.toLowerCase().includes(needle) ||
       item.prompt.toLowerCase().includes(needle) ||
       item.source.toLowerCase().includes(needle);
@@ -116,15 +154,17 @@ export function Gallery({
       if (item.trashed) return false;
       return (filter === 'all' || item.category === filter) && matches(item);
     });
-  }, [items, filter, query]);
+  }, [items, filter, query, serverFiltered]);
 
-  /* Only the categories the catalog actually contains, plus whichever is selected so
-     the chip you clicked cannot vanish under you. A row of nine chips where six match
-     nothing is a menu of dead ends. */
+  /* With a bank answering, every category is a live question and the chip row is the
+     vocabulary. Offline it is only the categories the catalog actually contains, plus
+     whichever is selected so the chip you clicked cannot vanish under you — a row of
+     nine chips where six match nothing is a menu of dead ends. */
   const categories = useMemo(() => {
+    if (allCategories) return SOUND_CATEGORIES;
     const present = new Set(items.filter((item) => !item.trashed).map((item) => item.category));
     return SOUND_CATEGORIES.filter((category) => present.has(category) || filter === category);
-  }, [items, filter]);
+  }, [items, filter, allCategories]);
 
   const submit = (event: React.FormEvent): void => {
     event.preventDefault();
@@ -151,8 +191,12 @@ export function Gallery({
                 onChange={(event) => onPromptChange(event.target.value)}
               />
             </div>
+            {/* The label is the truth about what the press does, here as much as in the
+                studio's row: with nothing able to write a recipe this box searches the
+                catalog, and calling that Generate is the one thing retrieval must never
+                do. See `lib/retrieval.ts`. */}
             <button type="submit" className="primary big" disabled={prompt.trim() === ''}>
-              {t('gallery.generate')}
+              {t(canGenerate ? 'gallery.generate' : 'gallery.find')}
             </button>
           </form>
 
@@ -229,7 +273,7 @@ export function Gallery({
               </p>
               {query.trim() === '' ? null : (
                 <button type="button" className="primary" onClick={() => onGenerate(query.trim())}>
-                  {t('gallery.generateInstead')}
+                  {t(canGenerate ? 'gallery.generateInstead' : 'gallery.findInstead')}
                 </button>
               )}
             </div>

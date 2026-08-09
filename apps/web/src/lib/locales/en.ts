@@ -66,6 +66,11 @@ export const en = {
   'gallery.emptyCategory': 'Nothing in the catalog is a {category}.',
   'gallery.emptyQuery': 'Nothing in the catalog matches “{query}”.',
   'gallery.generateInstead': 'Generate it instead',
+  /* Shown in place of the two Generate labels when nothing on the page can write a
+     recipe: the press searches the bank and the bundled catalog instead, and the button
+     says which of the two it is about to do. */
+  'gallery.find': 'Find in bank',
+  'gallery.findInstead': 'Find one in the bank instead',
 
   /* --- a card in the gallery --------------------------------------------- */
 
@@ -226,11 +231,23 @@ export const en = {
   'prompt.modelMissing': 'the model is not installed yet — the Model tab has the button',
   'prompt.runsSearch': 'searches freesound.org for a recording of this',
   'prompt.searchMissing': 'paste a freesound.org API key in the Search tab first',
+  /* With nothing able to write a recipe, the button searches for one instead — and says
+     so in the label rather than promising a sound that will not be made. The gear stays
+     amber beside it: there is still no model, which is the fact it reports. */
+  'prompt.find': 'Find in bank',
+  'prompt.runsRetrieve':
+    'searches the bank and the bundled catalog for a recipe that already answers this — it does not write a new one',
 
   /* --- the run strip ------------------------------------------------------ */
 
-  'run.noModel':
-    'Nothing here can answer that yet. Attach a coding agent to the bridge, or paste a Gemini key — the badge in the header opens both.',
+  /* The three sentences that keep retrieval from reading as generation. `retrieved, not
+     generated` is not a caveat in small print — it is the whole difference. */
+  'run.retrieveSearching': '⌕ no model attached and no key — searching the bank instead',
+  'run.retrieved': '● “{name}” loaded from the bank — retrieved, not generated',
+  'run.retrievedLocal': '● “{name}” loaded from the bundled catalog — retrieved, not generated',
+  'run.retrieveMissed': '● nothing matched — nothing was retrieved, and nothing was generated',
+  'run.retrieveNothing':
+    'Nothing in the bank or the bundled catalog answers that. Attach a coding agent to the bridge, or paste a Gemini key, to have a recipe written for it — the gear beside the button opens both.',
 
   'run.accepted': 'accepted',
   'run.notAccepted': 'not accepted — {outcome}',
@@ -287,6 +304,18 @@ export const en = {
   'slots.fitting': 'fitting…',
   'slots.generation': 'generation {n}/{total} · distance {distance}',
   'slots.noSlots': ' — no ~slots to fit',
+  'slots.variation': 'Variation',
+  'slots.variationTitle': 'roll every ~slot inside its own range',
+  'slots.variationBlocked': 'there are no ~slots to roll',
+
+  /* --- the master sliders -------------------------------------------------- */
+
+  'master.title': 'MASTER',
+  'master.pitch': 'pitch',
+  'master.length': 'length',
+  'master.brightness': 'brightness',
+  'master.noFreq': 'this recipe has no frequency to move',
+  'master.noFilters': 'this recipe has no lp/hp filter to move',
 
   /* --- the export card ---------------------------------------------------- */
 
@@ -422,12 +451,17 @@ export const en = {
   'compare.library': 'Library',
   'compare.file': 'File',
   'compare.take': 'Another take',
+  'compare.record': 'Microphone',
+  'compare.recordStop': 'Stop recording',
+  'compare.recordFit': 'Record → Fit',
   'compare.modelBlocked': 'needs the local diffusion model — install it from the Model tab',
   'compare.nothingLoaded': 'nothing loaded',
   'compare.hintModel': 'rendered by a diffusion model from the same prompt — a target, not a competitor',
   'compare.hintLibrary': 'a recording from freesound.org — preview quality, under the licence its row states',
   'compare.hintUpload': 'your own file, onset-aligned and peak-normalized on load',
   'compare.hintTake': 'the same recipe with a different seed — how much of this sound is the design?',
+  'compare.hintRecord':
+    'made just now on your microphone, with the browser’s noise suppression and auto-gain off — they would filter out what the fit is trying to match',
   'compare.colour': 'COLOUR',
   'compare.dropzone':
     'Nothing to compare against yet. Drop an audio file here, pick “{take}” to render this recipe with a new seed, or {model}.',
@@ -574,6 +608,7 @@ export const en = {
   'warn.longer': 'sound runs ~{actual}ms but the header declares {declared}ms',
   'warn.overBudget': 'export is {bytes} B, over the {budget} B budget',
   'warn.decodeFail': 'could not decode {file}: {error}',
+  'warn.micDenied': 'no recording was made: {error}',
 
   /* --- download and clipboard verdicts ------------------------------------- */
 

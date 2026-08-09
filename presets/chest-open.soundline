@@ -1,0 +1,10 @@
+# prompt: wooden chest creaking open
+# tags: chest, open, creak, loot
+# The same honest limitation `door-creak` records: with no LFO in v0 the
+# stick-slip stutter of a real hinge is approximated by a high-Q band-pass
+# riding a slow rising saw. What this recipe adds is the ending — the lid
+# knocking against its stop at 900 ms, which is what makes it an *open*.
+sound "chest open" 1200ms foley
+  hinge: tone saw ~140Hz[70..300] -> 210Hz in 800ms >> bp ~1100Hz[500..2600] Q9 | gain 0.3 attack 60ms decay 880ms
+  friction: noise pink >> bp ~2400Hz[1000..5000] Q7 | gain 0.18 attack 40ms decay 840ms
+  lid: modal wood ~220Hz[110..420] Q20 | gain 0.3 decay 260ms delay 900ms

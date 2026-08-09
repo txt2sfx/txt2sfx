@@ -1,0 +1,9 @@
+# prompt: distant rumbling explosion
+# tags: explosion, distant, rumble, war
+# Distance is not level, it is the missing top and the missing transient: air
+# absorbs high frequencies over a kilometre, so every layer opens slowly and
+# the brightest thing left in the sound is a low-passed pink hiss.
+sound "distant explosion" 1250ms explosion
+  thump: sub ~50Hz[30..90] -> 26Hz in 400ms | gain 0.48 attack 20ms decay 900ms
+  rumble: noise brown >> lp ~400Hz[150..1000] -> 120Hz in 700ms | gain 0.38 attack 30ms decay 1100ms
+  air: noise pink >> lp ~900Hz[300..2000] | gain 0.14 attack 60ms decay 700ms delay 120ms

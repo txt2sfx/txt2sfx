@@ -94,14 +94,21 @@ describe('canonicalization', () => {
 
 describe('slots', () => {
   it('records the optimizer range on the literal', () => {
-    const ast = parse('sound "s" 40ms pop\n  a: noise white >> bp ~3200Hz[500..8000] Q6 | gain 0.7 decay 18ms\n');
+    const src = 'sound "s" 40ms pop\n  a: noise white >> bp ~3200Hz[500..8000] Q6 | gain 0.7 decay 18ms\n';
+    const ast = parse(src);
     const bp = ast.layers[0]?.chain[0];
     expect(bp?.name).toBe('bp');
     const freq = bp?.args['freq'];
     expect(freq?.kind).toBe('number');
     if (freq?.kind !== 'number') throw new Error('expected a number argument');
-    expect(freq.head.slot).toEqual({ min: 500, max: 8000 });
+    expect(freq.head.slot).toMatchObject({ min: 500, max: 8000 });
     expect(freq.head.value).toBe(3200);
+    /* The bound spans are what lets a master slider move the range with the value;
+       they cover the bound tokens only, not the brackets. */
+    const span = (loc: { offset: number; length: number } | undefined): string =>
+      loc === undefined ? '' : src.slice(loc.offset, loc.offset + loc.length);
+    expect(span(freq.head.slot?.minLoc)).toBe('500');
+    expect(span(freq.head.slot?.maxLoc)).toBe('8000');
   });
 
   it('accepts a slot on a ramp target', () => {

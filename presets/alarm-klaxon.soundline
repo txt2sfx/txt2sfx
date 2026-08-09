@@ -1,0 +1,9 @@
+# prompt: sci-fi alarm klaxon, two alternating tones
+# tags: alarm, klaxon, siren, loop
+# The two tones are one period of the loop, which is why this is a `cycle` and
+# carries `loop`: the header's duration is not how long the sound lasts, it is
+# the interval after which it repeats. The second tone is delayed by exactly
+# half of it, so the seam lands between the two notes.
+sound "alarm klaxon" 1200ms cycle loop
+  low: tone saw ~330Hz[180..600] >> bp ~900Hz[400..2000] Q4 | gain 0.5 attack 30ms hold 380ms decay 160ms
+  high: tone saw ~440Hz[240..800] >> bp ~1200Hz[500..2600] Q4 | gain 0.5 attack 30ms hold 380ms decay 160ms delay 600ms

@@ -1,11 +1,11 @@
 /**
  * A against B: two waveforms, two spectrograms, and seven numbers.
  *
- * ## What B is allowed to be, and why there are four answers
+ * ## What B is allowed to be, and why there are five answers
  *
  * The old panel had one: a file you loaded. That covers the case where a real recording
  * of the thing exists *and you already have it*, which is the minority of the work. The
- * four sources here are the four questions people actually ask:
+ * five sources here are the five questions people actually ask:
  *
  * - **A model's render.** Send the same prompt to a diffusion model running locally and
  *   compare against what it produced. A *target*, never a competitor: the deliverable is
@@ -16,6 +16,10 @@
  *   seconds of CPU. Preview quality, under a licence the row states — see
  *   `components/SearchPanel.tsx`.
  * - **A file.** Your own recording, peak-normalized on load.
+ * - **The microphone.** The same thing a second earlier: knock on the desk, hiss, click
+ *   a pen. Most targets worth naming never existed as a file, and describing one in
+ *   words costs more than making it — so the shortest road from "it should sound like
+ *   *this*" to a fitted recipe is two presses of one button.
  * - **Another take.** The same recipe rendered with a different seed. This is the one
  *   the old panel could not express at all, and it answers a question specific to
  *   procedural audio: *how much of this sound is the design and how much is the noise
@@ -62,7 +66,7 @@ import { playBuffer, type Playback } from '../lib/engine.js';
 import { useI18n, type Key } from '../lib/i18n.js';
 
 /** Where B comes from. */
-export type BKind = 'model' | 'library' | 'upload' | 'take';
+export type BKind = 'model' | 'library' | 'upload' | 'take' | 'record';
 
 /**
  * Spectrogram window, shared by both signals so their bins line up.
@@ -98,6 +102,7 @@ const B_HINT: Readonly<Record<BKind, Key>> = {
   library: 'compare.hintLibrary',
   upload: 'compare.hintUpload',
   take: 'compare.hintTake',
+  record: 'compare.hintRecord',
 };
 
 export interface ComparePanelProps {
@@ -117,8 +122,35 @@ export interface ComparePanelProps {
   /** Go to the Search tab. Each B chip is a door to where that kind of B comes from. */
   readonly onFindLibrary: () => void;
   readonly onNewTake: () => void;
+  /**
+   * A recording is running right now.
+   *
+   * The panel owns none of it: the recorder, the decode and the failure message live in
+   * `App`, where the reference lives, and what is left here is two buttons and the
+   * knowledge that they are the same recording. Splitting it the other way would give
+   * the app two ways to be recording at once.
+   */
+  readonly recording: boolean;
+  /**
+   * Start a recording, or stop the running one.
+   *
+   * @param thenFit - Fit as soon as the recording lands, rather than only loading it as
+   *   B. Passed on the press that *starts* the recording and again on the press that
+   *   ends it, so the chip and the Fit button can never disagree about what stopping
+   *   means: whichever control ends the recording decides.
+   */
+  readonly onRecord: (thenFit: boolean) => void;
   readonly onFit: () => void;
   readonly fitBlocked: string | null;
+  /**
+   * Why record → Fit cannot work, or null.
+   *
+   * Not {@link ComparePanelProps.fitBlocked}, which reports "no B loaded" — the recording
+   * about to be made *is* the B, so that reason would disable the button exactly in the
+   * case it exists for. Every other reason (the recipe does not parse, it has no slots)
+   * still applies and still has to be said rather than swallowed.
+   */
+  readonly recordFitBlocked: string | null;
   /**
    * Whether the *next generation* is aimed at B, as opposed to the *current* recipe's
    * numbers, which is what {@link ComparePanelProps.onFit} does.
@@ -147,8 +179,11 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
     onLoadFile,
     onFindLibrary,
     onNewTake,
+    recording,
+    onRecord,
     onFit,
     fitBlocked,
+    recordFitBlocked,
     matchReference,
     onMatchReference,
     maxPeak,
@@ -453,12 +488,18 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
               { id: 'library', label: t('compare.library') },
               { id: 'upload', label: t('compare.file') },
               { id: 'take', label: t('compare.take') },
+              /* While the microphone is open the chip says what pressing it does now,
+                 not what it is — this is the one control in the panel that leaves a
+                 device running after the click, and the label is half of saying so. */
+              { id: 'record', label: recording ? t('compare.recordStop') : t('compare.record') },
             ] as const
           ).map((entry) => (
             <button
               type="button"
               key={entry.id}
-              className={`chip chip-amber${bKind === entry.id ? ' selected' : ''}`}
+              className={`chip chip-amber${bKind === entry.id ? ' selected' : ''}${
+                entry.id === 'record' && recording ? ' chip-recording' : ''
+              }`}
               onClick={() => {
                 onBKind(entry.id);
                 if (entry.id === 'upload') fileInput.current?.click();
@@ -467,6 +508,9 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
                    the comparison the user came here to look at. */
                 if (entry.id === 'library' && !libraryLoaded) onFindLibrary();
                 if (entry.id === 'take') onNewTake();
+                /* `false`: this chip only loads B. Fitting is the other button's promise,
+                   and the press that stops decides — see `onRecord`. */
+                if (entry.id === 'record') onRecord(false);
               }}
               disabled={entry.id === 'model' && !modelAvailable}
               title={entry.id === 'model' && !modelAvailable ? t('compare.modelBlocked') : undefined}
@@ -675,7 +719,29 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
             {t('compare.match')}
           </button>
         )}
-        <button type="button" className="violet" onClick={onFit} disabled={fitBlocked !== null} title={fitBlocked ?? ''}>
+        {/* Beside Fit rather than beside its chip, because it is not a way of choosing
+            what B is — it is the whole errand in one control: make the target, then fit
+            to it. The second press stops and fits without a stop in between, which is
+            the difference between one action and three. */}
+        <button
+          type="button"
+          className={`violet${recording ? ' chip-recording' : ''}`}
+          onClick={() => onRecord(true)}
+          disabled={recordFitBlocked !== null}
+          title={recordFitBlocked ?? ''}
+        >
+          {recording ? `■ ${t('compare.recordStop')}` : `● ${t('compare.recordFit')}`}
+        </button>
+        {/* Called with no argument on purpose: the handler behind it takes an optional
+            reference to fit against, and passing it straight to `onClick` would hand it
+            a mouse event to fit to. */}
+        <button
+          type="button"
+          className="violet"
+          onClick={() => onFit()}
+          disabled={fitBlocked !== null}
+          title={fitBlocked ?? ''}
+        >
           {t('compare.fitSlots')}
         </button>
       </div>

@@ -1,0 +1,8 @@
+# prompt: switch toggled on, snappy click with a rising blip
+# tags: ui, toggle, switch, on
+# The click is the switch and the blip is the state. Sweeping upward over 30 ms
+# is as long as a `ui` sound may sweep at all, and it is enough — the direction
+# is heard, the glide is not.
+sound "ui toggle on" 90ms ui
+  snap: click ~1.2ms[0.6..3] >> hp ~1800Hz[800..4000] | gain 0.46 attack 0ms decay 22ms
+  blip: chirp sine ~700Hz[400..1100] -> 1400Hz in 30ms | gain 0.3 decay 70ms delay 8ms

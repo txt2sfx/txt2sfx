@@ -1,0 +1,8 @@
+# prompt: switch toggled off, falling blip
+# tags: ui, toggle, switch, off
+# The mirror of `ui-toggle-on`, and deliberately a shade darker: the click sits
+# lower and the blip falls, which is the whole difference between "done" and
+# "undone" in an interface.
+sound "ui toggle off" 90ms ui
+  snap: click ~1.2ms[0.6..3] >> hp ~1500Hz[700..3600] | gain 0.42 attack 0ms decay 20ms
+  blip: chirp sine ~1200Hz[700..1900] -> 620Hz in 30ms | gain 0.3 decay 70ms delay 8ms

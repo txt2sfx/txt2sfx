@@ -1,0 +1,9 @@
+# prompt: cartoon boing, springy bounce
+# tags: boing, spring, bounce, cartoon
+# A short delay at high feedback is not an echo here, it is the spring: the
+# recirculation *is* the coil, the same way `helicopter` builds a rotor out of
+# one thump. The header has to pay for it — the delay keeps sounding for half a
+# second after the envelope closed, because the chain runs after the envelope.
+sound "boing" 800ms
+  spring: chirp tri ~900Hz[400..1800] -> 180Hz in 200ms >> delay ~45ms[20..80] feedback 0.55 mix 0.5 | gain 0.4 decay 260ms
+  body: tone sine ~200Hz[100..420] -> 120Hz in 160ms | gain 0.2 decay 220ms

@@ -1,0 +1,8 @@
+# prompt: arrow flying past, whistling
+# tags: arrow, flyby, whistle, projectile
+# The whistle is a tone and the flight is noise, and they have to fall
+# together: a fletching whistle that stays on pitch while the air behind it
+# drops sounds like two objects instead of one.
+sound "arrow flyby" 420ms
+  whistle: chirp sine ~2600Hz[1200..5200] -> 900Hz in 240ms >> bp ~2200Hz[900..5000] Q6 | gain 0.34 attack 60ms decay 300ms
+  air: noise white >> bp ~3200Hz[1400..7000] -> 1200Hz in 240ms Q1.5 | gain 0.22 attack 70ms decay 280ms

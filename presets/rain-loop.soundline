@@ -1,0 +1,9 @@
+# prompt: rain on a roof loop
+# tags: rain, loop, ambient, weather
+# Two grain fields at two densities: 420 pings a second scattered over three
+# octaves is the sheet of rain, and 90 wider, slower ones with a stronger bend
+# are the individual drops hitting the roof close by.
+sound "rain loop" 1600ms cycle loop
+  drops: grains ~3000Hz[1200..7000] rate ~420[150..600] width 2ms spread 3 bend 1.2 | gain 0.4 attack 200ms hold 900ms decay 400ms
+  roof: noise pink >> lp ~1600Hz[600..3600] | gain 0.2 attack 250ms hold 800ms decay 450ms
+  splash: grains ~900Hz[400..2000] rate 90 width 8ms spread 1.5 bend 1.4 | gain 0.16 attack 300ms hold 700ms decay 500ms

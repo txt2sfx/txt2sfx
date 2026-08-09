@@ -1,0 +1,9 @@
+# prompt: page flip, papery flick
+# tags: paper, page, flip, book
+# Three events in a quarter of a second: the sheet sweeping through the air,
+# its edge ticking past the fingertip, and the slap as it lands on the stack.
+# Drop the last one and the page never arrives anywhere.
+sound "paper flip" 195ms foley
+  swish: noise white >> bp ~3600Hz[1600..8000] Q1 | gain 0.34 attack 15ms decay 120ms
+  edge: grains ~5200Hz[2500..10000] rate 120 width 2ms spread 2 bend 1 | gain 0.22 decay 90ms delay 60ms
+  land: click ~1.5ms[0.8..3] >> hp ~1800Hz[800..4000] | gain 0.24 attack 0ms decay 25ms delay 150ms

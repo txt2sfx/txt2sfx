@@ -1,0 +1,9 @@
+# prompt: small metallic key pickup jingle
+# tags: key, pickup, metal, jingle
+# A key is small, so the metal is high and the ring is short — a high Q on a
+# modal bank buys the ring without the weight a lower fundamental would add.
+# The band-passed click is the two pieces of the ring knocking together.
+sound "key pickup" 300ms pickup
+  ring: modal metal ~2400Hz[1400..4000] Q110 | gain 0.32 decay 260ms
+  second: modal metal ~3100Hz[1800..5200] Q90 | gain 0.22 decay 200ms delay 70ms
+  tap: click 1ms >> bp ~5200Hz[2500..9000] Q3 | gain 0.26 attack 0ms decay 30ms delay 60ms

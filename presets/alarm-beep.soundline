@@ -1,0 +1,8 @@
+# prompt: urgent short alarm beep
+# tags: alarm, beep, urgent, warning
+# Urgency is a flat top: both squares hold at peak for 40 ms and then stop, so
+# there is no decay for the ear to relax into. The octave above is what makes
+# it cut through a mix that already has everything else in it.
+sound "alarm beep" 110ms ui
+  beep: tone square ~880Hz[500..1600] | gain 0.34 attack 2ms hold ~40ms[10..70] decay 50ms
+  edge: tone square ~1760Hz[1000..3200] | gain 0.16 attack 2ms hold 40ms decay 45ms

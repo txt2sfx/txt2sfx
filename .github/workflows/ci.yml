@@ -68,9 +68,11 @@ jobs:
         run: pnpm bench -- --strict
 
       # Exercises the one path tests cannot: a real SQLite file, FTS5 on this
-      # Node, and the renderer measuring all ten reference recipes. Not `--strict`
-      # — `helicopter` is knowingly out of contract, and the seeder is documented
-      # to load it and report it. Flip this to `--strict` when that is resolved.
+      # Node, and the renderer measuring every reference recipe and preset — sixty
+      # renders in all. Not `--strict` — `helicopter` is knowingly out of contract,
+      # and the seeder is documented to load it and report it. A preset that fails
+      # validation or clips is caught by `test/presets.test.ts` and the seeder's
+      # report before it gets here; `--strict` would refuse it outright.
       - name: Seed the recipe bank (smoke)
         run: pnpm --filter @txt2sfx/server seed
 

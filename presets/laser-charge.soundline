@@ -1,0 +1,9 @@
+# prompt: laser charging up, rising whine
+# tags: laser, charge, rise, whine
+# A charge is the one laser sound whose envelope opens slowly — the attack is
+# the charging, and a percussive one would read as a shot instead. Both layers
+# sweep together, so the resonance climbs with the pitch rather than sitting
+# still and filtering it.
+sound "laser charge" 300ms laser
+  whine: chirp saw ~300Hz[150..600] -> 2400Hz in 240ms >> bp ~1800Hz[800..4000] Q4 | gain 0.4 attack 40ms decay 250ms
+  hum: tone tri ~150Hz[80..320] -> 600Hz in 240ms | gain 0.2 attack 50ms decay 240ms

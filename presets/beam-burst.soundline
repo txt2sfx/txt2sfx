@@ -1,0 +1,9 @@
+# prompt: short energy beam burst
+# tags: beam, energy, burst, scifi
+# A beam is the one sci-fi weapon that holds: the envelope has a 40 ms hold at
+# peak, so there is a moment of steady tone between the attack and the decay.
+# Without it the same layers read as another zap.
+sound "beam burst" 185ms laser
+  beam: tone saw ~880Hz[440..1800] >> bp ~2200Hz[1000..4500] Q6 | gain 0.38 attack 6ms hold 40ms decay 120ms
+  edge: noise white >> hp ~5000Hz[2500..9000] | gain 0.22 decay 60ms
+  body: sub ~90Hz[45..160] | gain 0.2 decay 120ms

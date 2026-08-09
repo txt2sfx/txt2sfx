@@ -1,0 +1,9 @@
+# prompt: lock clicking open
+# tags: lock, click, unlock, mechanism
+# A mechanism is heard as a sequence: tumbler, bolt, catch. The 90 ms between
+# the first and the last is what says "something moved" rather than "something
+# was tapped".
+sound "lock click" 170ms foley
+  tumbler: click ~1.5ms[0.8..3] >> bp ~2800Hz[1200..6000] Q3 | gain 0.42 attack 0ms decay 20ms
+  bolt: modal metal ~1400Hz[700..2800] Q70 | gain 0.3 decay 120ms delay 30ms
+  catch: click 2ms >> lp 1600Hz | gain 0.3 attack 0ms decay 25ms delay 90ms

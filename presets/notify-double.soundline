@@ -1,0 +1,7 @@
+# prompt: two-tone message notification
+# tags: notification, message, twotone, chat
+# Two sines a fifth apart, 50 ms apart. The gap is the whole design: closer and
+# it reads as one chord, wider and a `ui` sound runs out of its 120 ms.
+sound "notify double" 120ms ui
+  first: tone sine ~1046Hz[700..1600] | gain 0.34 decay 45ms
+  second: tone sine ~1568Hz[1000..2400] | gain 0.32 decay ~60ms[25..90] delay 50ms

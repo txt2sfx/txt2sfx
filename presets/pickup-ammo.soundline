@@ -1,0 +1,9 @@
+# prompt: mechanical ammo pickup clack
+# tags: ammo, pickup, reload, clack
+# Two clacks, not one: a magazine picked up is a box of loose brass, and the
+# second impact 90 ms behind the first is what stops it reading as a single
+# switch being thrown.
+sound "ammo pickup" 180ms pickup
+  clack: click ~2.5ms[1..5] >> bp ~1800Hz[900..3600] Q2 | gain 0.5 attack 0ms decay 40ms
+  shell: modal metal ~1200Hz[700..2200] Q60 | gain 0.3 decay 150ms delay 10ms
+  again: click 2ms >> bp 2200Hz Q2 | gain 0.3 attack 0ms decay 35ms delay 90ms

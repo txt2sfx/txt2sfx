@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Recipe } from '@txt2sfx/shared';
-import { bankEntries, exampleEntries, mergeCatalog, type Entry } from '../src/lib/catalog.js';
+import { bankEntries, exampleEntries, mergeCatalog, presetEntries, type Entry } from '../src/lib/catalog.js';
 
 const recipe = (id: number, name: string, rating = 0): Recipe =>
   ({
@@ -58,6 +58,20 @@ describe('catalog', () => {
     const merged = mergeCatalog([session('coin')], bankEntries([recipe(1, 'coin'), recipe(2, 'laser')]));
     expect(merged.map((entry) => entry.name)).toEqual(['coin', 'laser']);
     expect(merged[0]?.origin).toBe('session');
+  });
+
+  /* A preset knows what it answers, and the gallery's fallback — the recipe's
+     leading comment — would print the `# prompt:` marker itself under the card. */
+  it('carries a preset\'s declared prompt and category', () => {
+    const entries = presetEntries([
+      { name: 'laser-pistol', source: 'x', prompt: 'small sci-fi pistol zap', tags: ['laser', 'zap'], category: 'laser' },
+    ]);
+    expect(entries[0]).toMatchObject({
+      name: 'laser-pistol',
+      origin: 'preset',
+      prompt: 'small sci-fi pistol zap',
+      category: 'laser',
+    });
   });
 
   it('is just the store when nothing was generated', () => {

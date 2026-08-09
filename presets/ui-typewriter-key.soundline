@@ -1,0 +1,9 @@
+# prompt: single mechanical keypress for a typing effect
+# tags: ui, key, typewriter, click
+# Three parts of a real keypress: the strike of the hammer, the wooden body of
+# the case ringing under it, and the air the key displaces. The body is what
+# stops it sounding like a mouse button.
+sound "typewriter key" 75ms ui
+  strike: click ~2ms[1..4] >> bp ~2400Hz[1200..5000] Q2 | gain 0.5 attack 0ms decay 16ms
+  body: modal wood ~900Hz[500..1600] Q25 | gain 0.34 decay 60ms
+  case: noise pink >> hp 3000Hz | gain 0.12 decay 22ms delay 4ms

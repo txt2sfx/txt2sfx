@@ -41,8 +41,13 @@
  * `Make sound` for the same reason: it is the one verb that is true of every engine,
  * where `Regenerate` described only the loop.
  *
- * What follows from that is that each tab is blocked by its own missing thing. On
- * `Model` the provider and the key are not consulted at all (nothing there goes to a
+ * What follows from that is that each tab is blocked by its own missing thing — except
+ * the recipe, which is no longer blocked at all. With no agent and no key the press
+ * *searches* the bank and the bundled catalog instead of writing anything, and the label
+ * changes to `Find in bank` so the button never claims the thing it is not doing. The
+ * gear stays amber beside it, because "there is no model" is still the fact.
+ *
+ * On `Model` the provider and the key are not consulted at all (nothing there goes to a
  * vendor — the render happens on this machine through the bridge), so what blocks the
  * button is the model not being installed. On `Search` it is the library key, which is
  * a different credential living in a different field: the provider key is optional
@@ -103,8 +108,16 @@ export function PromptRow({
      no engine and regenerating from it is regenerating the recipe. */
   const toModel = view === 'model';
   const toSearch = view === 'search';
-  const blocked =
-    prompt.trim() === '' || (toModel ? !modelReady : toSearch ? !searchReady : model === null);
+  /**
+   * The recipe engine with nothing able to write one: the press searches instead.
+   *
+   * Not a disabled button any more. The bank is a searchable catalog and fifty presets
+   * ship in the build, so a sentence typed here still has an answer — it is simply one
+   * that already existed, and the label says which of the two is about to happen. Every
+   * other surface of that boundary is listed in `lib/retrieval.ts`.
+   */
+  const toRetrieval = !toModel && !toSearch && model === null;
+  const blocked = prompt.trim() === '' || (toModel ? !modelReady : toSearch ? !searchReady : false);
 
   const hue =
     view === 'model'
@@ -158,12 +171,15 @@ export function PromptRow({
                   ? searchReady
                     ? 'prompt.runsSearch'
                     : 'prompt.searchMissing'
-                  : model === null
-                    ? 'prompt.noModelTitle'
+                  : toRetrieval
+                    ? 'prompt.runsRetrieve'
                     : 'prompt.runsSoundline',
             )}
           >
-            {t('prompt.make')}
+            {/* The one exception to "the label is the verb and it does not change": a
+                press that searches the catalog must not read `Make sound`, because that
+                is the sentence the whole honesty argument is about. */}
+            {t(toRetrieval ? 'prompt.find' : 'prompt.make')}
           </button>
         )}
 

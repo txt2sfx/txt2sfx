@@ -1,0 +1,9 @@
+# prompt: heavy laser rifle shot with a resonant tail
+# tags: laser, rifle, shot, weapon
+# Weight is the sub under the sweep; the tail is a high-Q metal bank in a small
+# room. The header sits at the ceiling of the `laser` category because the verb
+# keeps sounding after the envelope has closed — the chain runs after it.
+sound "laser rifle" 300ms laser
+  zap: chirp saw ~1400Hz[700..3000] -> 180Hz in 140ms | gain 0.46 decay 190ms
+  body: sub ~80Hz[45..140] -> 45Hz in 120ms | gain 0.32 decay 180ms
+  tail: modal metal ~900Hz[500..1700] Q140 >> verb 110ms mix 0.25 | gain 0.22 decay 150ms delay 25ms

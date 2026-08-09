@@ -1,0 +1,9 @@
+# prompt: plasma bolt, wet electric zap
+# tags: plasma, bolt, zap, scifi
+# "Wet" is the grain field: a few hundred short pings whose pitch rises inside
+# each grain (`bend` above 1) is the same cue water gives, and over a distorted
+# square it reads as something liquid being thrown rather than fired.
+sound "plasma bolt" 190ms laser
+  bolt: chirp square ~1800Hz[900..3600] -> 320Hz in 110ms >> dist drive ~4[1..8] mix 0.5 | gain 0.28 decay 170ms
+  spatter: grains ~2600Hz[1200..5000] rate 120 width 4ms spread 2 bend 1.5 | gain 0.2 decay 150ms
+  body: sub ~70Hz[40..120] | gain 0.24 decay 140ms

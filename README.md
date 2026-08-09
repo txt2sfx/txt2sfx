@@ -147,7 +147,11 @@ soundline. The audio is for handing a sound to a person; the code is for shippin
 There is no model picker, because there is nothing to pick between. If a coding agent is
 attached to the bridge it answers — it already holds a model, it needs no key, and it is
 the reason the next section exists. If none is, your Gemini key does. If neither, the
-prompt row says so before you press anything rather than after. The gear beside that row,
+prompt row says so before you press anything rather than after: the button reads **Find
+in bank**, and pressing it searches the bank and the bundled presets for a recipe that
+already answers what you typed. That is retrieval, and every surface of it says so — the
+label, the run's last line (`retrieved, not generated`), and a bank result flagged as an
+unrelated fallback, which is treated as a miss rather than as an answer. The gear beside that row,
 and the badge in the header, open the one place any of it is configured — a tab per answer:
 your Gemini key, or one of five ways to attach a coding agent.
 

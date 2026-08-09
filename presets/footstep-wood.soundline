@@ -1,0 +1,9 @@
+# prompt: footstep on a wooden floor
+# tags: footstep, wood, walk, foley
+# A board is a resonator with a very low Q — it answers the heel with one short
+# thump and is done. The high scuff is the sole, delayed by the 15 ms the foot
+# takes to roll forward.
+sound "footstep wood" 160ms foley
+  heel: click ~2.5ms[1..5] >> lp ~2200Hz[900..4500] | gain 0.42 attack 0ms decay 30ms
+  board: modal wood ~320Hz[160..600] Q22 | gain 0.34 decay 140ms
+  scuff: noise pink >> hp ~2600Hz[1200..6000] | gain 0.16 decay 60ms delay 15ms

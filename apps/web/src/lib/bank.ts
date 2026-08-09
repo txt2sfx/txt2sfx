@@ -106,6 +106,23 @@ export class BankError extends Error {
   }
 }
 
+/**
+ * What a listing is narrowed by.
+ *
+ * The gallery's search box and its category chips, which the server answers rather than
+ * the page: `q` goes to the FTS5 index over prompts and tags — text the browser does not
+ * have, because a listing carries a hundred recipes and the bank holds all of them.
+ * Every field is optional and an absent one is left out of the query string entirely, so
+ * an unfiltered listing is byte-for-byte the request it always was.
+ */
+export interface BankQuery {
+  /** Free text. Matched by the server against name, prompt and tags. */
+  readonly q?: string;
+  /** One of `SOUND_CATEGORIES`. The server answers 400 for anything else. */
+  readonly category?: string;
+  readonly limit?: number;
+}
+
 /** Everything the playground asks of a bank. */
 export interface BankClient {
   readonly baseUrl: string;
@@ -114,7 +131,7 @@ export interface BankClient {
   /** `null` when the bank cannot be reached. */
   authConfig(): Promise<BankAuthConfig | null>;
   /** Newest-first listing for the gallery. Empty when the bank is unreachable. */
-  list(limit?: number): Promise<BankListing>;
+  list(query?: BankQuery): Promise<BankListing>;
   /** @throws {@link BankError} when the bank refuses the recipe. */
   publish(input: PublishInput): Promise<PublishResult>;
   /** Like or unlike. Idempotent both ways. @throws {@link BankError} */
@@ -232,13 +249,21 @@ export function bankClient(baseUrl: string, options: BankClientOptions = {}): Ba
       }
     },
 
-    async list(limit = LIST_LIMIT): Promise<BankListing> {
+    async list(query: BankQuery = {}): Promise<BankListing> {
       try {
+        /* Built with `URLSearchParams` rather than by concatenation because `q` is a
+           sentence somebody typed: an unescaped `&` in "cats & dogs" would silently
+           become a second parameter, and an unescaped `+` a space. Empty and absent
+           fields are dropped, so the plain listing sends exactly `?limit=`. */
+        const params = new URLSearchParams({ limit: String(query.limit ?? LIST_LIMIT) });
+        if (query.q !== undefined && query.q.trim() !== '') params.set('q', query.q.trim());
+        if (query.category !== undefined && query.category !== '') params.set('category', query.category);
+
         /* Signed in or not, this is one request: the answer carries which of the
            listed recipes this account has liked. A heart per card that fills in half
            a second after the grid settles reads as a bug, and a hundred requests to
            avoid that reads as one. */
-        const response = await call(`${origin}/api/recipes?limit=${String(limit)}`, {
+        const response = await call(`${origin}/api/recipes?${params.toString()}`, {
           method: 'GET',
           headers: authorized(),
         });

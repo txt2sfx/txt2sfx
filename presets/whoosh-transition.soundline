@@ -1,0 +1,8 @@
+# prompt: airy UI transition swipe
+# tags: whoosh, transition, swipe, ui
+# The one whoosh here that only rises: a transition is going somewhere, and a
+# filter that comes back down would read as something passing by instead of a
+# screen arriving.
+sound "ui swipe" 420ms
+  swipe: noise white >> bp ~2200Hz[900..5000] -> ~6000Hz[2500..12000] in 160ms Q1.4 | gain 0.46 attack 60ms decay 240ms
+  tail: noise pink >> hp ~4000Hz[1800..9000] | gain 0.22 attack 80ms decay 260ms delay 40ms

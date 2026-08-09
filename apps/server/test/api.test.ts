@@ -16,7 +16,11 @@ import type { AuthContext } from '../src/auth.js';
 import { measure } from '../src/render.js';
 import { SCHEMA_VERSION, openDatabase } from '../src/schema.js';
 import { type Store, storeOver } from '../src/store.js';
-import { seedBank } from '../src/seed.js';
+/* Seeded with `examples/` alone, not the seeder's default. These tests are about
+   what the API does with a populated bank, and the shipped `presets/` catalog would
+   add fifty renders per call for nothing — plus a second recipe answering to the
+   word "pickup", which is the very ranking these assertions pin. */
+import { EXAMPLES_DIR, seedBank } from '../src/seed.js';
 
 const VALID = 'sound "tick" 45ms ui\n  body: tone sine 1800Hz | gain 0.6 decay 25ms\n';
 
@@ -323,14 +327,14 @@ describe('GET /api/retrieve', () => {
 
   /** The phase acceptance criterion, over HTTP and against the seeded bank. */
   it('returns coin first for "coin pickup sound"', async () => {
-    await seedBank(bank);
+    await seedBank(bank, { directories: [EXAMPLES_DIR] });
     const body = (await app.inject({ method: 'GET', url: '/api/retrieve?prompt=coin+pickup+sound&k=3' })).json();
     expect(body.fallback).toBe(false);
     expect(body.recipes[0].name).toBe('coin');
   });
 
   it('finds the looped rotor texture, which only exists because the seeder loads it', async () => {
-    await seedBank(bank);
+    await seedBank(bank, { directories: [EXAMPLES_DIR] });
     const body = (await app.inject({ method: 'GET', url: '/api/retrieve?prompt=helicopter+rotor+loop' })).json();
     expect(body.recipes[0].name).toBe('helicopter');
   });
@@ -364,7 +368,7 @@ describe('GET /api/llms.txt', () => {
   });
 
   it('includes real recipes once the bank has some', async () => {
-    await seedBank(bank);
+    await seedBank(bank, { directories: [EXAMPLES_DIR] });
     const body = (await app.inject({ method: 'GET', url: '/api/llms.txt' })).body;
     expect(body).toContain('sound "');
     expect(body).toMatch(/\*\*[a-z-]+\*\* — asked for as/);

@@ -1,0 +1,10 @@
+# prompt: splashy footstep in a puddle
+# tags: footstep, water, splash, puddle
+# Two grain fields at the two ends of the same primitive: a wide, dense one for
+# the splash and a narrow, slow one for the droplets that fall back a moment
+# later. Both bend upwards — a collapsing cavity rises in pitch, and that rise
+# is the cue the ear reads as water.
+sound "footstep water" 390ms foley
+  splash: grains ~1600Hz[700..3600] rate ~150[60..340] width 8ms spread 1.6 bend 1.4 | gain 0.38 decay 260ms
+  slap: noise white >> lp ~2600Hz[1000..5000] | gain 0.28 decay 70ms
+  droplets: grains ~3200Hz[1500..7000] rate 30 width 14ms spread 0.6 bend 1.5 | gain 0.2 decay 240ms delay 120ms

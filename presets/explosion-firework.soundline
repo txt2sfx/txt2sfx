@@ -1,0 +1,9 @@
+# prompt: firework burst with a crackle tail
+# tags: firework, burst, crackle, festive
+# The tail is the point: a firework is a short report followed by most of a
+# second of individual crackles, so the grain layer opens 150 ms late and
+# outlives everything else in the sound.
+sound "firework" 1060ms explosion
+  burst: noise white >> hp ~1800Hz[800..4000] | gain 0.38 decay 120ms
+  boom: sub ~110Hz[60..200] -> 45Hz in 180ms | gain 0.34 attack 3ms decay 380ms
+  crackle: grains ~2800Hz[1200..6000] rate ~220[80..500] width 2ms spread 3 bend 1 | gain 0.3 attack 40ms decay 800ms delay 150ms

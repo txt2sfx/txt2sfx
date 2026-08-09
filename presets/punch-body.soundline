@@ -1,0 +1,9 @@
+# prompt: boxing body punch, meaty thump
+# tags: punch, body, hit, combat
+# Meat is three things at once: a sub that drops in pitch as it lands, a
+# low-passed slap with no high end at all, and a brown-noise layer for the
+# clothing. Take the cloth away and the same punch reads as a kick drum.
+sound "body punch" 250ms impact
+  thump: sub ~90Hz[50..150] -> 45Hz in 90ms | gain 0.48 attack 3ms decay 220ms
+  slap: noise pink >> lp ~1600Hz[700..3200] | gain 0.32 decay 90ms
+  cloth: noise brown >> bp ~400Hz[200..900] Q2 | gain 0.2 decay 140ms delay 10ms

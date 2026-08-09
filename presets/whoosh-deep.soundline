@@ -1,0 +1,8 @@
+# prompt: deep slow whoosh, heavy object passing
+# tags: whoosh, deep, pass, heavy
+# Mass is time and colour: brown noise instead of white, a 200 ms attack
+# instead of 35, and a filter that never climbs above 800 Hz. Everything about
+# it says the thing is large and in no hurry.
+sound "deep whoosh" 820ms
+  air: noise brown >> bp ~300Hz[120..700] -> ~800Hz[400..1800] in 300ms -> 200Hz in 320ms Q1.2 | gain 0.6 attack 200ms hold 60ms decay 500ms
+  hiss: noise pink >> lp ~1200Hz[500..2600] | gain 0.22 attack 250ms decay 450ms

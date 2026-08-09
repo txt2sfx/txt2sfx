@@ -68,6 +68,20 @@ export type ParamKind = 'freq' | 'time' | 'level' | 'ratio' | 'enum' | 'list';
 export interface SlotRange {
   readonly min: number;
   readonly max: number;
+  /**
+   * Span of the bound's own number token in the source.
+   *
+   * Filled in by the parser, so that a transform which rewrites a literal by
+   * span — the master sliders in the playground multiply every frequency or
+   * every duration — can move the range with the value instead of leaving the
+   * seed outside its own bounds. Optional because an AST can be built by hand
+   * and `exactOptionalPropertyTypes` makes "absent" an explicit state; note
+   * that `min`/`max` are already converted to the unit of the value they
+   * bound, while the token at this span may have been written in another.
+   */
+  readonly minLoc?: Loc;
+  /** Span of the upper bound's number token; see {@link SlotRange.minLoc}. */
+  readonly maxLoc?: Loc;
 }
 
 /** A number as written in the source, with its unit and optional slot range. */

@@ -2,10 +2,10 @@
  * `@txt2sfx/core` — the soundline DSL, its compiler and its two backends.
  *
  * Current surface: lexer, parser, serializer, the signature table they share,
- * the physical-invariant validator, the compiler that turns an AST into an
- * {@link AudioIR}, and the two backends that play that IR — live `AudioNode`s
- * and exported JavaScript — plus offline rendering and a WAV writer. This module
- * is the single public entry point.
+ * the physical-invariant validator, the grammar-aware master transforms, the
+ * compiler that turns an AST into an {@link AudioIR}, and the two backends that
+ * play that IR — live `AudioNode`s and exported JavaScript — plus offline
+ * rendering and a WAV writer. This module is the single public entry point.
  *
  * @example
  * ```ts
@@ -29,6 +29,9 @@ export { parse, parseWithDiagnostics } from './grammar/parser.js';
 export type { ParseResult } from './grammar/parser.js';
 
 export { serialize, serializeLayer } from './grammar/serializer.js';
+
+export { recipeMeta } from './grammar/meta.js';
+export type { RecipeMeta } from './grammar/meta.js';
 
 export {
   INVARIANTS,
@@ -65,6 +68,11 @@ export {
   toMs,
   unitAllowed,
 } from './grammar/units.js';
+
+/* --- transforms --------------------------------------------------------- */
+
+export { OPEN_CUTOFF_HZ, scaleBrightness, scaleKind } from './transform/scale.js';
+export type { ScalableKind, ScaleResult } from './transform/scale.js';
 
 /* --- compiler ----------------------------------------------------------- */
 

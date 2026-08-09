@@ -23,17 +23,21 @@ function json(status: number, body: unknown): Response {
 function stub(routes: Record<string, () => Response | Promise<Response>>): {
   fetch: FetchLike;
   calls: string[];
+  /** Full URLs, for the cases where the query string is the thing under test. */
+  urls: string[];
 } {
   const calls: string[] = [];
+  const urls: string[] = [];
   const fetch: FetchLike = async (url, init) => {
     const method = (init.method ?? 'GET').toUpperCase();
     const path = new URL(url).pathname;
     calls.push(`${method} ${path}`);
+    urls.push(String(url));
     const handler = routes[`${method} ${path}`];
     if (handler === undefined) return json(404, { error: 'not-found', message: 'no route' });
     return handler();
   };
-  return { fetch, calls };
+  return { fetch, calls, urls };
 }
 
 const PROFILE = {
@@ -107,6 +111,33 @@ describe('bank client', () => {
     /* The listing answers "which of these have I liked" in the same request — a heart
        that fills half a second after the grid settles reads as a bug. */
     expect([...listed.liked]).toEqual([7]);
+  });
+
+  /* The gallery's search box is answered by the server, because the FTS index covers
+     prompts and tags — text a page holding a hundred listed recipes does not have. */
+  it('passes the search and the category to the server', async () => {
+    const { fetch, urls } = stub({ 'GET /api/recipes': () => json(200, { recipes: [RECIPE], liked: [] }) });
+    await bankClient(DEFAULT_BANK_URL, { fetch }).list({ q: 'coin & gems', category: 'pickup', limit: 20 });
+    const url = new URL(urls[0] ?? '');
+    expect(url.pathname).toBe('/api/recipes');
+    /* Escaped, not concatenated: an `&` typed into the box must stay part of `q`. */
+    expect(url.searchParams.get('q')).toBe('coin & gems');
+    expect(url.searchParams.get('category')).toBe('pickup');
+    expect(url.searchParams.get('limit')).toBe('20');
+  });
+
+  /* An empty box is not a search for the empty string — the server would answer
+     nothing, and the gallery would go blank the moment somebody cleared the field. */
+  it('leaves an empty query and category out of the URL entirely', async () => {
+    const { fetch, urls } = stub({ 'GET /api/recipes': () => json(200, { recipes: [], liked: [] }) });
+    const client = bankClient(DEFAULT_BANK_URL, { fetch });
+    await client.list();
+    await client.list({ q: '   ', category: '' });
+    for (const raw of urls) {
+      const url = new URL(raw);
+      expect([...url.searchParams.keys()]).toEqual(['limit']);
+      expect(url.searchParams.get('limit')).toBe('100');
+    }
   });
 
   it('publishes and reports what the bank created', async () => {

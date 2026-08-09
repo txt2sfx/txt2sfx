@@ -1,0 +1,9 @@
+# prompt: footstep crunching in snow
+# tags: footstep, snow, crunch, winter
+# Snow is thousands of ice crystals failing one after another, which is a grain
+# field and nothing else: `bend 1` keeps each grain from gliding, and that is
+# the whole difference between snow and gravel-in-water.
+sound "footstep snow" 230ms foley
+  crunch: grains ~2600Hz[1200..6000] rate ~140[50..320] width 3ms spread 2.5 bend 1 | gain 0.4 attack 6ms decay 200ms
+  press: noise pink >> lp ~1200Hz[500..2600] | gain 0.24 attack 10ms decay 160ms
+  squeak: noise white >> bp ~4200Hz[2000..8000] Q8 | gain 0.14 decay 120ms delay 40ms

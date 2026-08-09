@@ -1,0 +1,9 @@
+# prompt: electric spark zap, crackly
+# tags: zap, spark, electric, crackle
+# An arc is not a tone, it is a rate: hundreds of unpitched restrikes per
+# second. `bend 1` keeps each grain from gliding, which is what separates a
+# spark from a droplet — the same primitive with `bend 1.4` is water.
+sound "electric zap" 180ms laser
+  crackle: grains ~3200Hz[1500..7000] rate ~180[60..400] width 2ms spread 3 bend 1 | gain 0.38 decay 160ms
+  arc: chirp square ~2400Hz[1200..5000] -> 900Hz in 80ms >> hp 1200Hz | gain 0.24 decay 120ms
+  snap: click 0.6ms >> hp 3000Hz | gain 0.3 attack 0ms decay 10ms

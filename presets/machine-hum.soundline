@@ -1,0 +1,9 @@
+# prompt: electric machine room hum loop
+# tags: machine, hum, electric, loop
+# A saw at 100 Hz with everything above 700 removed is mains hum with its
+# harmonics intact; the quiet triangle two decades up is the bearing whine that
+# tells you the machine is running rather than merely energised.
+sound "machine hum" 1000ms cycle loop
+  hum: tone saw ~100Hz[50..200] >> lp ~700Hz[250..1800] | gain 0.4 attack 200ms hold 500ms decay 280ms
+  whine: tone tri ~1200Hz[600..2600] | gain 0.1 attack 250ms hold 450ms decay 280ms
+  air: noise pink >> bp ~2400Hz[1000..5000] Q1 | gain 0.12 attack 200ms hold 500ms decay 280ms

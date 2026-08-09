@@ -1,0 +1,9 @@
+# prompt: crackling campfire loop
+# tags: fire, campfire, crackle, loop
+# Fire is two rates, not one: about eighteen loud pops a second is what the ear
+# counts as crackling, and a hundred and twenty quiet ones underneath are the
+# embers. Put both at the same rate and it stops being a fire and becomes rain.
+sound "campfire loop" 2000ms cycle loop
+  hiss: noise pink >> bp ~1400Hz[600..3200] Q1 | gain 0.26 attack 300ms hold 900ms decay 700ms
+  crackle: grains ~2600Hz[1000..6000] rate ~18[5..60] width 4ms spread 2.5 bend 1 | gain 0.4 attack 200ms hold 1100ms decay 600ms
+  embers: grains ~5200Hz[2000..9000] rate ~120[40..300] width 1.5ms spread 2 bend 1 | gain 0.14 attack 250ms hold 1000ms decay 650ms

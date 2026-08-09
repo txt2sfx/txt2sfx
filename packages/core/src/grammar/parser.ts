@@ -238,7 +238,11 @@ function parseSlot(cur: Cursor, head: Token, owner: string): SlotRange {
       'the start value is the optimizer seed and must lie inside the range',
     );
   }
-  return { min, max };
+  /* The bound spans travel with the range so a transform can rewrite the bounds
+     in the same pass as the value they bound. They are the *token* spans: a bound
+     written `1s` against a `ms` value keeps its own span here while `min`/`max`
+     hold the converted number, which is exactly what a rewrite needs. */
+  return { min, max, minLoc: minTok.loc, maxLoc: maxTok.loc };
 }
 
 function parseLiteral(cur: Cursor, spec: ParamSpec, owner: string): NumberLiteral {

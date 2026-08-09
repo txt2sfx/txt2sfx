@@ -39,6 +39,7 @@ import {
   targetFromBuffer,
 } from './agent.js';
 import { canRemember, keystore } from './keystore.js';
+import { retrieveForPrompt } from './retrieval.js';
 import { t } from './i18n.js';
 
 /**
@@ -151,14 +152,6 @@ export interface Generation {
 /** The one name the keystore files a remembered key under. */
 const KEY_NAME = 'gemini';
 
-/**
- * What a run says when nothing on this page can answer it.
- *
- * Read at call time rather than captured, so it is in the language the tab is showing
- * now and not the one it started in.
- */
-const NO_MODEL = (): string => t('run.noModel');
-
 export function useGenerate(deps: GenerateDeps): Generation {
   const [log, setLog] = useState<readonly string[]>([]);
   const [progress, setProgress] = useState<string | null>(null);
@@ -194,15 +187,76 @@ export function useGenerate(deps: GenerateDeps): Generation {
     };
   }, []);
 
+  /**
+   * Answer the prompt by *searching*, because nothing here can write a new recipe.
+   *
+   * The tab with no agent and no key used to end at an error, which made the prompt box
+   * — the first thing on the front page — a dead end for anyone who had not set anything
+   * up. It is not one: the bank is a searchable catalog and the build ships fifty presets
+   * with their own prompts and tags, so a sentence typed into that box can still come back
+   * as a recipe in the editor.
+   *
+   * What it must never do is claim it generated one. Three places say so and they are
+   * listed in `lib/retrieval.ts`; two of them are here — the opening log line names the
+   * search, and the closing one says `retrieved, not generated` in whatever language the
+   * tab is showing.
+   */
+  const retrieve = useCallback((prompt: string) => {
+    const { bank, takenNames, onGenerated } = live.current;
+    const controller = new AbortController();
+    abort.current = controller;
+    taken.current = false;
+    setRunning(true);
+    setStopping(false);
+    setLog([t('run.retrieveSearching')]);
+    setResult(null);
+    setError(null);
+    setBest(null);
+
+    void retrieveForPrompt(prompt, bank)
+      .then((hit) => {
+        if (controller.signal.aborted) return;
+        if (hit === null) {
+          /* Both, and they are not the same sentence: the log line is what the collapsed
+             strip shows, and the error is the one that says what to do about it. */
+          setLog((lines) => [...lines, t('run.retrieveMissed')]);
+          setError(t('run.retrieveNothing'));
+          return;
+        }
+        setLog((lines) => [
+          ...lines,
+          t(hit.origin === 'bank' ? 'run.retrieved' : 'run.retrievedLocal', { name: hit.name }),
+        ]);
+        /* Filed exactly like a generated recipe — same naming rule, same session entry,
+           same auto-play — because from here on it *is* an ordinary editor buffer. The
+           prompt recorded with it is the one that was typed, not the one the recipe
+           answers where it is stored; that one travels in the log line above. */
+        onGenerated({
+          name: recipeName(hit.soundline, prompt, takenNames),
+          source: hit.soundline,
+          prompt,
+        });
+      })
+      .catch((failure: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(failure instanceof Error ? failure.message : String(failure));
+      })
+      .finally(() => {
+        if (abort.current === controller) abort.current = null;
+        setRunning(false);
+        setStopping(false);
+      });
+  }, []);
+
   const start = useCallback((prompt: string, settings: ProviderSettings, context: RunContext) => {
     const { bank, seed, reference, takenNames, onGenerated } = live.current;
     const kind = chooseProvider(settings, context.attached);
     const provider = context.provider ?? providerFor(settings, context.attached);
     if (provider === null) {
-      /* Reported rather than thrown, and reported *here* rather than guarded at every
-         button: the three entry points into a run are the gallery's hero box, the
-         studio's row and the bridge, and only the first two can grey a button out. */
-      setError(NO_MODEL());
+      /* Decided *here* rather than at every button: the three entry points into a run are
+         the gallery's hero box, the studio's row and the bridge, and a rule that lives in
+         one of them is a rule the other two get wrong. */
+      retrieve(prompt);
       return;
     }
 
@@ -303,7 +357,7 @@ export function useGenerate(deps: GenerateDeps): Generation {
         setRunning(false);
         setStopping(false);
       });
-  }, []);
+  }, [retrieve]);
 
   /**
    * Ask the run to stop, and wait for it to actually stop.

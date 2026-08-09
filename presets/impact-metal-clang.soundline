@@ -1,0 +1,10 @@
+# prompt: heavy metal clang, resonant
+# tags: metal, clang, impact, hit
+# `plate` rather than `modal` for the ring, because a Q-based bank ties its
+# decay to its pitch and cannot hold a bright ring for most of a second. The
+# envelope is deliberately flat over it — a decay on top would multiply with
+# the plate's own and neither number would be what you hear.
+sound "metal clang" 850ms impact
+  strike: noise white >> bp ~3600Hz[1800..7000] Q3 | gain 0.4 decay 35ms
+  ring: plate ~620Hz[300..1200] modes 12 stretch 1.45 slope 0.6 decay ~700ms[300..1500] tilt 0.9 | gain 0.32 hold 400ms decay 400ms
+  body: modal metal ~240Hz[120..500] Q80 | gain 0.24 decay 300ms

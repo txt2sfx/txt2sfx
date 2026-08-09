@@ -1,0 +1,8 @@
+# prompt: gentle notification ping
+# tags: notification, ping, message, soft
+# An FM voice whose index falls to almost nothing over 60 ms: the ping starts
+# with harmonics and ends as a sine, which is what a small struck bell does and
+# what keeps a notification from sounding like an alert.
+sound "notify ping" 110ms ui
+  ping: fm ~1760Hz[900..3000] ratio ~2[1..6] index 3 -> 0.4 in 60ms | gain 0.34 attack 2ms decay 90ms
+  air: tone sine ~2640Hz[1400..4200] | gain 0.12 decay 70ms

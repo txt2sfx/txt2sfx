@@ -1,0 +1,8 @@
+# prompt: steady wind loop
+# tags: wind, loop, ambient, weather
+# Wind is one band-pass wandering slowly over brown noise. The sweep goes up
+# and comes back to where it started, which is what lets the loop seam without
+# a step in the spectrum — a filter left high at the end would click over.
+sound "wind loop" 2200ms cycle loop
+  gust: noise brown >> bp ~420Hz[150..1000] -> ~900Hz[400..2000] in 900ms -> 380Hz in 900ms Q1.5 | gain 0.6 attack 400ms hold 600ms decay 1000ms
+  hiss: noise pink >> hp ~2000Hz[800..5000] | gain 0.2 attack 500ms decay 1500ms

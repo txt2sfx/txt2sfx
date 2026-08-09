@@ -1,0 +1,9 @@
+# prompt: stone cracking hit
+# tags: stone, crack, impact, rock
+# The grain field is the fracture: stone does not ring, it sheds chips, and a
+# scatter of short unbent pings (`bend 1`, the ice-and-ceramic end of the
+# range) is what that sounds like.
+sound "stone crack" 310ms impact
+  crack: noise white >> bp ~2400Hz[1200..5000] Q2 >> dist drive ~3[1..8] mix 0.4 | gain 0.4 decay 60ms
+  shards: grains ~1800Hz[800..4000] rate 90 width 6ms spread 2.5 bend 1 | gain 0.24 decay 260ms delay 20ms
+  mass: modal wood ~150Hz[80..300] Q25 | gain 0.3 decay 220ms

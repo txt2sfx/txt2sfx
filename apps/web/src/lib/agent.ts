@@ -27,6 +27,12 @@
  * is pressed. That is the honest replacement for the mock: an offer to answer with
  * a recipe that is already in the catalog was never the same thing as generating.
  *
+ * Which is exactly why the same offer is allowed back under its own name. `lib/retrieval.ts`
+ * searches the bank and the bundled catalog for a recipe that already answers the prompt,
+ * the button that runs it reads `Find in bank`, and the run's last line says `retrieved,
+ * not generated`. The mock's sin was the label, not the lookup — so the lookup is here and
+ * the label is the truth.
+ *
  * ## The key never leaves this tab except in a request the user started
  *
  * It is React state, passed to the provider factory per run. No `localStorage`, no
