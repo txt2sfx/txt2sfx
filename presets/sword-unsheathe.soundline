@@ -1,0 +1,10 @@
+# prompt: sword drawn from a scabbard
+# tags: sword, unsheathe, draw, metal
+# `plate` rather than `modal` for the ring, for the reason PRIMITIVES.md gives:
+# a Q-based bank ties its decay to its pitch and cannot hold a bright ring past
+# the leather. The band-pass rising through the scrape is the blade getting
+# shorter as it comes out — less metal in the scabbard, higher resonance.
+sound "sword draw" 700ms foley
+  scrape: noise white >> bp ~3000Hz[1400..7000] -> ~6000Hz[3000..11000] in 380ms Q6 | gain 0.3 attack 60ms hold 60ms decay 300ms
+  body: modal metal ~620Hz[300..1400] Q60 | gain 0.16 decay 300ms delay 300ms
+  ring: plate ~1800Hz[800..4000] modes 10 stretch 1.6 slope 0.5 decay ~500ms[200..1200] tilt 0.9 | gain 0.2 hold 180ms decay 180ms delay 300ms

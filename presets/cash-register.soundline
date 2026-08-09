@@ -1,0 +1,11 @@
+# prompt: shop purchase, till bell and drawer
+# tags: shop, purchase, register, money
+# The bell is struck at 0 ms and the drawer only starts moving at 240 ms,
+# because that is the order a till works in and the ear knows it. The wooden
+# knock at 620 ms is the drawer reaching its stop — leave it out and the sound
+# has no end, it just fades.
+sound "cash register" 900ms foley
+  lever: click 2ms >> bp ~1400Hz[600..3200] Q4 | gain 0.22 attack 0ms decay 20ms
+  ding: modal metal ~2093Hz[1000..4200] Q160 | gain 0.28 decay 450ms
+  drawer: noise brown >> lp ~900Hz[350..2000] | gain 0.2 attack 20ms decay 260ms delay 240ms
+  stop: modal wood ~180Hz[90..400] Q16 | gain 0.24 decay 200ms delay 620ms

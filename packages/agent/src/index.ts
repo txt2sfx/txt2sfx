@@ -65,11 +65,21 @@ export type { RankCandidate, RankSoundsOptions, Ranking } from './rank.js';
 export { CAPTION_LIMIT, audioCaption, captionIssue, parseCaption } from './caption.js';
 export type { AudioCaptionOptions, Caption, CaptionIssue } from './caption.js';
 
+export {
+  ASSET_FILE_LIMIT,
+  ASSET_TITLE_LIMIT,
+  assetFileName,
+  audioAssetName,
+  parseAssetTitle,
+  titleFromText,
+} from './assetname.js';
+export type { AssetName, AudioAssetNameOptions } from './assetname.js';
+
 export { extractSoundline, initialMessage, repairMessage, systemPrompt } from './prompts.js';
 export type { Failure, InitialMessageOptions, SystemPromptOptions } from './prompts.js';
 
-export { bridgeOnboardingPrompt } from './onboarding.js';
-export type { BridgeOnboardingOptions } from './onboarding.js';
+export { bridgeOnboardingPrompt, chatOnboardingPrompt } from './onboarding.js';
+export type { BridgeOnboardingOptions, ChatOnboardingOptions } from './onboarding.js';
 
 export { generateSound } from './loop.js';
 export type { AgentEvent, Attempt, GenerateOptions, GenerateResult, Outcome } from './loop.js';

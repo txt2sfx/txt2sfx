@@ -1,0 +1,10 @@
+# prompt: retro 8-bit game over jingle, descending
+# tags: gameover, retro, 8bit, jingle
+# `levelup-fanfare` inverted: three even steps down instead of up, and the last
+# note dropped a further fifth and held two and a half times as long. Holding
+# the last note is what makes it an ending rather than a stumble.
+sound "8bit game over" 900ms pickup
+  one: tone square ~523Hz[350..750] | gain 0.26 decay 160ms
+  two: tone square ~466Hz[300..700] | gain 0.26 decay 160ms delay 160ms
+  three: tone square ~392Hz[260..600] | gain 0.26 decay 160ms delay 320ms
+  four: tone square ~262Hz[160..420] | gain 0.3 decay 380ms delay 480ms

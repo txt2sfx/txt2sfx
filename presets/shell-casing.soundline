@@ -1,0 +1,12 @@
+# prompt: brass shell casing bouncing on concrete
+# tags: shell, casing, brass, bounce
+# Four strikes with the gaps shrinking and the pitch rising: a bouncing object
+# loses height geometrically, so each contact comes sooner and rings shorter
+# than the last. Getting that ordering wrong is the single thing that makes a
+# synthesized bounce sound like four separate hits.
+sound "shell casing" 900ms foley
+  first: modal metal ~2200Hz[1000..5000] Q90 | gain 0.32 decay 180ms
+  second: modal metal ~2300Hz[1000..5000] Q80 | gain 0.22 decay 150ms delay 220ms
+  third: modal metal ~2500Hz[1200..6000] Q70 | gain 0.15 decay 120ms delay 400ms
+  fourth: modal metal ~2700Hz[1200..6000] Q60 | gain 0.1 decay 100ms delay 540ms
+  roll: grains ~3000Hz[1500..7000] rate 30 width 3ms spread 1.5 bend 1 | gain 0.12 decay 250ms delay 620ms

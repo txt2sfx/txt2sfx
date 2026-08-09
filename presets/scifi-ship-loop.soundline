@@ -1,0 +1,12 @@
+# prompt: spaceship interior hum loop
+# tags: spaceship, hum, ambience, loop
+# The repeating blip is a delay line at a third of a second, and its feedback is
+# 0.35 rather than something more interesting because the tail has to die inside
+# the loop period — `engine-idle` records the same constraint. Above about 0.4
+# the last repeat is still sounding when the loop restarts and the seam is
+# audible.
+sound "ship interior" 2000ms cycle loop
+  hum: tone saw ~60Hz[30..120] >> lp ~400Hz[150..900] Q4 | gain 0.26 attack 200ms hold 1100ms decay 600ms
+  air: noise pink >> bp ~1800Hz[700..4000] Q1 | gain 0.12 attack 300ms hold 1000ms decay 600ms
+  whine: tone sine ~2400Hz[1200..5000] | gain 0.06 attack 400ms hold 900ms decay 600ms
+  pulse: click 2ms >> bp ~900Hz[400..2000] Q6 >> delay ~250ms[120..400] feedback 0.35 mix 1 | gain 0.14 attack 0ms decay 10ms

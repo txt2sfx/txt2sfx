@@ -4,7 +4,7 @@
  * ## Two directories, two contracts
  *
  * `examples/` is the reference set — ten recipes the tests and the documentation are
- * pinned against. `presets/` is the catalog the playground ships with, fifty sounds
+ * pinned against. `presets/` is the catalog the playground ships with, some ninety sounds
  * whose whole job is to be there before anybody has an API key. They are seeded
  * together because the bank does not distinguish them, but they are *held* to
  * different standards, and the difference is one line of policy:

@@ -1,9 +1,17 @@
 # presets/
 
-Fifty ready-made sounds, one file each. They exist so that a playground opened
-without an API key is still useful: the gallery has something in every category to
-listen to, open in the studio, turn the sliders on and export — the whole product
-except the sentence that generates a new one.
+Eighty-eight ready-made sounds, one file each. They exist so that a playground
+opened without an API key is still useful: the gallery has something in every
+category to listen to, open in the studio, turn the sliders on and export — the whole
+product except the sentence that generates a new one.
+
+The first fifty were chosen to fill the categories. The thirty-eight after them were
+chosen against what a small game actually reaches for, read off freesound.org's own
+download counts: firearms and fantasy magic were the two largest holes — the catalog
+could fire a laser but not a pistol, and had no spell vocabulary at all — followed by
+melee, water, a retro 8-bit set, creatures, and the ambience loops that run under a
+level. Popularity there is a fair proxy because it is measured in *downloads*, which
+is somebody putting the sound in a project rather than clicking play.
 
 ## How this differs from `examples/`
 

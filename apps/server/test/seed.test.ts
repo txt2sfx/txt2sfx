@@ -13,6 +13,7 @@
  * five times over across this file. The default itself is covered once, by name.
  */
 
+import { readdirSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { hasErrors } from '@txt2sfx/core';
 import { openBank, type RecipeBank } from '../src/db.js';
@@ -114,13 +115,19 @@ describe('the shipped catalog', () => {
   /* One test for both halves on purpose. Each of these renders the whole catalog,
      and the second seed re-uses the first one's work: a recipe already in the bank
      is skipped without rendering, so `examples/` costs ten more renders here rather
-     than another sixty. */
+     than another ninety-eight.
+
+     The count is read from the directory rather than written down. `test/presets.test.ts`
+     owns the manifest — it pins the exact names, which is the assertion that catches a
+     rename — and duplicating the number here would only mean two files to edit for one
+     preset, with the second failure saying nothing the first did not. */
   it(
     'renders every preset clean, and is seeded alongside examples by default',
     async () => {
+      const catalogSize = readdirSync(PRESETS_DIR.path).filter((file) => file.endsWith('.soundline')).length;
       const presets = await seedBank(bank, { directories: [PRESETS_DIR], strict: true });
-      expect(presets.entries).toHaveLength(50);
-      expect(presets.stored).toBe(50);
+      expect(presets.entries).toHaveLength(catalogSize);
+      expect(presets.stored).toBe(catalogSize);
       expect(presets.withErrors).toEqual([]);
       expect(presets.withWarnings).toEqual([]);
       expect(presets.clipping).toEqual([]);
@@ -136,9 +143,9 @@ describe('the shipped catalog', () => {
       expect(klaxon?.tags).toContain('siren');
 
       const both = await seedBank(bank);
-      expect(both.entries).toHaveLength(60);
+      expect(both.entries).toHaveLength(catalogSize + 10);
       expect(both.stored).toBe(10);
-      expect(bank.count()).toBe(60);
+      expect(bank.count()).toBe(catalogSize + 10);
     },
     600_000,
   );

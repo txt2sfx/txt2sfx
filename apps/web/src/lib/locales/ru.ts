@@ -5,6 +5,7 @@ import type { Key } from './en.js';
 export const ru: Partial<Readonly<Record<Key, string>>> = {
   'nav.sounds': 'Звуки',
   'nav.studio': 'Студия',
+  'nav.render': 'Нейрорендер',
   /* Название раздела, а не слово — не переводится, как и `soundline`. */
   'nav.loop': 'NeurosLoop',
   'nav.screenAria': 'экран',
@@ -35,22 +36,25 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'gallery.gotIt': 'Понятно',
   'gallery.searchPlaceholder': 'поиск по именам, запросам и рецептам',
   'gallery.searchAria': 'поиск по каталогу',
+  'gallery.freesoundHeading': 'Ещё на freesound.org',
+  'gallery.freesoundHint': 'записи, которые уже кто-то сделал — это цель, а не то, что можно поставить в игру',
   'gallery.all': 'все',
-  'gallery.trash': 'корзина',
-  'gallery.emptyTrash': 'Корзина пуста.',
+  'gallery.favorites': 'избранное',
   'gallery.emptyCategory': 'В каталоге нет ни одного звука категории {category}.',
+  'gallery.emptyFavorites': 'Пока ничего не отмечено. ★ на карточке держит звук в одном клике из студии.',
   'gallery.emptyQuery': 'В каталоге ничего не найдено по запросу «{query}».',
   'gallery.generateInstead': 'Сгенерировать такой звук',
   'gallery.find': 'Найти в банке',
   'gallery.findInstead': 'Поискать такой звук в банке',
 
-  'card.trash': 'в корзину',
-  'card.restore': 'вернуть',
-  'card.trashTitle': 'скрыть из галереи — файл остаётся на месте',
-  'card.restoreTitle': 'вернуть в галерею',
   'card.play': 'играть',
+  'card.favorite': 'оставить себе — отмеченные звуки попадают в отдельную вкладку студии',
+  'card.unfavorite': 'снять звёздочку',
   'card.stop': 'стоп',
   'card.noPrompt': 'запрос не сохранён',
+  'card.open': 'Открыть',
+  'card.openTitle': 'открыть в студии — редактор, ручки и экспорт',
+  'card.downloadTitle': 'скачать {name} — выберите формат',
   'time.justNow': 'только что',
   'card.edited': 'правка {when}',
 
@@ -87,15 +91,13 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'rail.new': 'Новый звук',
   'rail.recent': 'Недавние',
   'rail.categories': 'Категории',
-  'rail.trash': 'Корзина',
-  'rail.trashCount': 'Корзина · {count}',
+  'rail.favorites': 'Избранное',
+  'rail.favoritesCount': 'Избранное · {count}',
   'rail.groupRecent': 'недавние',
-  'rail.groupTrash': 'корзина',
-  'rail.emptyTrash': 'Корзина пуста.',
-  'rail.emptyRecent': 'Здесь пока пусто.',
+  'rail.groupFavorites': 'избранное',
+  'rail.emptyFavorites': 'Пока ничего не отмечено. ★ рядом с именем оставляет звук здесь и после перезагрузки.',
+  'rail.emptyRecent': 'Пока ничего не открыто. Выберите звук в галерее или создайте новый.',
   'rail.unsaved': 'несохранённые правки',
-  'rail.restore': 'вернуть',
-  'rail.moveToTrash': 'убрать в корзину',
 
   'loop.new': 'Новый саундтрек',
   'loop.soundtracks': 'саундтреки',
@@ -158,13 +160,13 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'loop.msg.generic': 'пишу {lane}…',
 
   'studio.soundline': 'Soundline',
-  'studio.model': 'Модель',
-  'studio.search': 'Поиск',
   'studio.compare': 'Сравнить A / B',
   'studio.viewAria': 'вид',
   'studio.hintCompare': 'числа, а не восприятие — сравнение ранжирует кандидатов, но не судит о них',
-  'studio.hintModel': 'аудио по тому же запросу — рецепта нет, крутить нечего',
-  'studio.hintSearch': 'записи, которые уже кто-то сделал — это цель, а не то, что можно поставить в игру',
+
+  'render.title': 'Нейрорендер',
+  'render.hint':
+    'тот же запрос, отрисованный диффузионной моделью на этой машине, — цель для сравнения, а не то, что можно поставить в игру',
   'studio.composing':
     'Пишем рецепт под этот запрос. Редактор, слайдеры и экспорт появятся здесь, как только он будет.',
   'studio.composingIdle':
@@ -183,9 +185,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'prompt.make': 'Создать звук',
   'prompt.runsSoundline': 'напишет новый рецепт по этому описанию и подгонит числа',
   'prompt.runsModel': 'отрисует это описание диффузионной моделью, на этой машине',
-  'prompt.modelMissing': 'модель ещё не установлена — кнопка на вкладке «Модель»',
-  'prompt.runsSearch': 'поищет запись этого звука на freesound.org',
-  'prompt.searchMissing': 'сначала вставьте ключ freesound.org во вкладке «Поиск»',
+  'prompt.modelMissing': 'модель ещё не установлена — кнопка для этого ниже',
   'prompt.find': 'Найти в банке',
   'prompt.runsRetrieve':
     'поищет в банке и во встроенном каталоге рецепт, который уже отвечает на это описание, — новый он не пишет',
@@ -219,8 +219,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'sound.play': 'Играть',
   'sound.loop': 'Цикл',
   'sound.loopTitle': 'зациклить офлайн-рендер',
-  'sound.trash': 'В корзину',
-  'sound.trashTitle': 'скрыть из галереи',
+  'sound.favorite': 'В избранное',
   'sound.share': 'Поделиться',
 
   'editor.aria': 'исходный текст soundline',
@@ -317,27 +316,34 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'model.seed': 'seed {value}',
   'model.play': 'Играть',
   'model.stop': 'Стоп',
-  'model.render': 'Отрендерить цель',
+  'model.generating': 'генерирую',
   'model.compare': 'Сравнить с рецептом',
   'model.caption':
     'Аудио по тому же запросу — рецепта нет, крутить нечего, и это один-два мегабайта там, где рецепт весит меньше килобайта. Он здесь как цель: сравните A/B и включите «подгонять числа под референс», чтобы навести на него оптимизатор.',
   'model.promptFirst': 'сначала введите запрос — модель отвечает на ту же фразу, что и наш цикл',
-  'model.captionLabel': 'подпись',
   'model.captionRewrite': 'Переписать',
   'model.captionHint':
-    'Ровно это модель и читает: английский, не больше 64 токенов t5 — около {limit} символов. Пишется из вашего запроса по кнопке «Отрендерить», и её можно править.',
+    'Ровно это модель и читает: английский, не больше 64 токенов t5 — около {limit} символов. «Переписать» превращает запрос выше ровно в такую строку, прямо на месте, и её можно править дальше.',
   'model.captionWriting': 'пишу подпись…',
   'model.captionNoProvider':
     'Написать её нечем: выберите в строке запроса Gemini или Anthropic либо подключите своего кодового агента через мост. Пока запрос уходит как есть.',
   'model.captionCount': '{count}/{limit} символов',
-  'model.captionByModel': 'написано моделью',
-  'model.captionByHand': 'поправлено вручную',
   'model.captionFailed': 'подпись не написана ({reason}) — отправляю запрос как есть',
+  'model.named': 'название: «{title}» · {file}',
+
+  'renders.title': 'РЕНДЕРЫ',
+  'renders.empty':
+    'Каждый рендер остаётся здесь — с названием, его можно послушать и скачать — пока вы его не уберёте. За пределы браузера ничего не пишется.',
+  'renders.unnamed': 'без названия',
+  'renders.downloadTitle': 'скачать {file} · {size}',
+  'renders.forget': 'убрать этот рендер',
   'model.captionScript':
     'Эта модель не читает ничего, кроме латиницы: любая другая письменность распадается на дыры и рендерится шумом. Напишите подпись по-английски.',
   'model.captionLength': 'Всё, что за {limit} символами, текстовый энкодер молча отбрасывает.',
 
-  'search.connect': 'Подключить freesound.org',
+  'search.connect': 'Подключить Freesound.org',
+  'search.connectHelp':
+    'Авторизация через OAuth. Пароль вы вводите на странице самого freesound.org — здесь он не появляется, — а вкладка получает токен, который можно отозвать с любой стороны. С подключённым аккаунтом можно искать на freesound.org параллельно с каталогом и брать запись как референс для подгонки.',
   'search.connectNote':
     'Войдите своим аккаунтом freesound.org. Их API отвечает аккаунтам, а не ключам, — и с подключённым аккаунтом кнопка скачивания отдаёт оригинал, а не превью. Подробнее на',
   'search.connected': 'freesound.org подключён',
@@ -345,7 +351,6 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'search.connectedNote': 'хранится в этом браузере, пока не отключите',
   'search.noBank':
     'У этого банка не настроено приложение freesound.org, поэтому подключить аккаунт он не может. Банк, где это настроено, покажет здесь кнопку.',
-  'search.needsConnection': 'Подключите аккаунт freesound.org выше, потом опишите звук и нажмите «Сделать звук».',
   'search.connCancelled': 'Подключение отменено — ничего не передано.',
   'search.connFailed': 'freesound.org не завершил подключение. Попробуйте ещё раз.',
   'search.cc0': 'только CC0',
@@ -358,7 +363,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'search.rewritten': 'запрос написала модель',
   'search.found': 'в библиотеке {count}, здесь {shown}',
   'search.searching': 'ищем…',
-  'search.idle': 'Опишите звук в строке выше и нажмите «Сделать звук».',
+  'search.idle': 'Наберите запрос в строке поиска выше — записи появятся здесь.',
   'search.nothing': 'Ничего не нашлось. Попробуйте «все лицензии», большую длину или более простые слова.',
   'search.play': 'проиграть превью',
   'search.stop': 'стоп',
@@ -387,7 +392,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'compare.record': 'Микрофон',
   'compare.recordStop': 'Остановить запись',
   'compare.recordFit': 'Записать → подогнать',
-  'compare.modelBlocked': 'нужна локальная диффузионная модель — установите её во вкладке «Модель»',
+  'compare.modelBlocked': 'нужна локальная диффузионная модель — откроется «Нейрорендер», где она ставится',
   'compare.nothingLoaded': 'ничего не загружено',
   'compare.hintModel': 'отрендерено диффузионной моделью по тому же запросу — это цель, а не соперник',
   'compare.hintLibrary': 'запись с freesound.org — качество превью, лицензия указана в её строке',
@@ -399,8 +404,8 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'compare.dropzone':
     'Сравнивать пока не с чем. Перетащите сюда аудиофайл, выберите «{take}», чтобы отрендерить рецепт с новым seed, или {model}.',
   'compare.dropzoneModelReady': 'пусть локальная модель отрендерит цель',
-  'compare.dropzoneModelMissing': 'установите локальную модель во вкладке «Модель»',
-  'compare.dropzoneLibrary': 'или найдите запись во вкладке «Поиск»',
+  'compare.dropzoneModelMissing': 'установите локальную модель во вкладке «Нейрорендер»',
+  'compare.dropzoneLibrary': 'или найдите запись на freesound.org — со страницы «Звуки»',
   'compare.candidate': 'кандидат',
   'compare.alignment':
     'обе атаки сдвинуты к {onset} мс · нормализация по пику · лог. шкала частот {min} Гц – {max}',
@@ -477,6 +482,13 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
     'Он хранится на этой машине, чтобы не вставлять его заново: зашифрован в IndexedDB этого браузера ключом, который нельзя извлечь, — не в localStorage и никуда не отправляется. Любой скрипт, отданный этой страницей, всё ещё сможет им воспользоваться: это разбирает lib/keystore.ts.',
   'dialog.keyStorageNone':
     'Этот браузер не умеет его хранить, так что ключ живёт только в этой вкладке, и после перезагрузки его спросят снова.',
+  'dialog.chatTab': 'Любой чат',
+  'dialog.chatTitle': 'Вставьте это в чат, который умеет открывать ссылки',
+  'dialog.chatLede':
+    'ChatGPT, Gemini, Claude — всё, у чего есть кнопка «сходить по ссылке», может искать в этом банке и приносить вам звук. Инструкцию модель читает по ссылке сама, поэтому вставка остаётся однострочной и не устаревает.',
+  'dialog.chatNote':
+    'Он ищет, даёт ссылку сюда и возвращает soundline дословно — но не проектирует. Чат не слышит, не измеряет и не узнаёт, какой инвариант он нарушил; ухо в этом цикле — ваше.',
+  'dialog.chatWhat': 'промпт для чата',
   'dialog.bridgeLedeLive':
     'Мост работает на вашей машине и позволяет кодовому агенту проектировать, рендерить, прослушивать и экспортировать звуки прямо здесь — без API-ключа, потому что модель у агента уже есть. Он же может отвечать на кнопку «Сгенерировать» в этой песочнице.',
   'dialog.bridgeLedeDead':
@@ -519,8 +531,6 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'app.seed': 'seed',
   'app.rnd': 'случ',
   'app.rndTitle': 'новый случайный seed',
-  'app.save': 'Сохранить',
-  'app.saveTitle': 'записать examples/<имя>.soundline',
   'app.publish': 'Опубликовать',
   'app.saved': 'сохранено {path}',
   'app.published': 'опубликовано как #{id}',
@@ -543,6 +553,7 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'dl.savedSize': 'сохранено {file} · {size}',
   'dl.noCompile': 'рецепт не компилируется — экспортировать нечего',
   'dl.nothingRendered': 'пока ничего не отрендерено',
+  'dl.renderFail': 'этот рецепт не удалось отрендерить: {error}',
   'dl.encodeFail': 'этот браузер не смог закодировать {format}: {error} — WAV работает всегда',
   'dl.copied': 'скопировано: {what}',
   'dl.clipboardRefused': 'браузер отказал в доступе к буферу обмена — выделите текст вручную',

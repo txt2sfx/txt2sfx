@@ -1,0 +1,10 @@
+# prompt: car tyres skidding on asphalt
+# tags: tyre, skid, car, brake
+# The screech is a high-Q band-pass falling 800 Hz over most of a second, which
+# is the contact patch heating and softening — a skid that holds its pitch reads
+# as a machine. Underneath it, 380 grains a second bending downwards are the
+# rubber letting go of the road grain by grain.
+sound "tyre skid" 1400ms foley
+  screech: noise white >> bp ~2200Hz[1000..5000] -> 1400Hz in 900ms Q7 | gain 0.32 attack 80ms hold 300ms decay 800ms
+  rubber: grains ~1200Hz[500..2800] rate ~380[150..600] width 3ms spread 1.5 bend 0.9 | gain 0.22 attack 100ms hold 300ms decay 800ms
+  road: noise brown >> lp ~700Hz[300..1600] | gain 0.14 attack 60ms hold 400ms decay 700ms

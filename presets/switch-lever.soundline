@@ -1,0 +1,9 @@
+# prompt: heavy lever thrown, mechanical switch
+# tags: lever, switch, mechanism, foley
+# Bigger than `lock-click` by one layer and 90 ms: a lever has travel, so the
+# throw and the stop are separate events with the spring audible between them.
+# Collapse them onto the same instant and it is a light switch again.
+sound "lever throw" 260ms foley
+  throw: click 2ms >> bp ~1200Hz[500..2800] Q5 | gain 0.38 attack 0ms decay 18ms
+  spring: noise pink >> bp ~3600Hz[1600..7000] Q8 | gain 0.14 decay 90ms delay 10ms
+  stop: modal metal ~700Hz[300..1600] Q40 | gain 0.28 decay 140ms delay 90ms

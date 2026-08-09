@@ -1,0 +1,11 @@
+# prompt: window smashing, glass shards falling
+# tags: glass, break, smash, shatter
+# Two grain fields at `bend 1`, which is the ice-and-glass end of the range: a
+# dense one for the sheet letting go and a slow, wide one starting 380 ms later
+# for the pieces reaching the floor. The gap between them is the fall, and it
+# is the only thing here that gives the window a height.
+sound "glass break" 900ms impact
+  smash: noise white >> hp ~3000Hz[1500..7000] | gain 0.32 attack 0ms decay 60ms
+  ring: modal glass ~2600Hz[1200..5500] Q140 | gain 0.2 decay 400ms
+  shards: grains ~5000Hz[2500..9000] rate ~130[60..320] width 4ms spread 2.5 bend 1 | gain 0.28 decay 500ms delay 30ms
+  fall: grains ~3600Hz[1800..7000] rate 30 width 8ms spread 2 bend 1 | gain 0.16 attack 40ms decay 400ms delay 380ms

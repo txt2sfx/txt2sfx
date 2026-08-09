@@ -1,0 +1,11 @@
+# prompt: footstep on a metal grate
+# tags: footstep, metal, grate, foley
+# A grate is a plate that somebody is standing on, so the ring is written as a
+# time with a flat envelope over it rather than as a Q — the rule PRIMITIVES.md
+# states for `plate`. The sub is the walkway flexing, and it is what says
+# industrial rather than tin.
+sound "footstep metal" 320ms foley
+  grate: noise white >> bp ~4200Hz[2000..8000] Q2 | gain 0.2 attack 0ms decay 40ms
+  clank: modal metal ~900Hz[400..2000] Q60 | gain 0.28 decay 240ms
+  flex: sub ~90Hz[45..160] -> 60Hz in 60ms | gain 0.18 attack 3ms decay 180ms
+  ring: plate ~1600Hz[700..3600] modes 8 stretch 1.5 slope 0.8 decay ~400ms[150..900] tilt 1.2 | gain 0.12 hold 120ms decay 140ms delay 20ms

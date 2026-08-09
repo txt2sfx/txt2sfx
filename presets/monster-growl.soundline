@@ -1,0 +1,11 @@
+# prompt: large monster growl
+# tags: monster, growl, creature, enemy
+# Size is the slow attack, not the pitch. Everything here opens over 60-120 ms,
+# which is how long a big chest takes to move air; the same layers with 5 ms
+# attacks read as a small animal snarling. The grain field at `bend 0.8` is the
+# rasp — falling grains, because vocal folds release rather than collapse.
+sound "monster growl" 1300ms
+  growl: fm ~90Hz[45..180] ratio 1.5 index 10 -> 3 in 700ms >> dist drive ~4[1..10] mix 0.5 | gain 0.22 attack 60ms hold 200ms decay 700ms
+  throat: noise brown >> bp ~400Hz[150..900] Q3 | gain 0.18 attack 80ms hold 300ms decay 600ms
+  rasp: grains ~900Hz[400..2000] rate ~90[30..250] width 12ms spread 1 bend 0.8 | gain 0.16 attack 100ms hold 250ms decay 600ms
+  rumble: sub ~45Hz[25..80] | gain 0.2 attack 120ms hold 400ms decay 700ms

@@ -82,6 +82,13 @@
  * config file verbatim, and a mis-transcribed `--stdio` fails in a way that looks like
  * the bridge is broken.
  *
+ * One tab installs nothing. A chat with a web-fetch button is a client too, and the
+ * only one whose whole setup is a sentence — so it gets no health checks, no numbered
+ * steps and no command, just the line that sends it to `/chat.txt`. It is a tab rather
+ * than a footnote because "which of these am I" is exactly the question the strip
+ * above already asks, and the honest answer for most people is neither Claude Code nor
+ * Cursor.
+ *
  * There is no longer a `Copy agent prompt` beside them. It copied a paragraph of
  * instructions for an agent that is not attached yet — which is to say, for an agent that
  * cannot be pasted into from this dialog anyway — and it sat in the footer looking like
@@ -97,8 +104,18 @@ import { GEMINI_DEFAULT_MODEL, GEMINI_KEY_SOURCE, type ProviderKind } from '../l
 import { copy } from '../lib/download.js';
 import { canRemember } from '../lib/keystore.js';
 import { t, useI18n, type Key } from '../lib/i18n.js';
+import { PUBLIC_SITE_URL } from '../lib/share.js';
 import type { BridgeStatus } from '../lib/bridge-client.js';
 import type { ProviderSettings } from '../lib/useGenerate.js';
+
+/**
+ * The whole paste for a chat: a URL and an instruction to read it.
+ *
+ * The published site, never `window.location`: the model that follows this is not on
+ * this machine, and a `localhost` address copied out of `pnpm dev` would send its
+ * user nowhere. `plugins/chat-prompt.ts` is what makes the address answer.
+ */
+const CHAT_PASTE = `Fetch ${PUBLIC_SITE_URL}chat.txt and follow it.`;
 
 export interface BridgeDialogProps {
   readonly status: BridgeStatus;
@@ -374,6 +391,14 @@ export function BridgeDialog({
           >
             Gemini
           </button>
+          <button
+            type="button"
+            className={tab === 'chat' ? 'selected violet' : ''}
+            aria-current={tab === 'chat'}
+            onClick={() => setTab('chat')}
+          >
+            {t('dialog.chatTab')}
+          </button>
           {recipes.map((candidate) => (
             <button
               key={candidate.id}
@@ -387,7 +412,23 @@ export function BridgeDialog({
           ))}
         </nav>
 
-        {tab === 'gemini' ? (
+        {tab === 'chat' ? (
+          /* No checks above it and no numbered steps: there is nothing on the reader's
+             machine to be right or wrong, so a row saying "bridge daemon ✕" would be
+             answering a question this tab does not raise. `bare` for the same reason the
+             Gemini tab uses it — the section is the whole page here. */
+          <div className="dialog-section bare">
+            <div className="step-title">{t('dialog.chatTitle')}</div>
+            <p className="step-note">{t('dialog.chatLede')}</p>
+            {/* The line, not the instructions. Copying the whole prompt would freeze
+                today's text in someone's message history, and it is the fetched file —
+                emitted by `plugins/chat-prompt.ts` from the one function that also
+                answers `txt2sfx-bridge doctor` — that stays current. Untranslated: it
+                is addressed to the model, not to the reader. */}
+            <CodeBlock code={CHAT_PASTE} what={t('dialog.chatWhat')} onCopied={say} />
+            <p className="step-note">{t('dialog.chatNote')}</p>
+          </div>
+        ) : tab === 'gemini' ? (
           /* `bare`: on this tab the section is the whole page, and rules above and below
              the only thing on screen read as a divider between nothing and nothing. */
           <div className="dialog-section bare">

@@ -1,0 +1,11 @@
+# prompt: shotgun blast, deep and wide
+# tags: shotgun, gun, blast, weapon
+# What separates a shotgun from the pistol is not level, it is that the blast
+# is a falling filter rather than a fixed one: a wide charge of powder keeps
+# pushing air after the crack, so the spectrum slides down over a third of a
+# second instead of ending with the transient.
+sound "shotgun blast" 850ms explosion
+  crack: noise white >> hp ~1800Hz[800..5000] -> 500Hz in 180ms | gain 0.4 attack 0ms decay 130ms
+  blast: noise brown >> lp ~1400Hz[500..3500] -> 300Hz in 350ms | gain 0.4 decay 380ms
+  boom: sub ~80Hz[40..150] -> 38Hz in 250ms | gain 0.42 attack 4ms decay 480ms
+  tail: noise pink >> lp ~1800Hz[700..4000] >> verb 380ms mix 0.4 | gain 0.14 attack 10ms decay 280ms delay 60ms

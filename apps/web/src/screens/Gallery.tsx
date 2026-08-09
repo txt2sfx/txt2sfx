@@ -1,14 +1,16 @@
 /**
  * The catalog, and the front door.
  *
- * ## Why the prompt box is here and not only in the studio
+ * ## One box, and it searches
  *
- * The previous playground opened on an editor with a recipe already loaded, which
- * answers the question "what is this" with "a text editor for something". The first
- * thing on screen should be the claim the project actually makes — *describe a sound,
- * get code that plays it* — and a box to test it with. So the hero is one sentence and
- * one input, and pressing Generate hands the prompt to the studio and starts the run
- * there, because that is where the answer needs somewhere to land.
+ * The hero used to carry a second input — a prompt with a Generate button beside the
+ * search below it — and two boxes on one screen is two boxes to choose between before
+ * knowing what either does. They also answered the same intent from opposite ends:
+ * somebody who wants a door slam wants the one that already exists if there is one, and
+ * a run costs a model call and a fit. So the hero is the search, at hero size, and
+ * generating is what the empty state offers when the catalog has nothing — the point
+ * below where searching has actually failed. The studio keeps its own prompt row, which
+ * is where a run has somewhere to land.
  *
  * ## Why search and category filters, over twelve recipes
  *
@@ -25,6 +27,27 @@
  * making the thing that is missing. `Generate it instead` takes the query as the
  * prompt, which is almost always what the person typing it wanted.
  *
+ * ## Why freesound.org answers the same box
+ *
+ * Because it is the same question. Somebody who types `door slam` wants a door slam,
+ * and "does one already exist" has two indexes that can answer it: this project's bank
+ * of recipes and a public library of two hundred thousand recordings. Asking that twice,
+ * in two places, on two screens, was the arrangement that made the library feel like a
+ * separate application bolted to the side — so the search box is one box, and the
+ * library's answer is a second block under the catalog's.
+ *
+ * It is a *second block* rather than rows mixed into the grid, and that distinction is
+ * the honest one this screen exists to make: a recipe is a few hundred bytes of
+ * JavaScript you can ship, and a recording is somebody else's file under somebody else's
+ * licence. Sorting them into one list would be claiming they are the same kind of thing.
+ * So the block carries its own heading, its own licence chips and its own caption, and
+ * the one verb on a row is `→ B` — take it into the studio as a target.
+ *
+ * Nothing is asked of freesound.org until an account is connected, which is what the
+ * button beside the search box is for, and nothing is asked *unprompted* even then: the
+ * search fires behind the same debounce the bank's does, one step further out, because
+ * it is a request to another company's servers on somebody else's rate limit.
+ *
  * @packageDocumentation
  */
 
@@ -32,10 +55,14 @@ import { useMemo } from 'react';
 import { SOUND_CATEGORIES } from '@txt2sfx/shared';
 import { SoundCard } from '../components/SoundCard.js';
 import { Bars } from '../components/Bars.js';
+import { FreesoundButton, FreesoundResults } from '../components/Freesound.js';
 import type { Origin } from '../lib/catalog.js';
 import { catHue } from '../lib/design.js';
+import { downloadRecipe } from '../lib/download.js';
+import type { FreesoundSound } from '../lib/freesound.js';
 import { useI18n, type Key } from '../lib/i18n.js';
 import { ghostBars } from '../lib/layers.js';
+import type { LibrarySearch } from '../lib/useSearch.js';
 
 /** A gallery row, with everything the card needs already derived. */
 export interface GalleryItem {
@@ -48,7 +75,7 @@ export interface GalleryItem {
      is how an added origin gets a dead branch somewhere instead of a type error. */
   readonly origin: Origin;
   readonly editedAt: number | undefined;
-  readonly trashed: boolean;
+  readonly favorite: boolean;
   /** Present only for a recipe that lives in the bank — see {@link SoundCard}. */
   readonly bankId?: number;
   readonly likes?: number;
@@ -60,8 +87,13 @@ export interface GalleryItem {
 export interface GalleryProps {
   readonly items: readonly GalleryItem[];
   readonly seed: number;
-  readonly prompt: string;
-  readonly onPromptChange: (prompt: string) => void;
+  /**
+   * Start a run from this screen.
+   *
+   * Reachable in one place now — the empty state — and always with the query as the
+   * prompt, which is what the person who typed it wanted when the catalog came back
+   * with nothing.
+   */
   readonly onGenerate: (prompt: string) => void;
   readonly query: string;
   readonly onQueryChange: (query: string) => void;
@@ -89,10 +121,10 @@ export interface GalleryProps {
   /**
    * Something on this page can write a new recipe.
    *
-   * False with no agent and no key, and then the two buttons that start a run say
-   * `Find in bank` instead of `Generate` — the run will search the catalog rather than
-   * generate anything, and a button that claimed otherwise is exactly the confusion
-   * `lib/retrieval.ts` exists to avoid.
+   * False with no agent and no key, and then the empty state's button says `Find one in
+   * the bank instead` rather than `Generate it instead` — the run will search the
+   * catalog rather than generate anything, and a button that claimed otherwise is
+   * exactly the confusion `lib/retrieval.ts` exists to avoid.
    */
   readonly canGenerate: boolean;
   readonly onboarded: boolean;
@@ -100,10 +132,31 @@ export interface GalleryProps {
   readonly playing: string | null;
   readonly onOpen: (name: string) => void;
   readonly onPlay: (name: string) => void;
-  readonly onTrash: (name: string) => void;
+  /** Star a recipe, or take the star back. Per browser — see `lib/library.ts`. */
+  readonly onFavorite: (name: string) => void;
   /** Like or unlike a published recipe. Absent when there is no bank to ask. */
   readonly onLike: (item: GalleryItem) => void;
   readonly onComments: (item: GalleryItem) => void;
+
+  /* --- the library ------------------------------------------------------- */
+
+  /**
+   * The freesound.org search, driven by this screen's own box.
+   *
+   * Handed in rather than owned here for the reason `lib/useSearch.ts` gives: the one
+   * thing a result is *for* is `→ B`, which opens the studio, so a list that lived in
+   * this component would die at the moment it became useful.
+   */
+  readonly search: LibrarySearch;
+  /** Make this recording the B side: fetch its preview, decode it, open Compare on it. */
+  readonly onUseSound: (sound: FreesoundSound) => Promise<void>;
+  /**
+   * The app's toast — every download on this screen reports through it.
+   *
+   * Both kinds: the library's fetched files, and a card's own export, which is compiled
+   * or rendered on the spot and can therefore fail on a recipe the catalog still lists.
+   */
+  readonly onStatus: (message: string) => void;
 }
 
 /** The three steps, which is the whole of the product in eleven words. */
@@ -112,8 +165,6 @@ const STEPS: readonly Key[] = ['gallery.step1', 'gallery.step2', 'gallery.step3'
 export function Gallery({
   items,
   seed,
-  prompt,
-  onPromptChange,
   onGenerate,
   query,
   onQueryChange,
@@ -127,16 +178,19 @@ export function Gallery({
   playing,
   onOpen,
   onPlay,
-  onTrash,
+  onFavorite,
   onLike,
   onComments,
+  search,
+  onUseSound,
+  onStatus,
 }: GalleryProps): React.JSX.Element {
   const { t } = useI18n();
-  const trashedCount = items.filter((item) => item.trashed).length;
+  const favoriteCount = items.filter((item) => item.favorite).length;
 
-  /* Filtering by category *and* by trash through one control, because they are the
+  /* Filtering by category *and* by star through one control, because they are the
      same question — "which subset of the catalog am I looking at" — and two controls
-     would let the user ask for the trash of one category, which nobody wants. */
+     would let the user ask for the favourites of one category, which nobody wants. */
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matches = (item: GalleryItem): boolean =>
@@ -150,8 +204,7 @@ export function Gallery({
       item.source.toLowerCase().includes(needle);
 
     return items.filter((item) => {
-      if (filter === 'trash') return item.trashed && matches(item);
-      if (item.trashed) return false;
+      if (filter === 'favorites') return item.favorite && matches(item);
       return (filter === 'all' || item.category === filter) && matches(item);
     });
   }, [items, filter, query, serverFiltered]);
@@ -162,14 +215,9 @@ export function Gallery({
      nine chips where six match nothing is a menu of dead ends. */
   const categories = useMemo(() => {
     if (allCategories) return SOUND_CATEGORIES;
-    const present = new Set(items.filter((item) => !item.trashed).map((item) => item.category));
+    const present = new Set(items.map((item) => item.category));
     return SOUND_CATEGORIES.filter((category) => present.has(category) || filter === category);
   }, [items, filter, allCategories]);
-
-  const submit = (event: React.FormEvent): void => {
-    event.preventDefault();
-    if (prompt.trim() !== '') onGenerate(prompt.trim());
-  };
 
   return (
     <div className="screen screen-gallery">
@@ -178,27 +226,28 @@ export function Gallery({
           <h1>{t('gallery.title')}</h1>
           <p className="lede">{t('gallery.lede')}</p>
 
-          <form className="hero-row" onSubmit={submit}>
-            <div className="input-shell accent">
-              <span className="mono caret">&gt;</span>
+          {/* No form around it, deliberately: the list is already answering every
+              keystroke — the bank behind a debounce, the bundle immediately — so there
+              is nothing left for Enter to submit, and a form would give it a page
+              reload as its default action. */}
+          <div className="hero-row">
+            <div className="input-shell accent hero-search">
+              <span className="faint">⌕</span>
               <input
-                type="text"
-                name="prompt"
-                className="mono"
-                value={prompt}
-                placeholder={t('gallery.placeholder')}
-                aria-label={t('gallery.describeAria')}
-                onChange={(event) => onPromptChange(event.target.value)}
+                type="search"
+                name="search"
+                value={query}
+                placeholder={t('gallery.searchPlaceholder')}
+                aria-label={t('gallery.searchAria')}
+                onChange={(event) => onQueryChange(event.target.value)}
               />
             </div>
-            {/* The label is the truth about what the press does, here as much as in the
-                studio's row: with nothing able to write a recipe this box searches the
-                catalog, and calling that Generate is the one thing retrieval must never
-                do. See `lib/retrieval.ts`. */}
-            <button type="submit" className="primary big" disabled={prompt.trim() === ''}>
-              {t(canGenerate ? 'gallery.generate' : 'gallery.find')}
-            </button>
-          </form>
+
+            {/* Beside the box rather than under the results, because it is a property of
+                the session and not of this query: connected, the same box answers twice
+                for as long as the connection lasts. */}
+            <FreesoundButton connection={search.connection} />
+          </div>
 
           {onboarded ? null : (
             <div className="onboard">
@@ -220,18 +269,9 @@ export function Gallery({
       <section className="catalog">
         <div className="wrap">
           <div className="filters">
-            <div className="input-shell small">
-              <span className="faint">⌕</span>
-              <input
-                type="search"
-                name="search"
-                value={query}
-                placeholder={t('gallery.searchPlaceholder')}
-                aria-label={t('gallery.searchAria')}
-                onChange={(event) => onQueryChange(event.target.value)}
-              />
-            </div>
-
+            {/* The chips only — the box that used to sit beside them is the hero now.
+                They are still the same control as the search: one question, "which
+                subset am I looking at", asked twice. */}
             <div className="chips">
               <button
                 type="button"
@@ -253,10 +293,10 @@ export function Gallery({
               ))}
               <button
                 type="button"
-                className={`chip chip-quiet${filter === 'trash' ? ' selected' : ''}`}
-                onClick={() => onFilterChange(filter === 'trash' ? 'all' : 'trash')}
+                className={`chip chip-star${filter === 'favorites' ? ' selected' : ''}`}
+                onClick={() => onFilterChange(filter === 'favorites' ? 'all' : 'favorites')}
               >
-                {t('gallery.trash')} · {trashedCount}
+                ★ {t('gallery.favorites')} · {favoriteCount}
               </button>
             </div>
           </div>
@@ -266,8 +306,8 @@ export function Gallery({
               <Bars values={ghostBars('empty', 30)} className="bars-ghost" />
               <p>
                 {query.trim() === ''
-                  ? filter === 'trash'
-                    ? t('gallery.emptyTrash')
+                  ? filter === 'favorites'
+                    ? t('gallery.emptyFavorites')
                     : t('gallery.emptyCategory', { category: filter })
                   : t('gallery.emptyQuery', { query: query.trim() })}
               </p>
@@ -289,7 +329,7 @@ export function Gallery({
                   durationMs={item.durationMs}
                   seed={seed}
                   editedAt={item.editedAt}
-                  trashed={item.trashed}
+                  favorite={item.favorite}
                   playing={playing === item.name}
                   {...(item.bankId === undefined ? {} : { bankId: item.bankId })}
                   {...(item.likes === undefined ? {} : { likes: item.likes })}
@@ -298,13 +338,33 @@ export function Gallery({
                   {...(item.author === undefined ? {} : { author: item.author })}
                   onOpen={() => onOpen(item.name)}
                   onPlay={() => onPlay(item.name)}
-                  onTrash={() => onTrash(item.name)}
+                  onFavorite={() => onFavorite(item.name)}
+                  /* The gallery's own seed, the same one the card's waveform was drawn
+                     with: a download that differed from the picture beside it would be a
+                     different sound under the name that was clicked. */
+                  onDownload={async (format) =>
+                    onStatus(await downloadRecipe(item.name, item.source, seed, format))
+                  }
                   onLike={() => onLike(item)}
                   onComments={() => onComments(item)}
                 />
               ))}
             </div>
           )}
+
+          {/* Only with an account connected, and only once there is a question to
+              answer. An empty box is the front page rather than a search, and a
+              freesound heading over nothing on the front page would advertise a second
+              catalog that is not there. */}
+          {search.connection.state === 'on' && query.trim() !== '' ? (
+            <section className="fs-block">
+              <div className="fs-head">
+                <h2>{t('gallery.freesoundHeading')}</h2>
+                <span className="faint hint">{t('gallery.freesoundHint')}</span>
+              </div>
+              <FreesoundResults search={search} onUseSound={onUseSound} onStatus={onStatus} />
+            </section>
+          ) : null}
         </div>
       </section>
     </div>

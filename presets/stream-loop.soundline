@@ -1,0 +1,10 @@
+# prompt: small stream running, loop
+# tags: stream, water, brook, loop
+# What makes running water read as running rather than as rain is grain width:
+# 18 ms is long enough for each bubble's upward bend to be heard as a pitch,
+# and `rain-loop` uses 2 ms for the opposite reason. Same primitive, same bend,
+# one number apart.
+sound "stream loop" 1800ms cycle loop
+  flow: noise pink >> bp ~1600Hz[600..3600] Q1 | gain 0.3 attack 200ms hold 1000ms decay 500ms
+  burble: grains ~900Hz[400..2000] rate ~55[20..160] width 18ms spread 1.2 bend 1.45 | gain 0.24 attack 250ms hold 900ms decay 550ms
+  hiss: noise white >> hp ~5000Hz[2500..9000] | gain 0.1 attack 300ms hold 800ms decay 600ms

@@ -28,6 +28,10 @@ export const en = {
 
   'nav.sounds': 'Sounds',
   'nav.studio': 'Studio',
+  /* Not "Model", which named the technology and said nothing about what the screen is
+     for. This one says what comes out of it: audio a neural model rendered from the
+     prompt — a target to aim at, not a recipe. */
+  'nav.render': 'AI Render',
   'nav.loop': 'NeurosLoop',
   'nav.screenAria': 'screen',
 
@@ -60,10 +64,15 @@ export const en = {
   'gallery.gotIt': 'Got it',
   'gallery.searchPlaceholder': 'search names, prompts and recipes',
   'gallery.searchAria': 'search the catalog',
+  /* The second answer to the same box, under the first. Headed rather than mixed into
+     the grid: a recipe is a few hundred bytes you can ship and a recording is somebody
+     else's file under somebody else's licence, and one list would claim otherwise. */
+  'gallery.freesoundHeading': 'Also on freesound.org',
+  'gallery.freesoundHint': 'recordings somebody already made — a target to aim at, not something to ship',
   'gallery.all': 'all',
-  'gallery.trash': 'trash',
-  'gallery.emptyTrash': 'Trash is empty.',
+  'gallery.favorites': 'starred',
   'gallery.emptyCategory': 'Nothing in the catalog is a {category}.',
+  'gallery.emptyFavorites': 'Nothing starred yet. The ★ on a card keeps it one click away in the studio.',
   'gallery.emptyQuery': 'Nothing in the catalog matches “{query}”.',
   'gallery.generateInstead': 'Generate it instead',
   /* Shown in place of the two Generate labels when nothing on the page can write a
@@ -74,13 +83,16 @@ export const en = {
 
   /* --- a card in the gallery --------------------------------------------- */
 
-  'card.trash': 'trash',
-  'card.restore': 'restore',
-  'card.trashTitle': 'hide it from the gallery — the file is not touched',
-  'card.restoreTitle': 'put it back in the gallery',
   'card.play': 'play',
+  /* The star is this browser's own — the heart in the social row is the one other
+     people see, and saying so here is what keeps the two from reading as one control. */
+  'card.favorite': 'keep it — starred sounds get their own tab in the studio',
+  'card.unfavorite': 'take the star back',
   'card.stop': 'stop',
   'card.noPrompt': 'no prompt recorded',
+  'card.open': 'Open',
+  'card.openTitle': 'open it in the studio — the editor, the sliders and the export',
+  'card.downloadTitle': 'download {name} — pick a format',
   'time.justNow': 'just now',
   'card.edited': 'edited {when}',
 
@@ -121,15 +133,13 @@ export const en = {
   'rail.new': 'New sound',
   'rail.recent': 'Recent',
   'rail.categories': 'Categories',
-  'rail.trash': 'Trash',
-  'rail.trashCount': 'Trash · {count}',
+  'rail.favorites': 'Starred',
+  'rail.favoritesCount': 'Starred · {count}',
   'rail.groupRecent': 'recent',
-  'rail.groupTrash': 'trash',
-  'rail.emptyTrash': 'Trash is empty.',
-  'rail.emptyRecent': 'Nothing here yet.',
+  'rail.groupFavorites': 'starred',
+  'rail.emptyFavorites': 'Nothing starred yet. The ★ beside a name keeps it here across sessions.',
+  'rail.emptyRecent': 'Nothing open yet. Pick a sound in the gallery, or start a new one.',
   'rail.unsaved': 'unsaved edits',
-  'rail.restore': 'restore',
-  'rail.moveToTrash': 'move to trash',
 
   /* --- NeurosLoop --------------------------------------------------------- */
 
@@ -198,13 +208,14 @@ export const en = {
   /* --- the studio -------------------------------------------------------- */
 
   'studio.soundline': 'Soundline',
-  'studio.model': 'Model',
-  'studio.search': 'Search',
   'studio.compare': 'Compare A / B',
   'studio.viewAria': 'view',
   'studio.hintCompare': 'numeric, not perceptual — it ranks candidates, it does not judge them',
-  'studio.hintModel': 'rendered audio from the same prompt — no recipe, nothing to tune',
-  'studio.hintSearch': 'recordings somebody already made — a target to aim at, not something to ship',
+
+  /* --- the AI Render screen ----------------------------------------------- */
+
+  'render.title': 'AI Render',
+  'render.hint': 'the same prompt answered by a diffusion model, on this machine — a target for Compare, not a deliverable',
   /* The studio with no recipe in it yet — a run started from the gallery. */
   'studio.composing': 'Writing a recipe for this prompt. The editor, the sliders and the export appear here as soon as one exists.',
   'studio.composingIdle': 'Nothing came back from that run. Press Make sound to try again, or pick a recipe from the list on the left.',
@@ -224,13 +235,11 @@ export const en = {
   'prompt.stop': 'Stop',
   'prompt.stopping': 'stopping…',
   'prompt.make': 'Make sound',
-  /* The button runs whichever tab is open, so what it will do is said on hover rather
-     than guessed from the accent colour. */
+  /* The button runs whichever screen it is on, so what it will do is said on hover
+     rather than guessed from the accent colour. */
   'prompt.runsSoundline': 'writes a new recipe for this prompt and fits its numbers',
   'prompt.runsModel': 'renders this prompt with the diffusion model, on this machine',
-  'prompt.modelMissing': 'the model is not installed yet — the Model tab has the button',
-  'prompt.runsSearch': 'searches freesound.org for a recording of this',
-  'prompt.searchMissing': 'paste a freesound.org API key in the Search tab first',
+  'prompt.modelMissing': 'the model is not installed yet — the button for that is below',
   /* With nothing able to write a recipe, the button searches for one instead — and says
      so in the label rather than promising a sound that will not be made. The gear stays
      amber beside it: there is still no model, which is the fact it reports. */
@@ -275,8 +284,7 @@ export const en = {
   'sound.play': 'Play',
   'sound.loop': 'Loop',
   'sound.loopTitle': 'loop the offline render',
-  'sound.trash': 'Trash',
-  'sound.trashTitle': 'hide it from the gallery',
+  'sound.favorite': 'Keep',
   'sound.share': 'Share',
 
   /* --- the recipe card ---------------------------------------------------- */
@@ -383,29 +391,44 @@ export const en = {
   'model.seed': 'seed {value}',
   'model.play': 'Play',
   'model.stop': 'Stop',
-  'model.render': 'Render target',
+  'model.generating': 'generating',
   'model.compare': 'Compare with the recipe',
   'model.caption':
     'Rendered audio from the same prompt — no recipe, nothing to tune, and one to two megabytes where the recipe is under a kilobyte. It is here to be a target: A/B it, and tick “fit the numbers to the reference” to point the optimizer at it.',
   'model.promptFirst': 'type a prompt first — the model answers the same sentence our loop does',
-  'model.captionLabel': 'caption',
   'model.captionRewrite': 'Rewrite',
   'model.captionHint':
-    'What this model actually reads: English, and at most 64 t5 tokens — about {limit} characters. Written from your prompt when you press Render, and yours to edit.',
+    'What this model actually reads: English, and at most 64 t5 tokens — about {limit} characters. Rewrite turns the prompt above into exactly that, in place, and leaves it yours to edit.',
   'model.captionWriting': 'writing the caption…',
   'model.captionNoProvider':
     'No model here can write one: pick Gemini or Anthropic in the prompt row, or attach your coding agent over the bridge. Until then the prompt is sent as written.',
   'model.captionCount': '{count}/{limit} characters',
-  'model.captionByModel': 'written by the model',
-  'model.captionByHand': 'edited by hand',
   'model.captionFailed': 'no caption written ({reason}) — sending the prompt as it is',
+  'model.named': 'named “{title}” · {file}',
+
+  /* --- the renders this browser kept -------------------------------------- */
+
+  'renders.title': 'RENDERS',
+  'renders.empty':
+    'Every render stays here — named, playable and downloadable — until you clear it. Nothing is written outside the browser.',
+  'renders.unnamed': 'unnamed',
+  'renders.downloadTitle': 'download {file} · {size}',
+  'renders.forget': 'forget this render',
   'model.captionScript':
     'This model reads no script but Latin — every other one tokenizes into holes and renders as noise. Write the caption in English.',
   'model.captionLength': 'Past {limit} characters the text encoder drops the rest without saying so.',
 
-  /* --- the search view ---------------------------------------------------- */
+  /* --- the library, on the gallery ---------------------------------------- */
 
-  'search.connect': 'Connect freesound.org',
+  /* The label names what the click actually does. It used to say "Search on
+     freesound.org", which is the purpose — but the control looked like a search field
+     and pressing it left the page for an OAuth consent screen, and a button that does
+     something other than what it says is worse than one that names a price. The purpose
+     moved to the `?` beside it, where it is read by whoever wants it. Once connected
+     the control stops being a verb and becomes the state, with the undo beside it. */
+  'search.connect': 'Connect to Freesound.org',
+  'search.connectHelp':
+    'OAuth authorization. Freesound.org asks for your password on their own page, never here, and hands this tab a token you can revoke from either side. With an account connected you can search freesound.org alongside the catalog and use a recording as a reference to fit against.',
   'search.connectNote':
     'Sign in with your own freesound.org account. Their API answers for accounts, not for keys — and with yours connected the download button hands over the original file, not a preview. Read more at',
   'search.connected': 'freesound.org connected',
@@ -413,7 +436,6 @@ export const en = {
   'search.connectedNote': 'kept in this browser until you disconnect',
   'search.noBank':
     'This bank has no freesound.org application configured, so it cannot connect an account. A bank set up for it offers the button here.',
-  'search.needsConnection': 'Connect a freesound.org account above, then describe the sound and press Make sound.',
   'search.connCancelled': 'Connection cancelled — nothing was shared.',
   'search.connFailed': 'freesound.org did not finish the connection. Try again.',
   'search.cc0': 'CC0 only',
@@ -426,7 +448,7 @@ export const en = {
   'search.rewritten': 'written by the model',
   'search.found': '{count} in the library, {shown} here',
   'search.searching': 'searching…',
-  'search.idle': 'Describe the sound in the box above and press Make sound.',
+  'search.idle': 'Type in the search box above and recordings of it appear here.',
   'search.nothing': 'Nothing matched. Try “all licences”, a longer length, or plainer words.',
   'search.play': 'play the preview',
   'search.stop': 'stop',
@@ -458,7 +480,7 @@ export const en = {
   'compare.record': 'Microphone',
   'compare.recordStop': 'Stop recording',
   'compare.recordFit': 'Record → Fit',
-  'compare.modelBlocked': 'needs the local diffusion model — install it from the Model tab',
+  'compare.modelBlocked': 'needs the local diffusion model — this opens AI Render, where it installs',
   'compare.nothingLoaded': 'nothing loaded',
   'compare.hintModel': 'rendered by a diffusion model from the same prompt — a target, not a competitor',
   'compare.hintLibrary': 'a recording from freesound.org — preview quality, under the licence its row states',
@@ -470,8 +492,8 @@ export const en = {
   'compare.dropzone':
     'Nothing to compare against yet. Drop an audio file here, pick “{take}” to render this recipe with a new seed, or {model}.',
   'compare.dropzoneModelReady': 'let the local model render a target',
-  'compare.dropzoneModelMissing': 'install the local model in the Model tab',
-  'compare.dropzoneLibrary': 'or find a recording of it in the Search tab',
+  'compare.dropzoneModelMissing': 'install the local model on the AI Render tab',
+  'compare.dropzoneLibrary': 'or find a recording of it on freesound.org, from the Sounds page',
   'compare.candidate': 'candidate',
   'compare.alignment':
     'both onsets shifted to {onset} ms · peak-normalized · log frequency {min} Hz – {max}',
@@ -550,6 +572,16 @@ export const en = {
     'It is kept on this machine so you do not paste it again: encrypted in this browser’s IndexedDB under a key nothing can export — never in localStorage, never uploaded. Any script served from this page could still use it, which lib/keystore.ts spells out.',
   'dialog.keyStorageNone':
     'This browser cannot store it, so the key lives in this tab only and a reload will ask for it again.',
+  /* The one tab whose client installs nothing. Its lede has to do the work the health
+     checks do on every other tab — say what this door can and cannot do — because a chat
+     has no daemon to report on and no tools to list. */
+  'dialog.chatTab': 'Any chat',
+  'dialog.chatTitle': 'Paste this into a chat that can fetch a URL',
+  'dialog.chatLede':
+    'ChatGPT, Gemini, Claude — anything with a web-fetch button can search this bank and hand you a sound. It reads its own instructions from the link, so the paste stays one line and never goes stale.',
+  'dialog.chatNote':
+    'It searches, links you here and repeats the soundline back — it does not design. A chat cannot hear, cannot measure and cannot be told which invariant it broke; the ear in that loop is yours.',
+  'dialog.chatWhat': 'the chat prompt',
   'dialog.bridgeLedeLive':
     'The bridge runs on your machine and lets a coding agent design, render, audition and export sounds here — with no API key, because the agent already has a model. It can also answer this playground’s own Generate button.',
   'dialog.bridgeLedeDead':
@@ -594,8 +626,6 @@ export const en = {
   'app.seed': 'seed',
   'app.rnd': 'rnd',
   'app.rndTitle': 'new random seed',
-  'app.save': 'Save',
-  'app.saveTitle': 'write examples/<name>.soundline',
   'app.publish': 'Publish',
   'app.saved': 'saved {path}',
   'app.published': 'published as #{id}',
@@ -620,6 +650,7 @@ export const en = {
   'dl.savedSize': 'saved {file} · {size}',
   'dl.noCompile': 'the recipe does not compile — nothing to export',
   'dl.nothingRendered': 'nothing rendered yet',
+  'dl.renderFail': 'this recipe could not be rendered: {error}',
   'dl.encodeFail': 'this browser could not encode {format}: {error} — WAV always works',
   'dl.copied': 'copied {what}',
   'dl.clipboardRefused': 'the browser refused clipboard access — select the text instead',

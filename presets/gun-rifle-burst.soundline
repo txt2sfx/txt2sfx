@@ -1,0 +1,10 @@
+# prompt: automatic rifle burst, several rounds
+# tags: rifle, burst, automatic, weapon
+# The repeats are a delay line, not four layers: an automatic weapon fires at a
+# fixed interval and every round is the same round quieter, which is exactly
+# what feedback does. `engine-idle` uses the same trick for a firing order —
+# the only difference here is that the interval is 700 rounds a minute.
+sound "rifle burst" 1250ms impact
+  shot: noise white >> hp ~2400Hz[1200..6000] >> delay ~85ms[50..160] feedback 0.6 mix 1 | gain 0.36 attack 0ms decay 40ms
+  punch: sub ~120Hz[60..200] -> 60Hz in 50ms >> delay ~85ms[50..160] feedback 0.6 mix 1 | gain 0.34 attack 2ms decay 60ms
+  room: noise pink >> lp ~1600Hz[600..4000] | gain 0.12 attack 20ms decay 900ms

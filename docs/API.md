@@ -77,6 +77,27 @@ numbers appear.
 The embedded examples are filtered to recipes that pass validation — see the few-shot rule
 in [AGENT_LOOP.md](AGENT_LOOP.md).
 
+## The chat door, and the one thing it is measured by
+
+A chat with a web-fetch button is a client of this API and of nothing else: no shell, no
+MCP, no bridge, `GET` and nothing more. It is served by two routes that already existed —
+`/api/retrieve` to search and `/api/recipes/:id` to resolve a link — plus a file the
+*playground* emits, `https://txt2sfx.github.io/chat.txt`, which is the instructions
+(`chatOnboardingPrompt` in `packages/agent`, the same place the bridge's paste lives).
+
+Nothing was added to this server for it, and that is the design rather than an accident.
+The endpoint such a client would actually want is a `GET` that validates and renders — the
+one thing a chat cannot do for itself — and it is exactly the endpoint that would hand
+anonymous callers the CPU this bank spends as its anti-spam cost (see *Why the server
+renders*). So the chat is told to search and to link, not to design, and it says so in the
+prompt.
+
+What it does add is a marker: the prompt asks for `&via=chat`, and the playground repeats
+it when it resolves `#recipe=<id>`. Handlers read named keys and ignore the rest, so this
+is zero code and changes no answer — it exists to make one line of the access log
+distinguish a chat's visitor from the gallery's own reads. That number, and not an opinion,
+is what should decide whether this door ever gets a `/api/check`.
+
 ## `POST /api/recipes`
 
 Body: `{ name, prompt, soundline, tags, parentId? }`.

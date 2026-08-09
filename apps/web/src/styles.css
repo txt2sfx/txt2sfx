@@ -324,6 +324,16 @@ button.danger:hover:not(:disabled) {
   border-color: oklch(0.42 0.07 var(--red));
 }
 
+/* Save and Share sit together at the right end of the transport, and they are the same
+   width on purpose: one writes the recipe into the repository, the other hands it to
+   somebody else, and neither is the bigger gesture. */
+.exit-button {
+  min-width: 88px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 button.violet {
   border-color: oklch(0.33 0.05 var(--violet));
   background: oklch(0.23 0.03 var(--violet));
@@ -732,6 +742,12 @@ input[type='range'] {
 .screen-studio {
   display: flex;
 }
+/* The render screen has a rail of its own now, and it is on the other side. The studio's
+   rail is a *source* — you pick from it and the screen follows; this one is an *output*,
+   filled by what the screen just did, and on the left it would read as the subject. */
+.screen-render {
+  display: flex;
+}
 
 .wrap {
   max-width: 1060px;
@@ -759,7 +775,121 @@ input[type='range'] {
 }
 .hero-row {
   display: flex;
-  gap: 9px;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* --- the library, beside the search box ---------------------------------- */
+
+/* Green, which is the library's colour everywhere else in the app, and *not* the cyan
+   of the box it stands beside: it is a second index answering the same question, not
+   another part of the same control. Tall enough to align with the hero box without
+   matching it — matching would make two equal buttons out of a search and its source. */
+.fs-button {
+  height: 42px;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-color: oklch(0.34 0.05 var(--green));
+  background: oklch(0.23 0.03 var(--green));
+  color: oklch(0.84 0.1 var(--green));
+  font-size: 13px;
+  white-space: nowrap;
+}
+.fs-button:hover:not(:disabled) {
+  border-color: oklch(0.44 0.08 var(--green));
+  background: oklch(0.27 0.04 var(--green));
+}
+/* The question mark beside the connect button. Deliberately not green: it is not a
+   second way to connect, it is the explanation of the first, so it reads as the page's
+   own furniture. `:focus-visible` gets the same lift as `:hover` because the tooltip it
+   carries is the only place the OAuth grant is described, and a keyboard user reaching
+   it must see the same affordance a mouse does. */
+.fs-help {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink-4);
+  font-size: 12px;
+  line-height: 1;
+  text-decoration: none;
+  cursor: help;
+}
+.fs-help:hover,
+.fs-help:focus-visible {
+  border-color: oklch(0.44 0.08 var(--green));
+  color: oklch(0.84 0.1 var(--green));
+}
+
+.fs-connect,
+.fs-connected {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.fs-connect p {
+  margin: 0;
+  flex-basis: 100%;
+}
+/* Connected, the control is a statement with an undo on it rather than a button. The
+   dot carries the state; making the whole thing look pressable again would invite a
+   click whose only meaning is "disconnect", which is the one thing beside it. */
+.fs-connected .ok {
+  color: oklch(0.8 0.12 var(--green));
+}
+.fs-connected .link {
+  color: var(--ink-4);
+}
+.fs-connected .link:hover {
+  color: oklch(0.8 0.1 var(--red));
+}
+
+/* The second answer, under the first. A rule and a heading rather than a card, because
+   the block is a *continuation* of the catalog's answer — a boxed panel would read as a
+   widget somebody embedded, which is exactly the separate-application feel that putting
+   the search here was meant to end. */
+.fs-block {
+  margin-top: 30px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.fs-head {
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.fs-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: oklch(0.82 0.09 var(--green));
+}
+/* The one control on the front page, at the size that says so. Capped rather than run
+   to the full 1060 px of the wrap: a line-length that long reads as a form field for a
+   paragraph, and what goes in here is two or three words. */
+.hero-search {
+  height: 56px;
+  max-width: 640px;
+  padding: 0 18px;
+  font-size: 16px;
+  border-radius: var(--radius-lg);
+}
+.hero-search input {
+  font-size: 16px;
+}
+.hero-search .faint {
+  font-size: 19px;
 }
 
 .onboard {
@@ -833,14 +963,17 @@ input[type='range'] {
   background: oklch(0.27 0.05 var(--hue));
   color: oklch(0.88 0.1 var(--hue));
 }
-.chip-quiet {
+/* The gallery's star filter. Amber rather than the cyan every other selected chip
+   wears, because it is not another category — it is the one chip that asks about this
+   browser rather than about the catalog. */
+.chip-star {
   border-color: oklch(0.25 0.014 265);
-  color: var(--ink-4);
+  color: oklch(0.7 0.06 var(--amber));
 }
-.chip-quiet.selected {
-  border-color: oklch(0.42 0.04 265);
-  background: oklch(0.26 0.02 265);
-  color: oklch(0.86 0.02 265);
+.chip-star.selected {
+  border-color: oklch(0.4 0.06 var(--amber));
+  background: oklch(0.26 0.035 var(--amber));
+  color: oklch(0.88 0.1 var(--amber));
 }
 .chip-amber.selected {
   border-color: oklch(0.4 0.06 var(--amber));
@@ -903,17 +1036,18 @@ button.chip-recording {
 
 /* --- card ---------------------------------------------------------------- */
 
+/* No `cursor: pointer` and no click of its own: the card is a panel, and Open is the
+   control. See the header of `SoundCard.tsx` for why it stopped being a button. */
 .card {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  height: auto;
   text-align: left;
   position: relative;
   padding: 13px 14px 12px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  cursor: pointer;
   overflow: hidden;
   animation: rise 0.28s ease both;
 }
@@ -921,8 +1055,11 @@ button.chip-recording {
   border-color: oklch(0.44 0.08 var(--hue));
   background: oklch(0.22 0.017 265);
 }
-.card:active {
-  transform: none;
+/* The one state in which the card must *not* clip: its own format popover is taller than
+   the row it hangs off. Switched by the card rather than by the menu because `overflow`
+   is the host's property — see `DownloadMenu`. */
+.card.menu-open {
+  overflow: visible;
 }
 .card-head {
   display: flex;
@@ -947,30 +1084,46 @@ button.chip-recording {
   white-space: nowrap;
   color: oklch(0.76 0.11 var(--hue));
 }
-.chip-danger {
-  font-family: var(--mono);
-  font-size: 10px;
+/* The star on a card, and the same star in the studio's button row. Amber when it is
+   on and grey when it is not, in both places: this is one state with two surfaces, and
+   the day they look different is the day somebody stars a sound twice. */
+.star {
+  height: auto;
+  padding: 0 2px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
   color: var(--ink-4);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 2px 6px;
   cursor: pointer;
-  white-space: nowrap;
-  transition: color var(--t), border-color var(--t);
 }
-.chip-danger:hover {
-  color: oklch(0.86 0.1 var(--red));
-  border-color: oklch(0.42 0.07 var(--red));
+.star:hover:not(:disabled) {
+  color: oklch(0.85 0.13 var(--amber));
+  border: none;
 }
+.star.on,
+.star.on:hover:not(:disabled) {
+  color: oklch(0.85 0.13 var(--amber));
+}
+.star-button.on {
+  border-color: oklch(0.42 0.07 var(--amber));
+  color: oklch(0.88 0.11 var(--amber));
+}
+
 .card-body {
   display: flex;
   align-items: center;
   gap: 11px;
 }
+/* The controls on a card are real buttons, so each of them undoes the height, the
+   padding and the raised background the global `button` rule gives every button in the
+   app — and their hover has to out-specify `button:hover:not(:disabled)`, which is why
+   `:not(:disabled)` is repeated here rather than left implied. */
 .play-round {
   flex: 0 0 auto;
   width: 34px;
   height: 34px;
+  padding: 0;
   border-radius: 50%;
   border: 1px solid oklch(0.4 0.07 var(--hue));
   background: oklch(0.26 0.035 var(--hue));
@@ -982,28 +1135,92 @@ button.chip-recording {
   cursor: pointer;
   transition: transform var(--t), background var(--t);
 }
-.play-round:hover {
+.play-round:hover:not(:disabled) {
   background: oklch(0.32 0.05 var(--hue));
+  border-color: oklch(0.4 0.07 var(--hue));
+  color: oklch(0.86 0.12 var(--hue));
 }
-.play-round:active {
+.play-round:active:not(:disabled) {
   transform: scale(0.94);
 }
+/* One line, beside the button rather than above it. Two lines meant every card in a row
+   was as tall as the wordiest prompt in it; a paragraph of its own then cost a whole
+   line of height for one line of text. Here it takes the width the row has left and
+   ellipses, and the whole prompt is one hover away (`title` on the element). */
 .card-prompt {
-  margin: 11px 0 0;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: 12px;
   line-height: 1.45;
   color: var(--ink-3);
-  text-wrap: pretty;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* `margin-top: auto` still aligns the Open buttons across a row, for the card that has
+   a social row and the card that does not — the card is a flex column, so the actions
+   row takes whatever slack is left instead of following the last paragraph. */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+/* The category's colour rather than the app's accent, and outlined rather than filled:
+   forty cards in a grid would be forty cyan pills, which is the thing the social row's
+   note warns about — the eye should land on a sound, not on a widget. Sharing `--hue`
+   with the play glyph beside it also says the two belong to this card. */
+.card-open {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 500;
+  background: none;
+  border-color: oklch(0.4 0.07 var(--hue));
+  color: oklch(0.86 0.12 var(--hue));
+}
+.card-open:hover:not(:disabled) {
+  background: oklch(0.3 0.045 var(--hue));
+  border-color: oklch(0.5 0.09 var(--hue));
+  color: oklch(0.92 0.11 var(--hue));
 }
 .card-edited {
-  margin-top: 7px;
+  flex: 0 0 auto;
   font-size: 10.5px;
   color: var(--ink-4);
+  white-space: nowrap;
+}
+/* Square, outlined and in the category's hue like Open beside it — one row, one family.
+   A glyph rather than a word because the row already spends its width on the prompt, and
+   the alternative was Open losing its label to make room for a second one. */
+.icon-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+.icon-download {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  background: none;
+  border-color: oklch(0.4 0.07 var(--hue));
+  color: oklch(0.86 0.12 var(--hue));
+}
+.icon-download:hover:not(:disabled) {
+  background: oklch(0.3 0.045 var(--hue));
+  border-color: oklch(0.5 0.09 var(--hue));
+  color: oklch(0.92 0.11 var(--hue));
+}
+.icon-download[aria-expanded='true'] {
+  background: oklch(0.3 0.045 var(--hue));
+  border-color: oklch(0.5 0.09 var(--hue));
 }
 
 /* ------------------------------------------------------------------------- *
@@ -1211,18 +1428,31 @@ button.chip-recording {
   font-size: 10px;
   opacity: 0.6;
 }
+/* The star. Dim like the play glyph until the row is hovered — with one exception, the
+   row that is starred, because a mark that only shows under the pointer cannot answer
+   "which of these did I keep" from across the list. */
 .rail-act {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-4);
   cursor: pointer;
   padding: 0 1px;
+  opacity: 0.7;
+  transition: opacity var(--t), color var(--t);
 }
-.rail-act:hover {
-  color: oklch(0.86 0.1 var(--red));
+.rail-row:hover .rail-act,
+.rail-act:focus-visible {
+  opacity: 1;
+  color: var(--ink-2);
+}
+.rail-act.on,
+.rail-row:hover .rail-act.on {
+  opacity: 1;
+  color: oklch(0.85 0.13 var(--amber));
 }
 
-.studio-main {
+.studio-main,
+.render-main {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
@@ -1236,8 +1466,67 @@ button.chip-recording {
   gap: 13px;
 }
 
+/*
+ * The prompt row grows downward instead of scrolling sideways.
+ *
+ * `height` becomes `min-height` for one reason: the sentence in this row is the caption
+ * the diffusion model reads, up to 200 characters, and a one-line box hid the interesting
+ * half of it behind the left edge on the exact screen where that sentence is the
+ * instrument. The buttons stay on the first line — `align-items: flex-start` plus a
+ * min-height on each — so a growing box does not carry Make sound down the page with it.
+ */
 .prompt-row .input-shell {
   gap: 10px;
+  height: auto;
+  min-height: 44px;
+  align-items: flex-start;
+  padding: 7px 12px 7px 14px;
+}
+/* Everything that is not the text sits on the first line, at one height — the gear is
+   27 px everywhere else, and next to a box that can be four lines tall a control half a
+   line short reads as misaligned rather than as small. */
+.prompt-row .caret,
+.prompt-row .prompt-count {
+  display: flex;
+  align-items: center;
+  height: 30px;
+}
+.prompt-row .chip-hue {
+  height: 30px;
+}
+.prompt-row .chip-hue.gear {
+  width: 30px;
+}
+.prompt-text {
+  flex: 1;
+  min-width: 40px;
+  /* One line by default, and no scrollbar ever: the height is set from `scrollHeight` on
+     every keystroke, so anything that scrolls here is a bug rather than a fallback. */
+  height: 30px;
+  max-height: 148px;
+  padding: 6px 0 0;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.45;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--ink);
+  font-size: inherit;
+  overflow-wrap: anywhere;
+}
+/* How much of the text encoder's window the sentence uses, right where the sentence is.
+   `flex: 0 0 auto` and `tabular-nums` so a counter ticking 8 → 108 does not push the two
+   buttons beside it sideways while somebody is typing. */
+.prompt-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-4);
+  cursor: default;
+}
+.prompt-count.warn {
+  color: oklch(0.8 0.13 var(--amber));
 }
 .chip-hue {
   display: flex;
@@ -1367,6 +1656,17 @@ button.chip-recording {
 .card-panel-head .cat {
   font-size: 11px;
 }
+/* The render screen's one panel. Amber the whole way down, because that is the colour
+   the model wears everywhere else — the B chip, the waveform, the install form — and a
+   screen whose subject is the model should not be the first place it is grey. */
+.render-panel {
+  --hue: var(--amber);
+}
+.render-panel .card-panel-head h2 {
+  color: oklch(0.84 0.1 var(--amber));
+  font-family: var(--mono);
+  font-size: 15px;
+}
 
 .strip {
   display: flex;
@@ -1448,6 +1748,12 @@ button.chip-recording {
   font-size: 11px;
   color: oklch(0.82 0.11 var(--cyan));
 }
+/* What the file will weigh. Dimmer than the format it follows, because the format is the
+   choice and this is only what the choice costs. */
+.split-size {
+  font-size: 10.5px;
+  color: var(--ink-4);
+}
 .split-toggle {
   width: 25px;
   padding: 0;
@@ -1507,6 +1813,16 @@ button.chip-recording {
   gap: 1px;
   animation: rise 0.14s ease both;
 }
+/* Upward and against the right edge, which is where the button that opens it sits: the
+   card's download glyph is in its last row, and a menu dropping *down* from there would
+   either be clipped by the gallery's scroller or lengthen the page under the cursor. */
+.menu-up {
+  top: auto;
+  bottom: 33px;
+  left: auto;
+  right: 0;
+  min-width: 196px;
+}
 .menu-item {
   display: flex;
   align-items: center;
@@ -1524,6 +1840,17 @@ button.chip-recording {
 }
 .menu-item:hover {
   background: oklch(0.25 0.02 265);
+}
+/* The size, and the tick, on one right-hand column. Dim: it is the consequence of the
+   choice, not the choice — the entry is picked by name. */
+.menu-right {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--ink-4);
+  white-space: pre;
+}
+.menu-item.selected .menu-right {
+  color: inherit;
 }
 .menu-item.selected {
   background: oklch(0.27 0.035 var(--cyan));
@@ -1994,7 +2321,22 @@ button.chip-recording {
   flex-wrap: wrap;
   font-size: 11.5px;
 }
+/* `.chip` is written for buttons, which centre their own text; on a span `height` is a
+   line the box does not keep, so the repo id sat off its own background. */
+.model-controls .chip {
+  display: inline-flex;
+  align-items: center;
+}
+/* The row's one button, the seed draw. Short and quiet: it is the second half of the
+   readout beside it, not a control with an opinion of its own. */
+.model-controls button {
+  height: 22px;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
 .model-wave {
+  position: relative;
   display: flex;
   padding: 10px 12px;
   background: var(--panel-3);
@@ -2002,29 +2344,41 @@ button.chip-recording {
   border-radius: var(--radius);
 }
 /*
- * The caption, on the same raised ground as the install form.
+ * What covers the bars while the next render is being made.
  *
- * A grid rather than a row of flex children because the field and the Rewrite button
- * share the first line while the three notes underneath run the full width — and the
- * button has to sit on the *input*, not on the label above it, which `align-items: end`
- * on a two-column grid gives for free.
+ * Over the waveform rather than beside it, because the thing that has to be said is about
+ * *those bars*: they are the previous answer, and a thirty-second wait spent looking at
+ * them reads as the new one. Nearly opaque rather than a light veil — a dimmed picture is
+ * a picture, and this one has to stop being readable.
  */
-.model-caption {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: 7px 9px;
-  padding: 11px 12px;
-  background: var(--panel-3);
-  border: 1px solid var(--line);
+.model-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  overflow: hidden;
   border-radius: var(--radius);
+  background: oklch(0.175 0.014 265 / 0.94);
+  color: oklch(0.84 0.11 var(--amber));
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
-.model-caption > p {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-.model-caption > button {
-  height: 32px;
+/* The motion is a band crossing the empty ground, not a pulse on the label: a fading
+   word is harder to read than a still one, and the point of the animation is only to say
+   that the wait is alive. Behind the text, and stopped outright by the reduced-motion
+   rule at the top of this file. */
+.model-busy::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, oklch(0.5 0.09 var(--amber) / 0.16), transparent);
+  animation: sweep 1.9s linear infinite;
 }
 /* The install screen. A card rather than loose rows, because it is a form with
    consequences — a few gigabytes of somebody's disk — and it should read as one
@@ -2112,6 +2466,151 @@ button.chip-recording {
   border-color: var(--line);
 }
 
+/* --- the kept renders, down the right-hand side --------------------------- */
+
+/*
+ * Amber the whole way down, like everything else the model made. The rail borrows the
+ * studio rail's proportions and none of its colour: two lists on two screens that look
+ * alike but hold different kinds of thing would be a worse mistake than either colour
+ * on its own.
+ */
+.render-rail {
+  flex: 0 0 232px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid oklch(0.28 0.03 var(--amber));
+  background: oklch(0.175 0.014 265);
+}
+.render-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 13px 12px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: 0 0 auto;
+}
+.render-rail-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: oklch(0.8 0.11 var(--amber));
+}
+.render-rail-empty {
+  margin: 0;
+  padding: 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-4);
+}
+.render-rail-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  /* The bottom padding clears the floating seed bar, which is fixed to the corner this
+     rail ends in — without it the last row is unreachable behind it. */
+  padding: 6px 6px 52px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Two lines, and the second one is evidence rather than a label — see `RenderRail.tsx`.
+   `grid` rather than flex so the middle column can be told to shrink: a title with no
+   spaces in it would otherwise push the two buttons off the row. */
+.render-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  transition: background var(--t);
+}
+.render-row:hover {
+  background: oklch(0.22 0.02 var(--amber));
+}
+.render-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.render-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.render-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: oklch(0.88 0.06 var(--amber));
+}
+.render-meta {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--ink-4);
+}
+/* Darker than the name on purpose: the name is the identifier and this is what it was
+   made from. Two lines then ellipsis — one line of a caption is rarely enough to tell
+   two renders of the same door apart. */
+.render-prompt {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: oklch(0.52 0.02 265);
+}
+.render-play {
+  flex: 0 0 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  border-color: oklch(0.32 0.05 var(--amber));
+  background: oklch(0.23 0.03 var(--amber));
+  color: oklch(0.86 0.11 var(--amber));
+}
+.render-play.playing {
+  background: oklch(0.32 0.06 var(--amber));
+  color: oklch(0.94 0.11 var(--amber));
+}
+/* Dim until the row is hovered, like the studio rail's star: two glyphs at full contrast
+   on every row would make the list read as forty controls rather than as forty sounds. */
+.render-act {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-4);
+  font-size: 11px;
+  opacity: 0.55;
+  transition: opacity var(--t), color var(--t);
+}
+.render-row:hover .render-act,
+.render-act:focus-visible {
+  opacity: 1;
+  color: oklch(0.86 0.1 var(--amber));
+}
+@media (max-width: 900px) {
+  /* Below this the panel itself stops fitting, and a 232 px rail beside a squeezed
+     waveform helps nobody. The renders are still there on a wider window. */
+  .render-rail {
+    display: none;
+  }
+}
+
 /* Where the gigabytes went. Monospace and dim: it is a receipt, not a control. */
 .model-facts {
   display: flex;
@@ -2172,21 +2671,6 @@ button.chip-recording {
   flex-direction: column;
   gap: 13px;
   animation: rise 0.28s var(--ease) both;
-}
-/* The key, on the raised ground the model's install form uses, and for the same
-   reason: it is the one control with a consequence outside this page. */
-.library-key {
-  display: flex;
-  align-items: end;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 11px 12px;
-  background: var(--panel-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.library-key .field {
-  flex: 1 1 260px;
 }
 .library-controls {
   display: flex;
@@ -2817,6 +3301,8 @@ button.chip-recording {
   margin-top: 9px;
 }
 .chip-social {
+  height: auto;
+  background: none;
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--ink-4);
@@ -2827,11 +3313,15 @@ button.chip-recording {
   white-space: nowrap;
   transition: color 0.14s var(--ease), border-color 0.14s var(--ease);
 }
-.chip-social:hover {
+.chip-social:hover:not(:disabled) {
   color: var(--ink-2);
   border-color: oklch(0.42 0.02 265);
 }
-.chip-social.on {
+/* Beats both `button.on` and the global hover, which is the whole reason the heart
+   keeps its colour while the pointer is on it. */
+.chip-social.on,
+.chip-social.on:hover:not(:disabled) {
+  background: none;
   color: oklch(0.82 0.13 var(--red));
   border-color: oklch(0.42 0.09 var(--red));
 }

@@ -42,7 +42,7 @@
  * line of output can be twenty seconds away, and until it lands the log cannot say that
  * anything is happening at all.
  *
- * ## Why the caption is a field and not a hidden step
+ * ## Why the caption is the prompt itself and not a field of its own
  *
  * The checkpoint conditions on **t5-base**, which reads English and at most 64 tokens.
  * A Russian prompt does not arrive slightly degraded, it arrives with holes in it —
@@ -50,12 +50,18 @@
  * a sentence nobody wrote. So pressing Render captions the prompt first: one cheap model
  * call, one line of concrete English acoustics, and *then* the subprocess.
  *
- * That caption is shown in an editable field rather than computed on the way past,
- * because on a diffusion model the caption is the instrument. It is the difference
- * between a render and a different render, so hiding it would be the same mistake as
- * hiding the download behind a spinner — and the panel would have no answer to "why did
- * it make that?". It is written once per prompt and reused, so tuning the length or the
- * seed does not spend another call.
+ * That caption used to live in an editable field under the prompt row, on the argument
+ * that on a diffusion model the caption is the instrument — it is the difference between
+ * a render and a different render, so computing it on the way past would leave the panel
+ * with no answer to "why did it make that?". The argument still holds; the second field
+ * was the wrong way to honour it. Two text boxes one above the other, holding nearly the
+ * same words, with only the lower one ever sent, made the prompt look like a draft.
+ *
+ * So the caption *replaces* the prompt, in place, and the row above is the only text on
+ * the screen: {@link ModelPanelProps.onPrompt} writes it back the moment a model has
+ * written one, whether that was `Rewrite` or the automatic pass on the way into a render.
+ * What is on screen is exactly what was sent, it stays editable, and it is written once
+ * per prompt — tuning the length or the seed does not spend another call.
  *
  * ## Why the prompt row can drive this panel
  *
@@ -72,7 +78,6 @@
  */
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react';
-import { CAPTION_LIMIT, captionIssue } from '@txt2sfx/agent';
 import { Bars } from './Bars.js';
 import { FormatMenu } from './FormatMenu.js';
 import { bars, ghostBars } from '../lib/layers.js';
@@ -122,12 +127,6 @@ const STAGE_KEY = {
  */
 const FALLBACK_SECONDS = 2;
 
-/** What the deterministic caption check reports, in one sentence each. */
-const CAPTION_ISSUE_KEY = {
-  script: 'model.captionScript',
-  length: 'model.captionLength',
-} as const;
-
 /**
  * Ask a model for an English caption describing the prompt.
  *
@@ -144,6 +143,13 @@ export type CaptionWriter = (input: {
 
 export interface ModelPanelProps {
   readonly prompt: string;
+  /**
+   * Where a caption goes once a model has written one: back into the prompt.
+   *
+   * The panel has no text field of its own any more — see the header — so this is the
+   * only way what was sent can be read afterwards, and the only way it stays editable.
+   */
+  readonly onPrompt: (next: string) => void;
   /** The last model render, decoded — the same object Compare uses as B. */
   readonly render: { readonly name: string; readonly buffer: AudioBuffer } | null;
   readonly onRendered: (file: File) => void;
@@ -160,6 +166,14 @@ export interface ModelPanelProps {
   readonly onDownload: (format: Format) => Promise<unknown> | void;
   readonly seed: number;
   /**
+   * Draw a new session seed.
+   *
+   * Beside the length rather than in the bar at the bottom of the page, because on this
+   * screen the seed is one of the two knobs there are: the same caption at a different
+   * seed is the model's other answer, and that is the whole reason to press Render twice.
+   */
+  readonly onReseed: () => void;
+  /**
    * How the prompt becomes something t5-base can read. Null when no model can.
    *
    * Which provider that is belongs to the prompt row's picker, not to this panel —
@@ -168,10 +182,12 @@ export interface ModelPanelProps {
   readonly writeCaption: CaptionWriter | null;
   /** Told when an install finishes, so the rest of the app stops saying "missing". */
   readonly onReady?: (ready: boolean) => void;
-  /** Filled with the two verbs the prompt row needs while this tab is the one showing. */
+  /** Filled with the verbs the prompt row needs while this tab is the one showing. */
   readonly controls?: RefObject<ModelControls | null>;
   /** True while a render or an install is in flight, including through an unmount. */
   readonly onBusy?: (busy: boolean) => void;
+  /** True while a caption is being written — the row's Rewrite button spins on it. */
+  readonly onCaptioning?: (writing: boolean) => void;
 }
 
 /** What this panel lets the screen above it do. */
@@ -180,10 +196,13 @@ export interface ModelControls {
   readonly run: () => void;
   /** Abort whatever is in flight — a render or an install. */
   readonly stop: () => void;
+  /** Rewrite the prompt into a caption the model can read, without spending a render. */
+  readonly rewrite: () => void;
 }
 
 export function ModelPanel({
   prompt,
+  onPrompt,
   render,
   onRendered,
   onCompare,
@@ -191,10 +210,12 @@ export function ModelPanel({
   onFormat,
   onDownload,
   seed,
+  onReseed,
   writeCaption,
   onReady,
   controls,
   onBusy,
+  onCaptioning,
 }: ModelPanelProps): React.JSX.Element {
   const { t } = useI18n();
   const [status, setStatus] = useState<ModelStatus | null>(null);
@@ -204,13 +225,12 @@ export function ModelPanel({
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [seconds, setSeconds] = useState<number | null>(null);
-  /* The caption, and the prompt it was written for. The second one is what makes this
-     one call per prompt rather than one per render: a caption is rewritten when it is
-     empty or when the prompt it describes has moved, and changing the length or the
-     seed does neither. `hand` is remembered so an edit is not reported as the model's. */
-  const [caption, setCaption] = useState('');
-  const [captionFor, setCaptionFor] = useState('');
-  const [captionBy, setCaptionBy] = useState<'model' | 'hand' | null>(null);
+  /* The last text a model wrote as a caption. It is what makes this one call per prompt
+     rather than one per render: with the caption written back into the prompt, a prompt
+     that *is* that string has already been captioned, and changing the length or the seed
+     does not make it stale. An edit by hand moves the prompt off it and captioning
+     resumes — which is the right answer, since a hand-edited line is a new sentence. */
+  const [captioned, setCaptioned] = useState('');
   const [captioning, setCaptioning] = useState(false);
   /* Both live in component state and nowhere else. The token is a credential and
      `lib/keystore.ts` sets the rule; the repo id is not, but it belongs to the same
@@ -311,26 +331,27 @@ export function ModelPanel({
   /**
    * Get the caption this render should use, asking a model when there is one to ask.
    *
-   * Returns the text rather than relying on the state it also sets: `setCaption` will
-   * not have landed by the time the render needs the string, and reading the stale
-   * value would send the previous prompt's caption.
+   * Returns the text rather than relying on the state it also sets: neither `onPrompt`
+   * nor `setCaptioned` will have landed by the time the render needs the string, and
+   * reading the stale value would send the previous prompt.
    */
   const captionFrom = useCallback(
     async (text: string, length: number, signal: AbortSignal, force = false): Promise<string> => {
-      const current = caption.trim();
-      const fresh = current !== '' && captionFor === text;
-      if (writeCaption === null || (fresh && !force)) return current === '' ? text : current;
+      if (writeCaption === null || (captioned === text && !force)) return text;
 
       setCaptioning(true);
       try {
         const written = await writeCaption({ prompt: text, seconds: length, signal });
         if (signal.aborted) return written.text;
-        setCaption(written.text);
-        setCaptionBy(written.source === 'model' ? 'model' : null);
-        /* Only a caption a model actually wrote counts as written *for* this prompt. A
-           failed call leaves the field stale on purpose, so the next Render retries
-           rather than sending the untranslated prompt for the rest of the session. */
-        if (written.source === 'model') setCaptionFor(text);
+        /* Only a caption a model actually wrote replaces the prompt. A failed call leaves
+           the text alone on purpose: the next Render retries rather than settling for the
+           untranslated prompt for the rest of the session — and overwriting somebody's
+           sentence with a fallback copy of itself would be a change that changed nothing
+           while looking like it had. */
+        if (written.source === 'model') {
+          onPrompt(written.text);
+          setCaptioned(written.text);
+        }
         setLines((lines) => [
           ...lines,
           written.source === 'model'
@@ -342,7 +363,7 @@ export function ModelPanel({
         setCaptioning(false);
       }
     },
-    [caption, captionFor, writeCaption, t],
+    [captioned, writeCaption, onPrompt, t],
   );
 
   const run = useCallback(() => {
@@ -430,7 +451,14 @@ export function ModelPanel({
 
   const stop = useCallback(() => abort.current?.abort(), []);
 
-  useImperativeHandle(controls, () => ({ run, stop }), [run, stop]);
+  useImperativeHandle(controls, () => ({ run, stop, rewrite }), [run, stop, rewrite]);
+
+  /* Same contract as `onBusy`: the row above holds the Rewrite button, and a spinner
+     left running by a screen that has gone away would be a control that lies. */
+  useEffect(() => {
+    onCaptioning?.(captioning);
+    return () => onCaptioning?.(false);
+  }, [captioning, onCaptioning]);
 
   /* The cleanup is the load-bearing half: leaving this tab aborts the render (see the
      unmount effect above), and a prompt row still offering to Stop something that is no
@@ -597,26 +625,20 @@ export function ModelPanel({
             }
           />
         </label>
+        {/* The seed, and the draw. Next to the length because the two of them are the
+            whole control surface of a diffusion render — everything else about it was
+            decided by the sentence in the row above. */}
         <span className="faint">{t('model.seed', { value: seed })}</span>
+        <button type="button" title={t('app.rndTitle')} onClick={onReseed} disabled={rendering}>
+          {t('app.rnd')}
+        </button>
       </div>
 
-      <Caption
-        value={caption}
-        prompt={prompt}
-        by={captionBy}
-        writing={captioning}
-        canWrite={writeCaption !== null}
-        disabled={rendering}
-        onChange={(next) => {
-          setCaption(next);
-          /* An edit is a caption for *this* prompt, however it got there — otherwise the
-             next Render would overwrite what was just typed. */
-          setCaptionFor(prompt.trim());
-          setCaptionBy(next.trim() === '' ? null : 'hand');
-        }}
-        onRewrite={rewrite}
-      />
-
+      {/* The waveform, and what covers it while a new one is being made.
+          The log below says *what* the subprocess is doing and stays readable; this says
+          that the picture underneath is the previous render and not the one being waited
+          for. Without it the only thing that changes for thirty seconds is a button in a
+          different part of the screen, and the stale bars read as the answer. */}
       <div className="model-wave">
         <Bars
           values={values}
@@ -626,22 +648,30 @@ export function ModelPanel({
           className="bars-master"
           color="oklch(0.80 0.12 80)"
         />
+        {/* Only while a render is in flight. A `Rewrite` pressed on its own makes no new
+            audio, and covering the last one to say so would report the wrong thing —
+            that press has its own spinner, in the button that was pressed. */}
+        {rendering ? (
+          <div className="model-busy mono" role="status">
+            <span className="spinner" aria-hidden="true" />
+            {t(captioning ? 'model.captionWriting' : 'model.generating')}
+          </div>
+        ) : null}
       </div>
 
+      {/* No Render button: the row above this panel is the one that runs it, on every
+          screen, and a second copy down here asked the same question twice — with a
+          different verb, which is worse. Stop lives there too, for the same reason.
+          Download is anchored to the right edge because it is the one control that ends
+          the session rather than continuing it. */}
       <div className="transport">
         <button type="button" className="amber-button big" onClick={play} disabled={render === null}>
           {playing ? '❚❚' : '▶'} {t('model.play')}
         </button>
-        {rendering ? (
-          <button type="button" onClick={stop}>
-            <span className="spinner" aria-hidden="true" />
-            {t('model.stop')}
-          </button>
-        ) : (
-          <button type="button" onClick={run} disabled={status.busy}>
-            ⤓ {t('model.render')}
-          </button>
-        )}
+        <button type="button" className="big" onClick={onCompare} disabled={render === null}>
+          {t('model.compare')}
+        </button>
+        <div className="spacer" />
         <FormatMenu
           formatId={formatId}
           onFormat={onFormat}
@@ -649,11 +679,10 @@ export function ModelPanel({
           disabled={render === null}
           className="amber"
           formats={AUDIO_FORMATS}
+          /* So the button says what the file will weigh before it is asked for one: a
+             WAV of this render is six times the MP3 beside it in the list. */
+          buffer={render?.buffer ?? null}
         />
-        <div className="spacer" />
-        <button type="button" onClick={onCompare} disabled={render === null}>
-          {t('model.compare')}
-        </button>
       </div>
 
       <p className="caption">{t('model.caption')}</p>
@@ -661,67 +690,6 @@ export function ModelPanel({
       {logBlock}
 
       <Facts status={status} />
-    </div>
-  );
-}
-
-/**
- * The one string the model actually reads.
- *
- * Its own component because the interesting part is not the input, it is the two lines
- * underneath: how long the caption is against what t5-base can hold, who wrote it, and
- * the deterministic complaint when the text will not survive the tokenizer. The check
- * runs on what *will be sent* — the field, or the prompt when the field is empty — so an
- * untranslated prompt is flagged before the thirty seconds of CPU, not after.
- */
-function Caption(props: {
-  readonly value: string;
-  readonly prompt: string;
-  readonly by: 'model' | 'hand' | null;
-  readonly writing: boolean;
-  readonly canWrite: boolean;
-  readonly disabled: boolean;
-  readonly onChange: (next: string) => void;
-  readonly onRewrite: () => void;
-}): React.JSX.Element {
-  const { t } = useI18n();
-  const sent = (props.value.trim() === '' ? props.prompt : props.value).trim();
-  const issue = sent === '' ? null : captionIssue(sent);
-
-  return (
-    <div className="model-caption">
-      <label className="field wide">
-        {t('model.captionLabel')}
-        <input
-          type="text"
-          name="model-caption"
-          autoComplete="off"
-          spellCheck={false}
-          /* The prompt as placeholder, because that is literally what an empty field
-             sends — a placeholder that said "caption…" would hide the default. */
-          placeholder={props.writing ? t('model.captionWriting') : props.prompt}
-          value={props.value}
-          onChange={(event) => props.onChange(event.target.value)}
-          disabled={props.disabled || props.writing}
-        />
-      </label>
-      <button
-        type="button"
-        className="amber"
-        onClick={props.onRewrite}
-        disabled={!props.canWrite || props.writing || props.disabled || props.prompt.trim() === ''}
-      >
-        {props.writing ? <span className="spinner" aria-hidden="true" /> : '✎ '}
-        {t('model.captionRewrite')}
-      </button>
-      <p className="caption">
-        {props.canWrite ? t('model.captionHint', { limit: CAPTION_LIMIT }) : t('model.captionNoProvider')}
-      </p>
-      <p className="caption mono faint">
-        {t('model.captionCount', { count: sent.length, limit: CAPTION_LIMIT })}
-        {props.by === null ? '' : ` · ${t(props.by === 'model' ? 'model.captionByModel' : 'model.captionByHand')}`}
-      </p>
-      {issue === null ? null : <p className="caption warn">{t(CAPTION_ISSUE_KEY[issue], { limit: CAPTION_LIMIT })}</p>}
     </div>
   );
 }

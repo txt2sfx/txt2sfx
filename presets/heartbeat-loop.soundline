@@ -1,0 +1,11 @@
+# prompt: slow heartbeat loop for low health
+# tags: heartbeat, pulse, health, loop
+# The declared period is mostly silence, and that is the design: lub at 0 ms,
+# dub at 320 ms, then nothing until the loop comes round at 1200 ms — 50 beats
+# a minute. Shorten the header and the sound stops being a heartbeat and starts
+# being a drum.
+sound "heartbeat" 1200ms cycle loop
+  lub: sub ~55Hz[30..90] -> 40Hz in 60ms | gain 0.42 attack 8ms decay 180ms
+  chest: noise brown >> lp ~200Hz[80..450] | gain 0.18 attack 10ms decay 160ms
+  dub: sub ~48Hz[28..80] -> 35Hz in 60ms | gain 0.32 attack 8ms decay 200ms delay 320ms
+  chest2: noise brown >> lp ~180Hz[80..400] | gain 0.14 attack 10ms decay 180ms delay 320ms

@@ -1,0 +1,11 @@
+# prompt: sword blocked by a wooden shield with a metal boss
+# tags: shield, block, parry, combat
+# A shield is two materials answering one strike, and the mix between them is
+# the whole design decision: the wood plank knocks and stops, the metal boss
+# rings four times longer. Drop the wood layer and it is a bell; drop the metal
+# and it is a crate.
+sound "shield block" 600ms impact
+  strike: noise white >> bp ~3600Hz[1800..7000] Q3 | gain 0.28 attack 0ms decay 30ms
+  plank: modal wood ~260Hz[130..520] Q18 | gain 0.34 decay 220ms
+  boss: modal metal ~1400Hz[700..3000] Q90 | gain 0.26 decay 380ms
+  rattle: grains ~2400Hz[1200..5000] rate 45 width 4ms spread 1.5 bend 1 | gain 0.12 decay 260ms delay 60ms

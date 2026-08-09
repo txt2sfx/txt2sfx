@@ -1,0 +1,11 @@
+# prompt: bow string released, arrow away
+# tags: bow, arrow, string, archery
+# The one place in this catalog where `pluck` is the honest primitive rather
+# than a convenience: a bowstring *is* a short damped string, and the damping is
+# high because it is loaded with an arrow. `arrow-flyby` picks the sound up
+# from here.
+sound "bow release" 420ms foley
+  thwack: click 2ms >> bp ~900Hz[400..2200] Q3 | gain 0.5 attack 0ms decay 40ms
+  string: pluck ~220Hz[100..500] damp 0.8 bright 0.6 | gain 0.4 decay 180ms
+  creak: noise pink >> bp ~1800Hz[800..4000] Q5 | gain 0.16 attack 10ms decay 120ms
+  flight: noise white >> hp ~4000Hz[2000..9000] | gain 0.2 attack 30ms decay 220ms delay 120ms

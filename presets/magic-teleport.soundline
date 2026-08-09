@@ -1,0 +1,9 @@
+# prompt: teleport warp, quick suck and pop
+# tags: teleport, warp, portal, magic
+# A teleport is a laser played backwards: the sweep rises instead of falling,
+# and the transient lands at the *end* rather than the start. That reversal is
+# the entire cue for "went somewhere" as opposed to "was shot at".
+sound "teleport" 290ms laser
+  suck: chirp saw ~400Hz[200..900] -> ~3600Hz[1800..7000] in 180ms >> bp ~2000Hz[900..4500] Q2 | gain 0.34 attack 10ms decay 200ms
+  zap: noise white >> hp ~4000Hz[2000..8000] | gain 0.2 decay 60ms delay 170ms
+  pop: modal glass ~2600Hz[1200..5500] Q80 | gain 0.18 decay 110ms delay 175ms

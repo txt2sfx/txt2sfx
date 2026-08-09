@@ -1,0 +1,9 @@
+# prompt: retro 8-bit damage taken
+# tags: hurt, damage, retro, 8bit
+# Two octaves down in 180 ms, which is slower than the shot and slower than the
+# jump — the sweep rate is what the ear reads as "this happened to me" rather
+# than "I did this". The band-passed noise is the hit; without it the sweep
+# alone reads as a power-down.
+sound "8bit hurt" 260ms impact
+  hurt: chirp square ~440Hz[220..900] -> 110Hz in 180ms | gain 0.34 decay 220ms
+  hit: noise white >> bp ~1200Hz[500..3000] Q2 | gain 0.16 decay 90ms

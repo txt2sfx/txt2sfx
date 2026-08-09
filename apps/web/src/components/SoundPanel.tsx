@@ -23,6 +23,19 @@
  * this row. Putting the share action three panels down would mean the thought and the
  * button are never on screen together.
  *
+ * ## The row has two ends and they mean different things
+ *
+ * Left is what you do *to the sound while working on it* — play it, loop it. Right is
+ * what you do *with it once it is good* — take the file, keep it, hand it to somebody.
+ * Download and Keep sit on the right for that reason and not for symmetry: read left to
+ * right, the row is the order the work happens in.
+ *
+ * `Save` used to be the last of them, writing `examples/<name>.soundline` in a dev build.
+ * It is gone from the row: beside a star labelled **Keep** it read as the same gesture
+ * spelled twice, and two buttons that both look like "remember this" is worse than one
+ * fewer way to write a file. The write itself is still there on Ctrl/Cmd+S and over the
+ * bridge, which is who was using it.
+ *
  * @packageDocumentation
  */
 
@@ -66,7 +79,10 @@ export interface SoundPanelProps {
   readonly onDownload: (format: Format) => Promise<unknown> | void;
   readonly onPlay: () => void;
   readonly onLoop: () => void;
-  readonly onTrash: () => void;
+  /** Star the open recipe, or take the star back. Reflected in the rail's tab. */
+  readonly onFavorite: () => void;
+  /** Whether it is starred right now — the button is a toggle, not an action. */
+  readonly favorite: boolean;
   readonly onShare: () => void;
 }
 
@@ -82,7 +98,8 @@ export function SoundPanel({
   onDownload,
   onPlay,
   onLoop,
-  onTrash,
+  onFavorite,
+  favorite,
   onShare,
 }: SoundPanelProps): React.JSX.Element {
   const { t } = useI18n();
@@ -150,17 +167,29 @@ export function SoundPanel({
         >
           ↻ {t('sound.loop')}
         </button>
+        <div className="spacer" />
+        {/* Everything past here is what you do with a sound that is finished — see the
+            header on why the row has two ends. */}
         <FormatMenu
           formatId={formatId}
           onFormat={onFormat}
           onDownload={onDownload}
           disabled={ast === null && rendered === null}
+          buffer={rendered?.buffer ?? null}
         />
-        <button type="button" className="danger" onClick={onTrash} title={t('sound.trashTitle')}>
-          {t('sound.trash')}
+        {/* Where Trash used to be. Same slot, opposite sign: the studio is where a
+            recipe earns a star, because this is the screen you are on when you decide
+            it is good. */}
+        <button
+          type="button"
+          className={`star-button${favorite ? ' on' : ''}`}
+          onClick={onFavorite}
+          aria-pressed={favorite}
+          title={t(favorite ? 'card.unfavorite' : 'card.favorite')}
+        >
+          {favorite ? '★' : '☆'} {t('sound.favorite')}
         </button>
-        <div className="spacer" />
-        <button type="button" className="violet" onClick={onShare} disabled={ast === null}>
+        <button type="button" className="violet exit-button" onClick={onShare} disabled={ast === null}>
           {t('sound.share')}
         </button>
       </div>

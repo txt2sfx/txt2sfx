@@ -140,6 +140,41 @@ describe('bank client', () => {
     }
   });
 
+  /* The caller is a link somebody followed from outside — a chat's `#recipe=<id>`.
+     Every way that can fail lands in the same place, an ordinary playground, because
+     "the bank is down", "it was hidden this morning" and "the model invented the id"
+     are three sentences the person who clicked can do nothing with. */
+  it('fetches one recipe by id, and answers null for every way that fails', async () => {
+    const { fetch, calls } = stub({
+      'GET /api/recipes/7': () => json(200, RECIPE),
+      'GET /api/recipes/8': () => json(404, { error: 'not-found', message: 'no recipe with id 8' }),
+      'GET /api/recipes/9': () => json(200, { note: 'not a recipe' }),
+    });
+    const client = bankClient(DEFAULT_BANK_URL, { fetch });
+    await expect(client.get(7)).resolves.toMatchObject({ id: 7, soundline: RECIPE.soundline });
+    await expect(client.get(8)).resolves.toBeNull();
+    await expect(client.get(9)).resolves.toBeNull();
+    expect(calls).toEqual(['GET /api/recipes/7', 'GET /api/recipes/8', 'GET /api/recipes/9']);
+
+    const offline = bankClient(DEFAULT_BANK_URL, { fetch: () => Promise.reject(new TypeError('fetch failed')) });
+    await expect(offline.get(7)).resolves.toBeNull();
+  });
+
+  /* The marker is how the access log tells a chat's visitor from the gallery's own
+     reads, and it is the only measurement this channel has. It must be on the wire and
+     it must be absent when nobody asked for it — a playground that stamped every read
+     `via=chat` would answer the question with a yes it invented. */
+  it('carries the via marker only when it is given one', async () => {
+    const { fetch, urls } = stub({ 'GET /api/recipes/7': () => json(200, RECIPE) });
+    const client = bankClient(DEFAULT_BANK_URL, { fetch });
+    await client.get(7, { via: 'chat' });
+    await client.get(7);
+    expect(urls).toEqual([
+      'http://127.0.0.1:8787/api/recipes/7?via=chat',
+      'http://127.0.0.1:8787/api/recipes/7',
+    ]);
+  });
+
   it('publishes and reports what the bank created', async () => {
     let posted: unknown;
     const fetch: FetchLike = async (_url, init) => {

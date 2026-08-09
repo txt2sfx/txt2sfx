@@ -1,0 +1,11 @@
+# prompt: healing spell, warm rising shimmer
+# tags: heal, magic, buff, restore
+# Healing and damage differ by direction and by attack, not by timbre. Every
+# layer here opens slowly — 40 to 80 ms, where a hit opens in one — and the
+# sweep goes up an octave. Reverse both and the same four layers read as a
+# curse.
+sound "heal spell" 850ms pickup
+  glow: tone sine ~523Hz[300..900] | gain 0.2 attack 60ms hold 100ms decay 400ms
+  rise: chirp sine ~784Hz[400..1400] -> ~1568Hz[900..3000] in 400ms | gain 0.22 attack 40ms decay 420ms
+  air: grains ~6000Hz[3000..10000] rate ~60[30..180] width 6ms spread 2 bend 1.1 | gain 0.12 attack 80ms decay 400ms delay 120ms
+  chime: modal glass ~2093Hz[1200..4200] Q120 | gain 0.18 decay 420ms delay 300ms
