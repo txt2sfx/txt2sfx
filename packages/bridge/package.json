@@ -4,7 +4,15 @@
   "type": "module",
   "description": "Local daemon that puts an MCP coding agent in the same room as the txt2sfx playground: validate, render, measure and audition soundline without hosting anything.",
   "license": "Apache-2.0",
-  "keywords": ["mcp", "sfx", "sound-effects", "web-audio", "procedural-audio", "soundline", "txt2sfx"],
+  "keywords": [
+    "mcp",
+    "sfx",
+    "sound-effects",
+    "web-audio",
+    "procedural-audio",
+    "soundline",
+    "txt2sfx"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/txt2sfx/txt2sfx.git",
@@ -37,7 +45,7 @@
     "@txt2sfx/core": "workspace:*",
     "@txt2sfx/optimizer": "workspace:*",
     "@txt2sfx/shared": "workspace:*",
-    "esbuild": "^0.24.2"
+    "esbuild": "^0.28.2"
   },
   "optionalDependencies": {
     "node-web-audio-api": "^2.1.0"

@@ -73,10 +73,17 @@ export interface Keystore {
   names(): Promise<readonly string[]>;
 }
 
-/** The subset of `crypto` used, so a test can pass Node's implementation. */
+/**
+ * The subset of `crypto` used, so a test can pass Node's implementation.
+ *
+ * `getRandomValues` mirrors the lib signature rather than simplifying it: the
+ * standard excludes a bare `ArrayBuffer` because there is no element type to
+ * fill, and a looser `ArrayBufferView` here stopped matching the platform
+ * `crypto` outright once the DOM lib tightened it.
+ */
 export interface CryptoLike {
   readonly subtle: SubtleCrypto;
-  getRandomValues<T extends ArrayBufferView>(array: T): T;
+  getRandomValues<T extends Exclude<BufferSource, ArrayBuffer>>(array: T): T;
 }
 
 /**

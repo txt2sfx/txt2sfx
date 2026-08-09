@@ -2,7 +2,13 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    // The bridge is the one package that is Node all the way down — child
+    // processes, sockets, Buffer. It used to get these globals by accident,
+    // from TypeScript walking up to the root `node_modules/@types`; TypeScript 7
+    // no longer does, and 97 "Cannot find name 'Buffer'" is what that looks
+    // like. Declared explicitly, the way apps/server always did.
+    "types": ["node"]
   },
   "include": ["src"],
   "references": [
