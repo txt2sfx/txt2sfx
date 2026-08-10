@@ -89,6 +89,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bars } from './Bars.js';
 import { FormatMenu } from './FormatMenu.js';
+import { IconPause, IconPlay } from './Icons.js';
 import { decodeAudioFile } from '../lib/analysis.js';
 import {
   LIBRARY_FORMATS,
@@ -400,7 +401,7 @@ function Row(props: RowProps): React.JSX.Element {
         title={props.playing ? t('search.stop') : t('search.play')}
         onClick={props.onPlay}
       >
-        {props.playing ? '❚❚' : '▶'}
+        {props.playing ? <IconPause size={12} /> : <IconPlay size={12} />}
       </button>
 
       <Bars

@@ -165,6 +165,8 @@ export function RenderScreen(props: RenderScreenProps): React.JSX.Element {
 
   return (
     <div className="screen screen-render">
+      <RenderRail items={kept} onSaved={props.onStatus} onForget={forget} />
+
       <main className="render-main">
         <div className="column">
           <PromptRow
@@ -220,8 +222,6 @@ export function RenderScreen(props: RenderScreenProps): React.JSX.Element {
           </section>
         </div>
       </main>
-
-      <RenderRail items={kept} onSaved={props.onStatus} onForget={forget} />
     </div>
   );
 }

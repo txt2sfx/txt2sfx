@@ -237,6 +237,15 @@ note is an ordinary soundline recipe, compiled by the same compiler and rendered
 same renderer, so a loop exports as a table of arrow functions plus a schedule — no sample
 data — or as MIDI for a DAW.
 
+The instruments are synthesized, and the named ones are *modelled* rather than approximated:
+the guitar is a pickup, a shaper and a **speaker cabinet** in that order, because the cabinet
+is what separates a guitar from a buzzer; the organ sums sine drawbars off tone wheels, which
+is what a Hammond physically does; the choir is two formants at fixed frequencies, which is
+what a vowel is. Where an open General MIDI bank belongs is the **export**: every lane carries
+its GM program change, so the same eight bars open in a DAW as distortion guitar, drawbar
+organ and choir aahs, played by whatever bank is loaded there. Putting a sample bank in the
+player instead is the one change that would make "exports as code" a lie.
+
 What the connected model writes there is a **score**: tempo, key, form, which instruments
 play, and every note, in a small text DSL with a deterministic checker in front of it
 (`apps/web/src/lib/score.ts`). The rules are the physics a score does have — a closed lane
@@ -245,10 +254,18 @@ carries an imperative fix, so a rejected score is repaired the same way a reject
 is. It also names the track and writes a line about each part, which is what the screen
 shows while that part's audio is being rendered.
 
-With no model connected the screen is unchanged: a seeded composer writes the arrangement
-from the preset and a keyword table, instantly and offline. Which of the two you got is on
-screen, always — a soundtrack that quietly came from the PRNG after a model was asked for
-would put every later one under suspicion.
+The brief is assembled rather than chosen: the chips under the box are **prompt fragments**
+— a mood, a motion, a texture, a part, a place — and pressing one adds its words to the
+request as a tag you can take back out. Nothing is a preset, so nothing pins the tempo, the
+key or the lanes behind the words; those are derived from the finished brief, which means
+what you type can always argue with them.
+
+With no model connected the screen is unchanged in kind: a seeded composer writes the
+arrangement from that same brief and a keyword table, instantly and offline. Which of the
+two you got is on screen, always — a soundtrack that quietly came from the PRNG after a
+model was asked for would put every later one under suspicion. While either one works, the
+screen shows the phase it is actually in — writing, checking, building instruments, mixing —
+and a repair trip says which rule the last score broke.
 
 The recipe bank runs as its own process and needs no native build — it uses Node's built-in
 `node:sqlite`:

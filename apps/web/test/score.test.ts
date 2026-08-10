@@ -135,7 +135,7 @@ describe('expanding a pattern', () => {
      become a recipe is a lane that is silently silent — the same failure `loop.test.ts`
      guards for the seeded composer. */
   it('produces notes every voice template can turn into a recipe that parses', () => {
-    const context = { stepSeconds: stepSeconds(track), brightness: 0 };
+    const context = { stepSeconds: stepSeconds(track), brightness: 0, drive: 0 };
     for (const entry of track.lanes) {
       for (const note of entry.notes) {
         const text = voiceFor(entry.name, note, context);
@@ -170,7 +170,9 @@ describe('the rules', () => {
   });
 
   it('refuses a lane that is not an instrument, and one that is already playing', () => {
-    expect(errors('loop "x" 120bpm D min 8 bars\nlane guitar "g"\n  1-4  X...  0\n')).toContain('lane.unknown');
+    /* `sitar`, not `guitar` — the table has a guitar now, and an example that quietly became a
+       real instrument is a rule that stops being tested while still passing. */
+    expect(errors('loop "x" 120bpm D min 8 bars\nlane sitar "s"\n  1-4  X...  0\n')).toContain('lane.unknown');
     expect(errors('lane bass "b"\n  1-4  X...  0\n', { mode: 'add', bars: 8, existing: ['bass'] })).toContain(
       'lane.exists',
     );

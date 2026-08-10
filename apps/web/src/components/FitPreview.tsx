@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parse } from '@txt2sfx/core';
 import { GLOBAL_LIMITS } from '@txt2sfx/shared';
+import { IconDownload, IconPlay, IconStop } from './Icons.js';
 import { spectrogram } from '../lib/fft.js';
 import { drawFreqGrid, drawWaveform, drawWaveformGuides, spectrogramImage, type Box } from '../lib/draw.js';
 import { playBuffer, render, type Playback } from '../lib/engine.js';
@@ -167,13 +168,13 @@ export function FitPreview({ source, seed, onTake }: FitPreviewProps): React.JSX
     <div className="fit-preview">
       <div className="fit-preview-bar">
         <button type="button" onClick={play} disabled={buffer === null} title={t('fit.leaderTitle')}>
-          ▶ {t('fit.leader')}
+          <IconPlay size={11} /> {t('fit.leader')}
         </button>
         <button type="button" onClick={() => playback.current?.stop()}>
-          ■
+          <IconStop size={11} />
         </button>
         <button type="button" onClick={onTake} title={t('fit.takeTitle')}>
-          ⤓ {t('fit.take')}
+          <IconDownload size={11} /> {t('fit.take')}
         </button>
         <span className="hint">
           {buffer === null

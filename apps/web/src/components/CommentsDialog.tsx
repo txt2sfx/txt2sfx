@@ -30,6 +30,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { RecipeComment } from '@txt2sfx/shared';
+import { IconPlay } from './Icons.js';
 import type { AccountState } from '../lib/account.js';
 import { BankError, type BankClient } from '../lib/bank.js';
 import { ago } from '../lib/format.js';
@@ -141,7 +142,7 @@ export function CommentsDialog({
                     title={t('card.play')}
                     onClick={() => onPlay(`${recipe.name} · ${comment.author.login}`, comment.soundline ?? '')}
                   >
-                    ▶
+                    <IconPlay size={11} />
                   </button>
                   <pre className="mono">{comment.soundline}</pre>
                   <button

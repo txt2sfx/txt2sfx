@@ -53,6 +53,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IconPlay } from './Icons.js';
 import { spectrogram, type Spectrogram } from '../lib/fft.js';
 import {
   BAND_LABELS,
@@ -537,10 +538,10 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
         <div className="spacer" />
         <div className="chips">
           <button type="button" className="chip chip-cyan" onClick={() => playOne(candidate)} disabled={candidate === null}>
-            ▶ A
+            <IconPlay size={11} /> A
           </button>
           <button type="button" className="chip chip-amber" onClick={() => playOne(b?.buffer ?? null)} disabled={b === null}>
-            ▶ B
+            <IconPlay size={11} /> B
           </button>
           <button type="button" className="chip" onClick={alternate} disabled={candidate === null || b === null}>
             ⇄ A/B

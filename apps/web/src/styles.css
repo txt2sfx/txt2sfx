@@ -270,6 +270,25 @@ button:has(> .spinner) {
   gap: 7px;
 }
 
+/*
+ * The drawn icons (`components/Icons.tsx`).
+ *
+ * Two lines because two lines is all an icon needs from CSS, and everything else about it
+ * has to stay at the call site. `flex: 0 0 auto` for the half of them that sit in a flex
+ * row — a 14 px square must not be squeezed by a long name beside it — and the baseline
+ * nudge for the other half, which sit inline in a text button, where an SVG standing on
+ * the baseline reads as an icon that fell off the line.
+ *
+ * Deliberately no size and no colour: size is a number at the call site because `font-size`
+ * cannot reach an SVG and these live in slots from 10 px to 18 px, and colour comes from
+ * `currentColor` in the markup, so an icon follows its own button's hover, focus and
+ * amber-when-on states without a rule per button.
+ */
+.ic {
+  flex: 0 0 auto;
+  vertical-align: -0.16em;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -742,9 +761,12 @@ input[type='range'] {
 .screen-studio {
   display: flex;
 }
-/* The render screen has a rail of its own now, and it is on the other side. The studio's
-   rail is a *source* — you pick from it and the screen follows; this one is an *output*,
-   filled by what the screen just did, and on the left it would read as the subject. */
+/* The render screen has a rail of its own, on the same side as the studio's. It was on the
+   right for a reason that only reads on one screen at a time — an output, not a source, so
+   not in the position the eye reads first. Switching screens is where that broke down: the
+   rail changed sides, so the content column jumped sideways between two tabs of the same
+   header. A frame that moves costs more than the reading order gains, and the panel stays
+   the subject regardless, because it is what the prompt row points at. */
 .screen-render {
   display: flex;
 }
@@ -2466,7 +2488,7 @@ button.chip-recording {
   border-color: var(--line);
 }
 
-/* --- the kept renders, down the right-hand side --------------------------- */
+/* --- the kept renders, down the left-hand side ---------------------------- */
 
 /*
  * Amber the whole way down, like everything else the model made. The rail borrows the
@@ -2479,7 +2501,7 @@ button.chip-recording {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid oklch(0.28 0.03 var(--amber));
+  border-right: 1px solid oklch(0.28 0.03 var(--amber));
   background: oklch(0.175 0.014 265);
 }
 .render-rail-head {
@@ -2508,9 +2530,9 @@ button.chip-recording {
   flex: 1;
   overflow-y: auto;
   margin: 0;
-  /* The bottom padding clears the floating seed bar, which is fixed to the corner this
-     rail ends in — without it the last row is unreachable behind it. */
-  padding: 6px 6px 52px;
+  /* The 52 px that used to be here cleared the floating seed bar; the bar is fixed to the
+     bottom *right*, so from the left-hand side it no longer covers the last row. */
+  padding: 6px;
   list-style: none;
   display: flex;
   flex-direction: column;
@@ -3457,17 +3479,79 @@ button.chip-recording {
   padding: 18px 22px 64px;
 }
 
-.presets {
+/* --- the brief ----------------------------------------------------------- *
+ *
+ * Five rows of fragments, one per question a brief answers, and the fragments that were
+ * chosen live *inside* the box rather than in a strip beside it: the prompt that will be
+ * sent is the prompt that is on screen, in the order it was assembled. The box already
+ * grows (`.prompt-row .input-shell` is `height: auto`), so a brief with eight chips in it
+ * wraps rather than scrolling sideways past its own edge.
+ * ------------------------------------------------------------------------- */
+
+.tag-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tag-row {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
-.presets-label {
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
+.tag-row-label {
+  flex: 0 0 74px;
+  font-size: 10px;
+  letter-spacing: 0.09em;
   color: var(--ink-4);
   white-space: nowrap;
+}
+/* The chips are one line shorter than a filter chip: thirty-one of them are on screen at
+   once, and at 26 px they read as a wall of buttons rather than as a vocabulary. */
+.tag-row .chip {
+  height: 23px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+/* A fragment in the box. Coloured by its row, so a brief is legible as the questions it
+   answered without reading a word of it. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  margin-top: 3px;
+  padding: 0 4px 0 9px;
+  border-radius: 6px;
+  border: 1px solid oklch(0.42 0.07 var(--hue));
+  background: oklch(0.27 0.05 var(--hue));
+  color: oklch(0.9 0.09 var(--hue));
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.tag-drop {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: oklch(0.8 0.07 var(--hue));
+  font-size: 13px;
+  line-height: 1;
+}
+.tag-drop:hover {
+  background: oklch(0.36 0.07 var(--hue));
+  color: var(--ink);
+}
+/* The text field keeps the height of the caret and the chips beside it, because the shell
+   is `align-items: flex-start` and an input at its natural height sits three pixels high
+   against a 24 px chip. */
+.prompt-row .input-shell input {
+  height: 30px;
 }
 
 /* Not `.panel`: that one clips its children, and the export menu has to paint over
@@ -3667,15 +3751,185 @@ button.chip-recording {
   animation: sweep linear infinite;
 }
 
-.composing {
+/* --- what is happening --------------------------------------------------- *
+ *
+ * Four rows, one per phase, plus a breathing bar row above them. Everything here takes its
+ * colour from `--hue`, which the component sets from the lane being built — so the panel is
+ * the colour of the instrument currently being made, and goes quiet again when it stops.
+ *
+ * The one thing this must never look like is a meter. The bars carry no number and are not
+ * derived from audio (nothing has been rendered yet during the first two phases); they are
+ * the *tempo of waiting*, which on a screen for ambience is a thing worth designing.
+ * ------------------------------------------------------------------------- */
+
+.stages {
   display: flex;
-  align-items: center;
-  gap: 9px;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 12px;
-  padding: 9px 12px;
+  padding: 11px 13px 9px;
   border: 1px dashed oklch(0.3 0.02 265);
-  border-radius: 9px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, oklch(0.23 0.02 var(--hue) / 0.5), transparent 70%);
   font-size: 11.5px;
   color: var(--ink-2);
   animation: rise 0.2s var(--ease) both;
+}
+
+.breath {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 34px;
+  margin-bottom: 7px;
+}
+.breath i {
+  flex: 1;
+  min-width: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, oklch(0.78 0.13 var(--hue)), oklch(0.44 0.08 var(--hue)));
+  transform-origin: bottom;
+  /* Slow — two and a half seconds — because this is the one element on the screen whose
+     job is that the wait feels like listening rather than like loading. */
+  animation: swell 2.6s var(--ease) infinite;
+}
+@keyframes swell {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 0.95;
+  }
+}
+
+.stage {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 17px;
+}
+.stage-mark {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin-bottom: 1px;
+  border-radius: 50%;
+  border: 1px solid oklch(0.4 0.02 265);
+}
+.stage-name {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+}
+.stage-detail {
+  min-width: 0;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A phase that has not started says nothing and looks like it. */
+.stage.waiting {
+  color: var(--ink-4);
+  opacity: 0.6;
+}
+.stage.done .stage-mark {
+  border-color: oklch(0.6 0.11 var(--green));
+  background: oklch(0.6 0.11 var(--green));
+}
+.stage.done {
+  color: var(--ink-3);
+}
+.stage.active .stage-mark {
+  border-color: oklch(0.8 0.13 var(--hue));
+  background: oklch(0.8 0.13 var(--hue));
+  box-shadow: 0 0 9px oklch(0.8 0.13 var(--hue));
+  animation: breathe 2.6s ease-in-out infinite;
+}
+.stage.active .stage-name {
+  color: oklch(0.9 0.08 var(--hue));
+}
+
+/* --- the card that is not there yet -------------------------------------- *
+ *
+ * Shaped like the real one so the phase list does not travel down the page when the answer
+ * lands. Still, not shimmering: the movement belongs on the phase list, where something is
+ * actually happening, and a placeholder that pulses on its own keeps promising.
+ * ------------------------------------------------------------------------- */
+
+.loop-ghost {
+  /* Dimmed as a whole rather than per element — one opacity is one decision, and it is the
+     decision the reader needs: none of this is real yet. */
+  opacity: 0.75;
+}
+.ghost-line {
+  display: block;
+  border-radius: 5px;
+  background: oklch(0.26 0.014 265);
+}
+.ghost-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 15px;
+}
+.ghost-title {
+  width: 150px;
+  height: 17px;
+}
+.ghost-meta {
+  width: 210px;
+  height: 11px;
+}
+.ghost-transport {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 13px;
+}
+.ghost-button {
+  width: 124px;
+  height: 34px;
+  border-radius: 9px;
+}
+.ghost-word {
+  width: 88px;
+  height: 11px;
+}
+.ghost-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 18px;
+}
+.ghost-lane {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ghost-label {
+  flex: 0 0 90px;
+  height: 12px;
+}
+/* 44 px, the height of a real lane row, so the card does not resize under the reader when
+   the timeline replaces it. */
+.ghost-track {
+  flex: 1;
+  height: 44px;
+  border-radius: var(--radius-sm);
+}
+/* A lane the track will have and does not yet: same height as a real row, so the timeline
+   is the size it will end at while showing only what has actually been rendered. */
+.lane-label.pending,
+.lane-track.pending {
+  opacity: 0.35;
+}
+.lane-label.pending {
+  display: flex;
+  align-items: center;
+}
+.lane-track.pending {
+  background: oklch(0.24 0.014 265);
 }

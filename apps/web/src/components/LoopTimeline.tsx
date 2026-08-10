@@ -28,11 +28,21 @@
  * @packageDocumentation
  */
 
+import { IconRotate, IconTrash } from './Icons.js';
 import { laneClips, type LoopLane } from '../lib/loop.js';
 import { useI18n } from '../lib/i18n.js';
 
 export interface LoopTimelineProps {
   readonly lanes: readonly LoopLane[];
+  /**
+   * Lanes this track will have and does not yet, drawn as dimmed rows.
+   *
+   * The reveal is a measurement (`useLoop.ts` says why), so the grid used to grow one row
+   * at a time and carry everything under it down the page twice a second. A placeholder row
+   * per staged lane keeps the card the height it will end at while still showing only the
+   * lanes that have actually been rendered.
+   */
+  readonly pending?: number;
   readonly bars: number;
   readonly steps: number;
   /** How long one lap takes, which is the playhead's animation duration. */
@@ -47,6 +57,7 @@ export interface LoopTimelineProps {
 
 export function LoopTimeline({
   lanes,
+  pending = 0,
   bars,
   steps,
   loopMs,
@@ -82,6 +93,11 @@ export function LoopTimeline({
             {lane.proposed === true ? <span className="lane-badge mono">{t('loop.laneNew')}</span> : null}
           </div>
         ))}
+        {Array.from({ length: pending }, (_, index) => (
+          <div className="lane-label pending" key={`pending-${String(index)}`} aria-hidden="true">
+            <span className="ghost-line ghost-label" />
+          </div>
+        ))}
       </div>
 
       <div className="timeline-grid">
@@ -111,7 +127,7 @@ export function LoopTimeline({
                   {t('loop.keep')}
                 </button>
                 <button type="button" className="icon" title={t('loop.retryTitle')} onClick={() => onRetry(lane.name)}>
-                  ↻
+                  <IconRotate size={12} />
                 </button>
                 <button
                   type="button"
@@ -119,11 +135,15 @@ export function LoopTimeline({
                   title={t('loop.discardTitle')}
                   onClick={() => onDrop(lane.name)}
                 >
-                  ✕
+                  <IconTrash size={12} />
                 </button>
               </div>
             ) : null}
           </div>
+        ))}
+
+        {Array.from({ length: pending }, (_, index) => (
+          <div className="lane-track pending" key={`pending-${String(index)}`} aria-hidden="true" />
         ))}
 
         {playing ? <div className="playhead" style={{ animationDuration: `${String(loopMs)}ms` }} /> : null}

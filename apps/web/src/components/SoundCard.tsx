@@ -38,6 +38,7 @@
 import { useState } from 'react';
 import { Bars } from './Bars.js';
 import { DownloadMenu } from './FormatMenu.js';
+import { IconPause, IconPlay, IconStar } from './Icons.js';
 import { catColor, catHue } from '../lib/design.js';
 import type { Format } from '../lib/download.js';
 import { ago, ms } from '../lib/format.js';
@@ -136,7 +137,7 @@ export function SoundCard({
           aria-pressed={favorite}
           onClick={onFavorite}
         >
-          {favorite ? '★' : '☆'}
+          <IconStar size={13} on={favorite} />
         </button>
       </div>
 
@@ -147,7 +148,7 @@ export function SoundCard({
           title={playing ? t('card.stop') : t('card.play')}
           onClick={onPlay}
         >
-          {playing ? '❚❚' : '▶'}
+          {playing ? <IconPause size={13} /> : <IconPlay size={13} />}
         </button>
         <Bars
           values={values}

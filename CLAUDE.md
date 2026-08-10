@@ -10,9 +10,10 @@ Four principles that are valid arguments in review (see [docs/ARCHITECTURE.md](d
 
 ## Environment
 
-`pnpm` is not on PATH on this machine; it is available through Corepack. Every `pnpm`
-command in this file and in the package scripts must be run as `corepack pnpm …` from a
-shell, even though CI and the documentation write it as plain `pnpm`.
+`pnpm` **is** on PATH on this machine — 10.11.0, installed globally with npm. Run every command
+below as plain `pnpm …`. This paragraph used to say the opposite and to require `corepack pnpm`;
+that stopped being true when this machine went to Node 25, which no longer ships Corepack at all,
+so `corepack pnpm test` now fails with "corepack is not recognized".
 
 ## Commands
 
@@ -84,8 +85,9 @@ The metric is scale-normalized and onset-aligned, so it cannot distinguish "this
 | add a model vendor | implement `LLMProvider` (one method) in `packages/agent`. Document the API version the request shape was written against and pin it in a test with an injected `fetch`. |
 | add a reference recipe | a file in `examples/` in canonical form (`serialize` decides), plus prompt and tags in the seeder's table. Several tests count the examples; `docs/ACOUSTIC_PROFILE.md` needs a `\| name \|` row. |
 | add a bench target | [bench/README.md](bench/README.md). Single-attempt targets must contain `~` slots; multi-attempt ones must actually differ between attempts — both enforced by tests. |
-| add a NeurosLoop lane | a row in `LANES` (`apps/web/src/lib/loop.ts`), a family in `loop-voice.ts` if it is new, a row in `LANE_MESSAGE` for the seeded path, and a role in `LANE_ROLE` (`lib/loop-agent.ts`). The model's lane table is *generated* from `LANES` — never write one into the prompt. |
+| add a NeurosLoop lane | a row in `LANES` (`apps/web/src/lib/loop.ts`), a family in `loop-voice.ts` if it is new, a row in `LANE_MESSAGE` for the seeded path with its `loop.msg.<lane>` string in `locales/en.ts`, a role in `LANE_ROLE` (`lib/loop-agent.ts`), and a General MIDI program in `PROGRAM` (`lib/loop-export.ts`) — a lane with no program exports as a piano. `test/loop.test.ts` fails on a missing caption or program. The model's lane table is *generated* from `LANES` — never write one into the prompt. |
 | add a scoreline rule | append to `SCORE_RULES` (`apps/web/src/lib/score.ts`) and enforce it in `validateScore`. Stable `rule` id, `hint` phrased as an imperative — same contract as `INVARIANTS`, same reason. |
+| add a NeurosLoop prompt fragment | a row in `LOOP_TAGS` (`apps/web/src/lib/loop.ts`). Its `phrase` must be words the keyword table in the same file already reads, or add a row to `WORDS` — a fragment that only changes the seed is a chip that looks broken with no model attached, and `test/loop.test.ts` fails on one. The palette numbers beside it are hints, never settings. |
 
 `test/docs.test.ts` also pins README wording (the honest size claim, the honesty-about-limits section) and checks every relative doc link resolves. If a change moves a measured number in `docs/`, update it in the same commit.
 
@@ -104,7 +106,7 @@ The metric is scale-normalized and onset-aligned, so it cannot distinguish "this
 - `examples/helicopter.soundline` knowingly breaks a duration invariant — its rotor *is* a delay line with high feedback. It is seeded with the error reported rather than hidden, and few-shot selection prefers recipes that validate. This is why the CI seed step is not `--strict`.
 - `codegen`'s 1 KB `withinBudget` is a **report, not a gate**. Three- and four-layer recipes exceed it because procedural buffer generators are a fixed cost; the compiler always emits working code and says what it cost.
 - `renderSound` reports clipping and never normalizes — normalization would hide the problem where it can still be fixed in the spec.
-- Dev-only instruments that must not reach a static build: the devtools `bridge` provider (`apps/web/src/lib/bridge.ts`, installed on `window` only under `vite dev`) and the Stable Audio endpoint (`apps/web/plugins/stable-audio.ts`, `apply: 'serve'`). The latter drives an already-provisioned Python venv — see [test/stable-audio/README.md](test/stable-audio/README.md) — and provisions nothing itself.
+- Dev-only instruments that must not reach a static build: the devtools `bridge` provider (`apps/web/src/lib/bridge.ts`, installed on `window` only under `vite dev`), the Stable Audio endpoint (`apps/web/plugins/stable-audio.ts`, `apply: 'serve'`) and the General MIDI bank preview (`apps/web/plugins/gm-bank.ts` + `apps/web/src/lib/gm.ts`, behind `import.meta.env.DEV`). The Stable Audio one drives an already-provisioned Python venv — see [test/stable-audio/README.md](test/stable-audio/README.md) — and provisions nothing itself; the GM one reads a bank already on the machine (`gm.dls` on Windows, or `TXT2SFX_GM_BANK`) and must never have one committed beside it. **A sample bank can never be what plays or exports** — that would make "a loop ships as code, no sample data" false. Where a bank legitimately belongs is the program changes of the exported MIDI (`PROGRAM` in `lib/loop-export.ts`); the preview exists only so the synthesized instruments can be A/B'd against one by ear.
 
 ## The public bank
 

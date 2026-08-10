@@ -44,6 +44,7 @@ import type { RenderResult } from '@txt2sfx/core';
 import type { SoundAST } from '@txt2sfx/shared';
 import { Bars } from './Bars.js';
 import { FormatMenu } from './FormatMenu.js';
+import { IconPause, IconPlay, IconRotate, IconStar } from './Icons.js';
 import { metricsOf, onsetIndex, signalOf } from '../lib/analysis.js';
 import { layerColor } from '../lib/design.js';
 import { ms } from '../lib/format.js';
@@ -155,7 +156,7 @@ export function SoundPanel({
 
       <div className="transport">
         <button type="button" className="primary big" onClick={onPlay} disabled={ast === null}>
-          {playing ? '❚❚' : '▶'} {t('sound.play')}
+          {playing ? <IconPause size={12} /> : <IconPlay size={12} />} {t('sound.play')}
         </button>
         <button
           type="button"
@@ -165,7 +166,7 @@ export function SoundPanel({
           disabled={rendered === null}
           title={t('sound.loopTitle')}
         >
-          ↻ {t('sound.loop')}
+          <IconRotate size={12} /> {t('sound.loop')}
         </button>
         <div className="spacer" />
         {/* Everything past here is what you do with a sound that is finished — see the
@@ -187,7 +188,7 @@ export function SoundPanel({
           aria-pressed={favorite}
           title={t(favorite ? 'card.unfavorite' : 'card.favorite')}
         >
-          {favorite ? '★' : '☆'} {t('sound.favorite')}
+          <IconStar size={12} on={favorite} /> {t('sound.favorite')}
         </button>
         <button type="button" className="violet exit-button" onClick={onShare} disabled={ast === null}>
           {t('sound.share')}

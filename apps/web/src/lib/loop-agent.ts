@@ -75,14 +75,19 @@ const LANE_ROLE: Readonly<Record<string, string>> = {
   bass: 'the bass line',
   chords: 'plucked chords, mid register',
   keys: 'plucked chords, one octave up',
-  stabs: 'short bright chord hits',
+  stabs: 'synth power chords, low and distorted — the heavy chord lane',
+  guitar: 'a distorted electric guitar through a cabinet — chords, low',
+  riff: 'the same guitar playing one line: a low, palm-muted riff',
+  organ: 'a drawbar organ — held chords, sustained not struck',
+  brass: 'a brass section — chords that take 30 ms to speak',
+  epiano: 'an electric piano, bell-like and struck',
   lead: 'the melody, high and cutting',
   arp: 'fast plucked figures',
   bells: 'sparse high bells',
   fx: 'one or two accents in the whole loop',
-  pads: 'held chords, the bed',
-  strings: 'held chords, softer',
-  choir: 'held chords, high and vowel-like',
+  pads: 'held chords, slow to arrive — the bed',
+  strings: 'held chords, slow to arrive, softer',
+  choir: 'held chords, slow to arrive, high and vowel-like',
   drone: 'a held sub, one note',
   air: 'high noise, barely there',
 };
@@ -138,7 +143,7 @@ fifth"). At most ${String(MAX_CAPTION)} characters.
 
 Lane names come from this closed table. There are no other instruments; a name that is
 not here plays nothing. If the request asks for an instrument that is not in the table
-("guitar", "brass"), pick the nearest family and say so in the caption.
+("banjo", "sitar"), pick the nearest one and say so in the caption.
 
 ${laneTable()}
 
@@ -201,6 +206,50 @@ ring across the loop point freely.
 - Accents are the groove: \`X\` on the beats you mean, \`x\` elsewhere, \`-\` to make
   percussion breathe.
 
+## Range
+
+You have one habit to fight, and it is the only reason this section exists: asked for
+"music", a model writes a bright major loop at 120 bpm with every part in its top octave
+and something playing on every eighth. That is one piece of music, and this screen is
+asked for hundreds.
+
+- **The mode is a decision, not a default.** Minor for anything cold, tense, tired,
+  underground, sacred or sad; major only when the request is genuinely sunlit. If the
+  request names no mood, minor is the safer read — the requests this screen gets are
+  ambience far more often than fanfare.
+- **Use the whole tempo range.** ${String(BPM_RANGE.min)} bpm is a real answer and so is
+  ${String(BPM_RANGE.max)}. Anything asking to be still, vast, heavy or half-time belongs
+  under 90.
+- **Register is expression.** Degrees run down to ${String(DEGREE_RANGE.min)}, and a
+  figure written an octave lower is a different piece of music, not a quieter one. Do not
+  put every lane at the top of its range; let one part sit low and alone.
+- **Dynamics.** A loop where every bar is as full as every other bar has no shape. Take a
+  lane out for four bars. Let one enter halfway. End a phrase early and leave the gap.
+- **Density is not effort.** Long notes and rests are composition. A pad holding one
+  chord for four bars while a bell plays three notes in sixteen is a finished piece of
+  music, and it is what most of these requests actually want.
+
+## How aggression works here
+
+Some requests are the opposite of ambience — a march, a boss, an assault, anything
+militant or industrial. The instruments saturate when the request reads that way, so the
+sound follows; what you have to get right is the *arrangement*, and there is one trap:
+
+- **The bed lanes — \`pads\`, \`strings\`, \`choir\`, \`drone\`, \`air\` — fade in.** They are
+  two detuned saws with a slow attack; that is what they are for and it cannot be swapped.
+  A held bed chord under a march turns the whole thing back into ambience with a drum
+  track. If you want chords that hit, use \`stabs\` (short bright chord hits) or \`chords\`,
+  and keep a bed lane out or give it long notes far under the rest.
+- **Aggression is the low end and the repetition**: \`drums\` on a hard, unbroken grid with
+  \`tom\` carrying the fills, \`bass\` in eighths mostly on the root, \`stabs\` — power
+  chords, the heaviest lane there is — on the beats or the offbeats, and a \`lead\` that
+  repeats a short figure rather than wandering. Ostinato, not melody.
+- **Weight comes from the bottom two octaves.** Prefer degrees at or below 0 in the low
+  lanes and do not answer "heavy" with a busier top end: four lanes crowding the middle
+  make the mixdown turn the whole thing down, and what it takes off is the weight.
+- Keep the tempo where the style lives — a march is near 120–130, not 90 — and stay in a
+  minor mode.
+
 ## How to reply
 
 - Reply with exactly one fenced code block containing the score, and nothing else — no
@@ -213,15 +262,23 @@ ring across the loop point freely.
   chose.`;
 }
 
-/** The first turn for a new track. */
-export function composeRequest(prompt: string, preset: LoopPreset): string {
+/**
+ * The first turn for a new track.
+ *
+ * The numbers are shown as what they are: a *guess the interface made from the same words
+ * you are reading*, produced by `paletteFor` so the built-in composer has something to
+ * work with. Naming it a palette the user "started from" — as this turn used to — invited
+ * the model to treat six fixed tempi as the brief, which is exactly the monotony the
+ * chips were replaced to end.
+ */
+export function composeRequest(prompt: string, palette: LoopPreset): string {
   return `Compose a new loop for this request:
 
 <request>
 ${prompt.trim()}
 </request>
 
-The user started from the "${preset.id}" palette: ${String(preset.bpm)}bpm, ${preset.key}, ${String(preset.bars)} bars, lanes ${preset.lanes.join('/')}. Treat that as a starting point, not a cage — depart from it in tempo, key or lane choice wherever the request reads better another way.`;
+From those words the interface guessed ${String(palette.bpm)}bpm, ${palette.key}, ${String(palette.bars)} bars and lanes ${palette.lanes.join('/')}. That guess exists so the built-in composer has numbers when you are not asked; it is not the brief. Set the tempo, key, mode, length and lane choice yourself from the request, and depart from the guess wherever the request reads better another way.`;
 }
 
 /** The first turn for lanes added to a track that already plays. */

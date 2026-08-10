@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { IconDownload } from './Icons.js';
 import { FORMATS, estimateBytes, formatById, sizeLabel, type Format } from '../lib/download.js';
 import { useI18n } from '../lib/i18n.js';
 
@@ -257,7 +258,7 @@ export function DownloadMenu({
         title={busy ? t('format.encoding') : (title ?? t('format.download'))}
         onClick={() => change(!open)}
       >
-        {busy ? '⋯' : '⤓'}
+        {busy ? '⋯' : <IconDownload size={14} />}
       </button>
 
       {open ? (

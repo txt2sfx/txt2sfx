@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { IconGlobe } from './Icons.js';
 import { LANGUAGES, useI18n } from '../lib/i18n.js';
 
 export function LanguageMenu(): React.JSX.Element {
@@ -58,7 +59,7 @@ export function LanguageMenu(): React.JSX.Element {
         title={t('lang.title')}
         onClick={() => setOpen((current_) => !current_)}
       >
-        <Globe />
+        <IconGlobe className="globe" />
         <span className="mono lang-code">{current.short}</span>
         <span className="caret-down">▾</span>
       </button>
@@ -84,25 +85,5 @@ export function LanguageMenu(): React.JSX.Element {
         </div>
       ) : null}
     </div>
-  );
-}
-
-/**
- * The globe, inline.
- *
- * Drawn rather than set as the 🌐 emoji: the emoji renders as a different picture at a
- * different weight on every platform this runs on, and next to a monospace code it comes
- * out either cartoonish or invisible depending on the machine. `currentColor` makes it
- * follow the button's own hover and focus states for free.
- */
-function Globe(): React.JSX.Element {
-  return (
-    <svg className="globe" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <g fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
-        <circle cx="8" cy="8" r="6.1" />
-        <path d="M1.9 8h12.2" />
-        <ellipse cx="8" cy="8" rx="2.7" ry="6.1" />
-      </g>
-    </svg>
   );
 }

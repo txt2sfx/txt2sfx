@@ -93,7 +93,10 @@ import {
   STEPS_PER_BAR,
   VELOCITY_STEP,
   degreeToMidi,
+  knobsFor,
+  laneOctave,
   parseKey,
+  register,
   type LoopLane,
   type LoopNote,
   type LoopTrack,
@@ -162,6 +165,10 @@ export const STEP_VELOCITY: Readonly<Record<string, number>> = { X: 0.9, x: 0.6,
 export const PIECES: Readonly<Record<string, number>> = {
   kick: DRUM.kick,
   snare: DRUM.snare,
+  /* The pitched membrane. Added because the kit had nothing between a kick and a snare, so a
+     march had no drums with any weight in them and the model had nothing to ask for. The
+     prompt's piece list is generated from this table, so naming it here is all it takes. */
+  tom: DRUM.tom,
   clap: DRUM.clap,
   rim: DRUM.rim,
   hat: DRUM.hatClosed,
@@ -775,7 +782,22 @@ function velocity(value: number): number {
  */
 export function laneFromScore(
   lane: ScoreLane,
-  options: { readonly key: string; readonly bars: number; readonly index: number; readonly salt: string },
+  options: {
+    readonly key: string;
+    readonly bars: number;
+    readonly index: number;
+    readonly salt: string;
+    /**
+     * The track's brief, for the register shift — and *only* for that.
+     *
+     * The shift used to apply to seeded arrangements alone, which made the honest half of
+     * "everything is too high" invisible: the model writes degrees in a lane's own register,
+     * that register came straight out of `LANES`, and so every model-composed track sat exactly
+     * where the table put it however heavy the request was. A degree is relative, so moving the
+     * register moves the part and leaves every musical decision the model made intact.
+     */
+    readonly prompt?: string;
+  },
 ): LoopLane {
   const spec = LANES[lane.name];
   const hue = LANE_HUES[options.index % LANE_HUES.length] ?? 195;
@@ -790,6 +812,8 @@ export function laneFromScore(
   if (spec === undefined) return base;
 
   const key = parseKey(options.key);
+  /* The same shift the seeded composer applies, from the same brief and the same function. */
+  const octave = laneOctave(spec, options.prompt === undefined ? 0 : register(knobsFor(options.prompt)));
   const notes: LoopNote[] = [];
 
   for (const row of lane.rows) {
@@ -826,7 +850,7 @@ export function laneFromScore(
         for (const degree of chord.slice(0, MAX_CHORD)) {
           notes.push({
             step,
-            midi: degreeToMidi(key, degree, spec.octave),
+            midi: degreeToMidi(key, degree, octave),
             /* Upper notes of a chord a shade quieter, the same taper the seeded
                composer uses — a triad at three equal velocities reads as a cluster. */
             gain: velocity(gain - chord.indexOf(degree) * 0.04),
@@ -858,7 +882,9 @@ export function trackFromScore(
     key,
     prompt: options.prompt,
     composedBy: 'model',
-    lanes: known.map((lane, index) => laneFromScore(lane, { key, bars, index, salt: options.salt })),
+    lanes: known.map((lane, index) =>
+      laneFromScore(lane, { key, bars, index, salt: options.salt, prompt: options.prompt }),
+    ),
   };
 }
 

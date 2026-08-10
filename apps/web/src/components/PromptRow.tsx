@@ -73,6 +73,7 @@
 
 import { useEffect, useRef } from 'react';
 import { CAPTION_LIMIT, captionIssue } from '@txt2sfx/agent';
+import { IconSpark } from './Icons.js';
 import type { ProviderKind } from '../lib/agent.js';
 import { HUE } from '../lib/design.js';
 import { useI18n } from '../lib/i18n.js';
@@ -251,8 +252,16 @@ export function PromptRow({
           >
             {/* The one exception to "the label is the verb and it does not change": a
                 press that searches the catalog must not read `Make sound`, because that
-                is the sentence the whole honesty argument is about. */}
-            {t(toRetrieval ? 'prompt.find' : 'prompt.make')}
+                is the sentence the whole honesty argument is about — and the spark keeps
+                the same promise the label does. A press that only searches the bank writes
+                nothing, so it does not wear the mark that says a model is about to. */}
+            {toRetrieval ? (
+              t('prompt.find')
+            ) : (
+              <>
+                <IconSpark size={12} /> {t('prompt.make')}
+              </>
+            )}
           </button>
         )}
 

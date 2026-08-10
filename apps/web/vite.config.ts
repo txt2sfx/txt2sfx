@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { chatPrompt } from './plugins/chat-prompt.js';
 import { examplesFs } from './plugins/examples-fs.js';
+import { gmBank } from './plugins/gm-bank.js';
 import { metrika } from './plugins/metrika.js';
 import { stableAudio } from './plugins/stable-audio.js';
 
@@ -52,6 +53,7 @@ export default defineConfig({
     react(),
     examplesFs(r('../../examples')),
     stableAudio(r('../../test/stable-audio')),
+    gmBank(),
     chatPrompt(),
     metrika(metrikaId),
   ],

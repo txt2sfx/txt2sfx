@@ -56,6 +56,7 @@ import { SOUND_CATEGORIES } from '@txt2sfx/shared';
 import { SoundCard } from '../components/SoundCard.js';
 import { Bars } from '../components/Bars.js';
 import { FreesoundButton, FreesoundResults } from '../components/Freesound.js';
+import { IconStar } from '../components/Icons.js';
 import type { Origin } from '../lib/catalog.js';
 import { catHue } from '../lib/design.js';
 import { downloadRecipe } from '../lib/download.js';
@@ -296,7 +297,7 @@ export function Gallery({
                 className={`chip chip-star${filter === 'favorites' ? ' selected' : ''}`}
                 onClick={() => onFilterChange(filter === 'favorites' ? 'all' : 'favorites')}
               >
-                ★ {t('gallery.favorites')} · {favoriteCount}
+                <IconStar size={12} on={filter === 'favorites'} /> {t('gallery.favorites')} · {favoriteCount}
               </button>
             </div>
           </div>

@@ -26,18 +26,41 @@
  * The mode owns the accent hue (cyan for new, amber for adding), so the prompt bar, its
  * button and the mode tabs all say which of the two is armed before it is pressed.
  *
+ * ## The chips are the brief, not a preset
+ *
+ * They used to be six palettes, and pressing one replaced the whole prompt and pinned the
+ * tempo, the key and the lane list — so "boss fight" typed under `menu-drift` composed
+ * `menu-drift`, and every take of every session came from one of six sentences. They are
+ * *fragments* now: pressing one adds its words to the brief as a tag with an ×, pressing
+ * it again takes them back out, and any number of them combine. The numbers the seeded
+ * composer needs are derived from the resulting text (`paletteFor`), which means the words
+ * can always argue with them — which is the property the chips never had.
+ *
+ * Nothing is armed and nothing is exclusive, so there is no selected state to explain:
+ * what will be composed is visible in the box, in the order it was assembled.
+ *
  * @packageDocumentation
  */
 
 import { useState } from 'react';
 import { encodeWav } from '@txt2sfx/core';
 import { FormatMenu } from '../components/FormatMenu.js';
+import { IconPause, IconPlay } from '../components/Icons.js';
+import { LoopProgress, LoopSkeleton } from '../components/LoopProgress.js';
 import { LoopTimeline } from '../components/LoopTimeline.js';
 import { HUE } from '../lib/design.js';
 import { LOOP_FORMATS, save, type Format } from '../lib/download.js';
 import { ms } from '../lib/format.js';
 import { useI18n, type Key } from '../lib/i18n.js';
-import { LANE_HUES, LOOP_PRESETS, loopSeconds, proposals, stepCount } from '../lib/loop.js';
+import {
+  LANE_HUES,
+  LOOP_TAGS,
+  TAG_GROUPS,
+  loopSeconds,
+  proposals,
+  stepCount,
+  type TagGroup,
+} from '../lib/loop.js';
 import { downloadLoop } from '../lib/loop-export.js';
 import { renderStems } from '../lib/loop-render.js';
 import type { LoopState } from '../lib/useLoop.js';
@@ -51,29 +74,33 @@ export interface LoopProps {
 }
 
 /**
- * What each lane is called while it is being composed.
+ * A hue per row of chips.
  *
- * One line per lane rather than a generic "working…", because these are the seconds in
- * which the user finds out whether the thing being built is the thing they asked for,
- * and "winding the arp" answers that where a spinner does not.
+ * From the lane palette, as the preset chips were — but keyed on the *group* rather than
+ * on the chip's position, because the rows are what the eye groups by. A fragment's colour
+ * therefore never changes when the table gains a row above it.
  */
-const LANE_MESSAGE: Readonly<Record<string, Key>> = {
-  drums: 'loop.msg.drums',
-  perc: 'loop.msg.perc',
-  bass: 'loop.msg.bass',
-  chords: 'loop.msg.chords',
-  keys: 'loop.msg.keys',
-  stabs: 'loop.msg.stabs',
-  lead: 'loop.msg.lead',
-  arp: 'loop.msg.arp',
-  bells: 'loop.msg.bells',
-  fx: 'loop.msg.fx',
-  pads: 'loop.msg.pads',
-  strings: 'loop.msg.strings',
-  choir: 'loop.msg.choir',
-  drone: 'loop.msg.drone',
-  air: 'loop.msg.air',
+const GROUP_HUE: Readonly<Record<TagGroup, number>> = {
+  mood: LANE_HUES[4] ?? 340,
+  motion: LANE_HUES[0] ?? 195,
+  texture: LANE_HUES[7] ?? 265,
+  kit: LANE_HUES[1] ?? 150,
+  place: LANE_HUES[3] ?? 80,
 };
+
+/** What each row is called. A table rather than a built key, so the dictionary type checks. */
+const GROUP_LABEL: Readonly<Record<TagGroup, Key>> = {
+  mood: 'loop.group.mood',
+  motion: 'loop.group.motion',
+  texture: 'loop.group.texture',
+  kit: 'loop.group.kit',
+  place: 'loop.group.place',
+};
+
+/** Which row a fragment belongs to, for the chip's colour. */
+function hueOf(id: string): number {
+  return GROUP_HUE[LOOP_TAGS.find((tag) => tag.id === id)?.group ?? 'motion'] ?? 195;
+}
 
 export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): React.JSX.Element {
   const { t } = useI18n();
@@ -81,6 +108,21 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
   const track = state.selected;
   const hue = state.mode === 'new' ? HUE.recipe : HUE.model;
   const busy = state.composing !== null;
+  /**
+   * Whether the card on screen is still the *previous* soundtrack.
+   *
+   * A new track has no id until the model has answered and the score has been read, so
+   * `trackId` being empty is exactly the window in which the card would be showing
+   * something the user asked to have replaced. That window gets the skeleton. Adding lanes
+   * never does: those lanes are frozen, still audible, and the reason the mode exists.
+   */
+  const ahead = state.composing !== null && state.composing.verb === 'compose' && state.composing.trackId !== track?.id;
+  /* Lanes of the new track that are staged but not yet voiced, drawn as ghost rows so the
+     timeline does not grow under the reader's eyes one row at a time. */
+  const pending =
+    state.composing !== null && state.composing.trackId === track?.id
+      ? Math.max(0, state.composing.total - state.lanes.length)
+      : 0;
 
   const submit = (event: React.FormEvent): void => {
     event.preventDefault();
@@ -127,6 +169,9 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
             onClick={() => {
               state.setMode('new');
               state.setPrompt('');
+              /* An empty box, fragments included. "New soundtrack" that left five chips in
+                 the brief would be a new soundtrack of the last one. */
+              state.clearTags();
             }}
           >
             <span className="plus">+</span>
@@ -166,16 +211,46 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
           <form className="prompt-row" onSubmit={submit}>
             <div className="input-shell hue">
               <span className="mono caret">&gt;</span>
+              {/* The fragments sit *inside* the box, before the text, in the order they
+                  were added: what is on screen is the brief that will be sent. */}
+              {state.tags.map((id) => (
+                <span className="tag mono" key={id} style={{ ['--hue' as string]: String(hueOf(id)) }}>
+                  {id}
+                  <button
+                    type="button"
+                    className="tag-drop"
+                    title={t('loop.dropTag', { tag: id })}
+                    aria-label={t('loop.dropTag', { tag: id })}
+                    onClick={() => state.toggleTag(id)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
               <input
                 type="text"
                 name="loop-prompt"
                 className="mono"
                 value={state.prompt}
-                placeholder={t(state.mode === 'new' ? 'loop.placeholderNew' : 'loop.placeholderAdd')}
+                placeholder={t(
+                  state.mode === 'add'
+                    ? 'loop.placeholderAdd'
+                    : state.tags.length === 0
+                      ? 'loop.placeholderNew'
+                      : 'loop.placeholderMore',
+                )}
                 aria-label={t('loop.describeAria')}
                 onChange={(event) => state.setPrompt(event.target.value)}
               />
-              <button type="submit" className="hue-button" disabled={busy}>
+              {/* Disabled on an empty brief in `New track` only. There is no palette behind
+                  the button any more, so a press with nothing in the box would be a request
+                  the screen invented — and `Add tracks` genuinely has a default ("answer
+                  what is already playing"), which is why it stays pressable. */}
+              <button
+                type="submit"
+                className="hue-button"
+                disabled={busy || (state.mode === 'new' && state.brief === '')}
+              >
                 {busy ? <span className="spinner" aria-hidden="true" /> : null}
                 {busy
                   ? t(state.composing?.verb === 'extend' ? 'loop.adding' : 'loop.composing')
@@ -212,25 +287,36 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
             </span>
           </div>
 
-          <div className="presets">
-            <span className="mono presets-label">{t('loop.presets')}</span>
-            {LOOP_PRESETS.map((preset, index) => (
-              <button
-                type="button"
-                key={preset.id}
-                className={`chip cat-chip${state.preset === preset.id ? ' selected' : ''}`}
-                /* The lane palette, reused: a preset is a set of lanes, so colouring the
-                   chips from the same table means the first lane of `boss-fight` is the
-                   colour its chip was. */
-                style={{ ['--hue' as string]: String(LANE_HUES[index % LANE_HUES.length] ?? 195) }}
-                onClick={() => state.pickPreset(preset.id)}
-              >
-                {preset.id}
-              </button>
+          {/* One row per question a brief answers. Grouped rather than one cloud of
+              thirty, because a row the reader skipped is a question they did not answer. */}
+          <div className="tag-rows">
+            {TAG_GROUPS.map((group) => (
+              <div className="tag-row" key={group}>
+                <span className="mono tag-row-label">{t(GROUP_LABEL[group])}</span>
+                {LOOP_TAGS.filter((tag) => tag.group === group).map((tag) => (
+                  <button
+                    type="button"
+                    key={tag.id}
+                    className={`chip cat-chip${state.tags.includes(tag.id) ? ' selected' : ''}`}
+                    style={{ ['--hue' as string]: String(GROUP_HUE[group]) }}
+                    /* The phrase it will write, so a chip is never a mystery word: the
+                       tooltip is the text, and the text is what the model reads. */
+                    title={tag.phrase}
+                    aria-pressed={state.tags.includes(tag.id)}
+                    onClick={() => state.toggleTag(tag.id)}
+                  >
+                    {tag.id}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
 
-          {track === null ? null : (
+          {ahead ? (
+            <LoopSkeleton composing={state.composing} mixing={state.mixing} withModel={state.model !== null} />
+          ) : null}
+
+          {track === null || ahead ? null : (
             <section className="loop-card">
               <div className="loop-head">
                 <h2 className="mono">{track.name}</h2>
@@ -256,9 +342,25 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                   disabled={state.render === null}
                   onClick={state.play}
                 >
-                  {state.playing ? `❚❚ ${t('loop.stop')}` : `▶ ${t('loop.play')}`}
+                  {state.playing ? <IconPause size={12} /> : <IconPlay size={12} />}{' '}
+                  {t(state.playing ? 'loop.stop' : 'loop.play')}
                 </button>
                 <span className="mono faint">{t('loop.seamless')}</span>
+                {/* The dev-only A/B against a General MIDI bank. Absent in a built page and on
+                    any machine with no bank, because `bankFound` is null there — a toggle that
+                    produced silence would be worse than no toggle. It says what it is switching
+                    to by name, and `lib/gm.ts` says why it can never be the thing that
+                    exports. */}
+                {state.bankFound === null ? null : (
+                  <button
+                    type="button"
+                    className={state.bank ? 'on' : ''}
+                    title={`${state.bankFound.name} — ${state.bankFound.path}`}
+                    onClick={() => state.setBank(!state.bank)}
+                  >
+                    {t(state.bank ? 'loop.bankOn' : 'loop.bankOff')}
+                  </button>
+                )}
                 <div className="spacer" />
                 {/* Never disabled. Three of the five entries need no mixdown at all, and
                     the two that do already answer "there is nothing rendered to export"
@@ -273,6 +375,7 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
 
               <LoopTimeline
                 lanes={state.lanes}
+                pending={pending}
                 bars={track.bars}
                 steps={stepCount(track)}
                 loopMs={loopSeconds(track) * 1000}
@@ -284,33 +387,10 @@ export function Loop({ state, seed, formatId, onFormat, onStatus }: LoopProps): 
                 onDrop={state.drop}
               />
 
-              {state.composing === null ? null : (
-                <div className="composing">
-                  <span
-                    className="dot dot-breathing"
-                    style={{ color: `oklch(0.8 0.12 ${String(state.composing.hue)})` }}
-                  />
-                  {/* The model's own sentence about the part it wrote, when it wrote one.
-                      It costs nothing — the caption arrived inside the score — and these
-                      are the seconds in which the user finds out whether the thing being
-                      built is the thing they asked for. The fixed table stays for the
-                      seeded composer, which has nothing to say about its own lanes. */}
-                  <span className="mono">
-                    {state.composing.writing
-                      ? t(state.composing.verb === 'compose' ? 'loop.writing' : 'loop.writingLanes')
-                      : (state.composing.caption ??
-                        t(LANE_MESSAGE[state.composing.lane] ?? 'loop.msg.generic', {
-                          lane: state.composing.lane,
-                        }))}
-                  </span>
-                  <div className="spacer" />
-                  {state.composing.writing ? null : (
-                    <span className="mono faint">
-                      {t('loop.progress', { done: state.composing.done, total: state.composing.total })}
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* The same phase list the skeleton carries — the lanes exist now, so it sits
+                  under them instead of standing in for them. It disappears of its own
+                  accord when nothing is running, mixdown included. */}
+              <LoopProgress composing={state.composing} mixing={state.mixing} withModel={state.model !== null} />
 
               {/* Who composed this, and why it was not the model when it was not. A
                   soundtrack that quietly came from the PRNG after a model was asked for

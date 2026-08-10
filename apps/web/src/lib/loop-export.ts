@@ -46,7 +46,7 @@ import {
   stepSeconds,
   type LoopTrack,
 } from './loop.js';
-import { voiceFor, type VoiceContext } from './loop-voice.js';
+import { voiceContext, voiceFor } from './loop-voice.js';
 
 /* ------------------------------------------------------------------------- *
  * The schedule both exports are built from
@@ -68,10 +68,7 @@ export interface Schedule {
 
 /** Flatten a track into distinct voices and the steps they fire on. */
 export function schedule(track: LoopTrack): Schedule {
-  const context: VoiceContext = {
-    stepSeconds: stepSeconds(track),
-    brightness: knobsFor(track.prompt).brightness,
-  };
+  const context = voiceContext(track);
   const voices: string[] = [];
   const hits: Hit[] = [];
 
@@ -177,16 +174,79 @@ export default function playLoop(${ctx}, ${when}, ${repeats}) {
 /** Ticks per quarter note. 480 is what every DAW rounds to happily. */
 const TPQ = 480;
 
-/** General MIDI programs, so an exported file opens making roughly the right noise. */
+/**
+ * General MIDI programs, per lane, so an exported file opens making the right noise.
+ *
+ * ## This is where a General MIDI sound bank belongs
+ *
+ * The recurring request behind this table is "use one of the open GM banks so the instruments
+ * sound real". A bank cannot go in the *player*: a soundline compiles to a self-contained
+ * function with no assets, and a sampler is the one thing that would make the export a lie.
+ * It fits perfectly here. A program change is fourteen bytes that tell whoever opens the file
+ * which instrument each track is, and their DAW — with FluidR3, GeneralUser GS, or a
+ * two-thousand-dollar sample library — plays it with that. Nothing is shipped, nothing is
+ * licensed, and the realism ceiling stops being ours.
+ *
+ * So the table is keyed by **lane** rather than by voice family, which is the change that makes
+ * it worth anything. By family, `chords` and `stabs` were both program 4 — an electric piano,
+ * for a plucked chord and for a distorted power chord — because a family is a synthesis
+ * technique and a program is an instrument. Numbers are zero-based, as the wire format wants
+ * them: 30 is what a DAW displays as 31, Distortion Guitar.
+ *
+ * A lane with no row falls back to its family's nearest match, then to a piano, because a file
+ * that opens silent is worse than one that opens on the wrong patch.
+ */
 const PROGRAM: Readonly<Record<string, number>> = {
+  drums: 0,
+  perc: 0,
+  bass: 38, // Synth Bass 1 — a synthesized bass is what this actually is
+  chords: 24, // Nylon guitar: the pluck family is a Karplus-Strong string
+  keys: 4, // Electric Piano 1
+  epiano: 4,
+  organ: 16, // Drawbar Organ, which is what the organ family literally models
+  stabs: 62, // Synth Brass 1 — the power lane is synthesized, unlike `guitar`
+  guitar: 30, // Distortion Guitar
+  riff: 29, // Overdriven Guitar, a shade less fizz for a single line
+  brass: 61, // Brass Section
+  lead: 81, // Lead 2 (sawtooth), which is the waveform the lead template uses
+  arp: 81,
+  bells: 14, // Tubular Bells
+  fx: 122, // Seashore, GM's stand-in for anything noise-shaped
+  pads: 89, // Pad 2 (warm)
+  strings: 48, // String Ensemble 1
+  choir: 52, // Choir Aahs — and the voice family really is singing a vowel
+  drone: 88, // Pad 1 (new age)
+  air: 122,
+};
+
+/** Fallback when a lane has no row of its own: the nearest thing its family can be. */
+const FAMILY_PROGRAM: Readonly<Record<string, number>> = {
+  kit: 0,
   bass: 38,
-  pluck: 4,
+  pluck: 24,
   bell: 14,
   lead: 81,
+  power: 62,
+  guitar: 30,
+  organ: 16,
+  brass: 61,
+  epiano: 4,
+  voice: 52,
   pad: 89,
   air: 122,
-  kit: 0,
 };
+
+/**
+ * The General MIDI program a lane plays.
+ *
+ * Exported because there are two readers of this table and they must never disagree: the MIDI
+ * writer below, and the dev-only bank preview in `lib/gm.ts`, which asks a sample bank for the
+ * same instrument. Two copies of the mapping would mean auditioning one bank and exporting a
+ * file that names a different one.
+ */
+export function programFor(lane: string): number {
+  return PROGRAM[lane] ?? FAMILY_PROGRAM[LANES[lane]?.family ?? 'pluck'] ?? 0;
+}
 
 /** MIDI's variable-length quantity: seven bits per byte, high bit means "more". */
 function vlq(value: number): number[] {
@@ -289,7 +349,7 @@ export function toMidi(loop: LoopTrack): Uint8Array {
       events.push({ tick: start, order: 1, bytes: [0x90 | channel, note.midi & 0x7f, velocity] });
       events.push({ tick: end, order: 0, bytes: [0x80 | channel, note.midi & 0x7f, 0x40] });
     }
-    const program = PROGRAM[spec?.family ?? 'pluck'] ?? 0;
+    const program = programFor(lane.name);
     chunks.push(
       chunk(
         'MTrk',

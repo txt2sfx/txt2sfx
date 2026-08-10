@@ -33,7 +33,7 @@
 import { parseWithDiagnostics } from '@txt2sfx/core';
 import { render } from './engine.js';
 import { knobsFor, loopSeconds, stepSeconds, type LoopTrack } from './loop.js';
-import { voiceFor, type VoiceContext } from './loop-voice.js';
+import { voiceContext, voiceFor } from './loop-voice.js';
 
 /** Peak the mix is scaled down to when the lanes sum past it. */
 export const CEILING = 0.95;
@@ -153,10 +153,7 @@ export async function voiceSamples(soundline: string, seed: number): Promise<Flo
 export async function primeLane(track: LoopTrack, laneName: string, seed: number): Promise<void> {
   const lane = track.lanes.find((entry) => entry.name === laneName);
   if (lane === undefined) return;
-  const context: VoiceContext = {
-    stepSeconds: stepSeconds(track),
-    brightness: knobsFor(track.prompt).brightness,
-  };
+  const context = voiceContext(track);
   const distinct = new Set(lane.notes.map((note) => voiceFor(lane.name, note, context)));
   for (const soundline of distinct) await voiceSamples(soundline, seed);
 }
@@ -173,10 +170,7 @@ export async function renderLoop(
   options: { readonly seed: number; readonly muted?: ReadonlySet<string> },
 ): Promise<LoopRender> {
   const muted = options.muted ?? new Set<string>();
-  const context: VoiceContext = {
-    stepSeconds: stepSeconds(track),
-    brightness: knobsFor(track.prompt).brightness,
-  };
+  const context = voiceContext(track);
   const length = Math.max(1, Math.round(loopSeconds(track) * SAMPLE_RATE));
   const step = context.stepSeconds * SAMPLE_RATE;
 

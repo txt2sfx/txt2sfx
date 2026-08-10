@@ -85,8 +85,34 @@ export function playLive(ast: SoundAST, options: PlayOptions = {}): { readonly p
   };
 }
 
-/** Play a rendered buffer, optionally looping it. */
-export function playBuffer(buffer: AudioBuffer, options: { readonly loop: boolean }): Playback {
+/**
+ * A playing buffer that can say where it is.
+ *
+ * `position` exists for one caller and one reason: NeurosLoop mutes a lane by **re-mixing**
+ * (`lib/loop-render.ts` argues why — what plays and what exports must be the same bytes),
+ * and a re-mix produces a different `AudioBuffer` while the old one is still sounding.
+ * Without a way to ask how far into the lap we are, taking over means restarting the loop
+ * from bar 1, and a mute button that restarts the music is not a mute button.
+ */
+export interface BufferPlayback extends Playback {
+  /** Seconds into the buffer right now, wrapped into it when looping. */
+  position(): number;
+}
+
+/**
+ * How long a buffer swapped in mid-lap fades up.
+ *
+ * Paired with `release`'s 8 ms fade-out on the outgoing one, so the handover is a short
+ * crossfade rather than two edits: both buffers carry the same music from the same phase,
+ * but one of them is missing a lane, and a hard cut at that difference is an audible click.
+ */
+const HANDOVER = 0.01;
+
+/** Play a rendered buffer, optionally looping it, optionally starting partway in. */
+export function playBuffer(
+  buffer: AudioBuffer,
+  options: { readonly loop: boolean; readonly offset?: number },
+): BufferPlayback {
   const ctx = audioContext();
   void ctx.resume();
 
@@ -97,10 +123,21 @@ export function playBuffer(buffer: AudioBuffer, options: { readonly loop: boolea
   source.buffer = buffer;
   source.loop = options.loop;
   source.connect(master);
-  source.start();
+
+  const offset = Math.max(0, Math.min(options.offset ?? 0, buffer.duration));
+  const startedAt = ctx.currentTime;
+  if (offset > 0) {
+    master.gain.setValueAtTime(0, startedAt);
+    master.gain.linearRampToValueAtTime(1, startedAt + HANDOVER);
+  }
+  source.start(0, offset);
 
   let stopped = false;
   return {
+    position: () => {
+      const elapsed = ctx.currentTime - startedAt + offset;
+      return options.loop ? elapsed % buffer.duration : Math.min(elapsed, buffer.duration);
+    },
     stop: () => {
       if (stopped) return;
       stopped = true;

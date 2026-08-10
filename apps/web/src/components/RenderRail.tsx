@@ -1,5 +1,5 @@
 /**
- * The renders this browser kept, down the right-hand side of the AI Render screen.
+ * The renders this browser kept, down the left-hand side of the AI Render screen.
  *
  * ## Why the screen grew a rail after arguing it did not need one
  *
@@ -10,11 +10,14 @@
  * destroyed the first. Anybody comparing four variants of a door was holding three of
  * them in their head.
  *
- * So the rail is the memory that was missing, and it sits on the **right** rather than
- * where the studio's is. The studio's rail is a *source*: you pick from it and the screen
- * follows. This one is an *output*: things arrive in it because of what the screen just
- * did, and putting the results on the left, in the position the eye reads first, would
- * make the newest render look like the subject of the screen instead of the prompt.
+ * So the rail is the memory that was missing, and it sits on the **left**, where the
+ * studio's is. It was on the right first, and the argument was about kind: the studio's
+ * rail is a *source* — you pick from it and the screen follows — while this one is an
+ * *output*, so it had no business in the position the eye reads first. The argument holds
+ * for one screen looked at alone and fails across two: these are tabs under one header,
+ * and a rail that changes sides moves the content column sideways every time you switch.
+ * Nothing about a render is easier to read for that, and the panel is still plainly the
+ * subject, because the prompt row above it is what fills it.
  *
  * ## What a row says, and what it does not
  *
@@ -32,6 +35,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { IconDownload, IconPause, IconPlay, IconTrash } from './Icons.js';
 import { save, sizeLabel } from '../lib/download.js';
 import { ms } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
@@ -106,7 +110,7 @@ export function RenderRail({ items, onSaved, onForget }: RenderRailProps): React
                 title={t(playing === entry.id ? 'card.stop' : 'card.play')}
                 onClick={() => play(entry)}
               >
-                {playing === entry.id ? '❚❚' : '▶'}
+                {playing === entry.id ? <IconPause size={10} /> : <IconPlay size={10} />}
               </button>
 
               <div className="render-row-body">
@@ -132,7 +136,7 @@ export function RenderRail({ items, onSaved, onForget }: RenderRailProps): React
                 })}
                 onClick={() => download(entry)}
               >
-                ⤓
+                <IconDownload size={12} />
               </button>
               <button
                 type="button"
@@ -140,7 +144,7 @@ export function RenderRail({ items, onSaved, onForget }: RenderRailProps): React
                 title={t('renders.forget')}
                 onClick={() => onForget(entry.id)}
               >
-                ✕
+                <IconTrash size={12} />
               </button>
             </li>
           ))}

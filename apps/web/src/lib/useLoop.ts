@@ -20,18 +20,29 @@
  * indicator that is not measuring anything teaches the user to distrust every other one
  * in the application.
  *
- * So lanes are revealed as they are *actually finished*. Composing a lane is two real
- * pieces of work — write its notes, then render every distinct voice it needs — and the
- * second one takes real time (a sixteen-bar hat lane is three or four offline renders,
- * a pad lane is six). A lane appears the moment its audio exists, which means the line
- * above the timeline is a measurement and the whole thing gets faster on a faster
- * machine, as progress indicators should.
+ * So every phase {@link Composing} reports is a real pending promise, and lanes are
+ * revealed as they are *actually finished*. Composing a lane is two real pieces of work —
+ * write its notes, then render every distinct voice it needs — and the second one takes
+ * real time (a sixteen-bar hat lane is three or four offline renders, a pad lane is six).
+ * A lane appears the moment its audio exists, which means the whole thing gets faster on
+ * a faster machine, as progress indicators should.
  *
- * The model added a phase in front of that and it obeys the same rule: `writing` is true
- * exactly while a request is in flight, which is a real pending promise and not a clock.
- * It is also why the *previous* arrangement stays on screen and audible while the model
- * writes — there is nothing yet to replace it with, and blanking the timeline for the
- * five seconds of a round trip would throw away the thing the user is comparing against.
+ * The four phases are the four things that actually happen, in order: `writing` while a
+ * request is in flight, `checking` while `lib/score.ts` judges the reply (and again on
+ * every repair trip, with the rule that failed named), `voicing` while each lane's
+ * recipes render, `mixing` while `renderLoop` sums them. Nothing is interpolated between
+ * them and nothing is announced before it starts.
+ *
+ * ## The previous track leaves the screen
+ *
+ * It used to stay, and the argument was that there is nothing to replace it with yet.
+ * That was wrong in the way an unlabelled placeholder is always wrong: a finished
+ * arrangement sitting under a spinner reads as *the answer*, and the reader spends the
+ * round trip looking at the thing they asked to have replaced. The compose path now hands
+ * the screen a `composing` whose `trackId` is empty until the new track exists, which is
+ * what lets `Loop.tsx` put a skeleton and the phase list there instead. `Add tracks` is
+ * the opposite case and keeps its arrangement: those lanes are frozen, still audible, and
+ * the whole point of the mode.
  *
  * ## Why the mixdown is state and not a memo
  *
@@ -40,6 +51,15 @@
  * A `useMemo` over an async render would let a stale buffer be exported while a fresh
  * one was still in flight; an explicit generation counter makes a superseded render
  * discard itself instead.
+ *
+ * That argument was only half implemented, and the missing half was audible: re-mixing
+ * replaced the buffer in *state* while the `AudioBufferSourceNode` playing the previous one
+ * carried on, so muting a lane during playback changed the picture, the export and nothing
+ * you could hear until you pressed Play again. A finished mix now **takes over from the one
+ * that is sounding**, at the same position in the lap (`playBuffer`'s `position` exists for
+ * this), which is what makes mute, ↻ and discard immediate without restarting the music.
+ * The alternative — a gain node per lane, gated live — is the thing `loop-render.ts`
+ * rejects: it would make what you hear differ from what the file contains.
  *
  * ## Nothing here is persisted, still
  *
@@ -56,29 +76,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LLMProvider } from '@txt2sfx/agent';
 import type { ProviderKind } from './agent.js';
-import { playBuffer, type Playback } from './engine.js';
+import { playBuffer, type BufferPlayback } from './engine.js';
 import { t } from './i18n.js';
 import {
   LANE_HUES,
-  LOOP_PRESETS,
+  brief,
+  briefName,
   composeLane,
   composeTrack,
+  paletteFor,
   presetById,
   proposals,
   type LoopLane,
   type LoopTrack,
 } from './loop.js';
-import { composeRequest, composeScore, extendRequest, retryRequest } from './loop-agent.js';
+import {
+  MAX_TRIPS,
+  composeRequest,
+  composeScore,
+  extendRequest,
+  retryRequest,
+  type ScoreEvent,
+} from './loop-agent.js';
 import { laneFromScore, trackFromScore } from './score.js';
 import { primeLane, renderLoop, type LoopRender } from './loop-render.js';
+import { bankStatus, renderLoopFromBank, type BankStatus } from './gm.js';
 
 /** Which prompt the box is writing: a whole new track, or lanes for the current one. */
 export type LoopMode = 'new' | 'add';
+
+/**
+ * The four things that happen, in the order they happen.
+ *
+ * `writing` and `checking` only exist when a model is composing; the seeded composer opens
+ * at `voicing`, because it has nothing to wait for and announcing a phase that took no
+ * time is the same lie as a timer.
+ */
+export type ComposePhase = 'writing' | 'checking' | 'voicing' | 'mixing';
 
 /** What the composing indicator reports while a track is being built. */
 export interface Composing {
   /** Empty while the model is writing, because the track does not exist yet. */
   readonly trackId: string;
+  readonly phase: ComposePhase;
   /** Lanes finished so far. Lanes past this index are not on screen yet. */
   readonly done: number;
   readonly total: number;
@@ -89,8 +129,20 @@ export interface Composing {
   readonly hue: number;
   /** `compose` for a new track, `extend` for added lanes. */
   readonly verb: 'compose' | 'extend';
-  /** True exactly while a request to the model is in flight. */
-  readonly writing: boolean;
+  /** Which trip through the model is in flight, 1-based. 0 when no model is composing. */
+  readonly attempt: number;
+  /** How many trips it may take, so "trip 2 of 3" is a bound and not a mystery. */
+  readonly trips: number;
+  /**
+   * The rule the last rejected score broke.
+   *
+   * On screen, because a repair trip is the one part of this that looks like a hang: five
+   * more seconds with no explanation reads as a stall, where `pattern.length — fixing it`
+   * reads as work.
+   */
+  readonly rejected: string | null;
+  /** Characters in the model's reply — the first evidence a score exists at all. */
+  readonly chars: number;
 }
 
 /** Everything the screen reads and every action it can take. */
@@ -101,14 +153,31 @@ export interface LoopState {
 
   readonly mode: LoopMode;
   readonly setMode: (mode: LoopMode) => void;
-  readonly preset: string;
-  readonly pickPreset: (id: string) => void;
+  /**
+   * The fragments added to the brief, in the order they were pressed.
+   *
+   * Ids from `LOOP_TAGS`, not text: the same chip pressed twice removes itself, and the
+   * brief is assembled from the table so a fragment's wording is defined in one place.
+   */
+  readonly tags: readonly string[];
+  readonly toggleTag: (id: string) => void;
+  readonly clearTags: () => void;
   readonly prompt: string;
   readonly setPrompt: (prompt: string) => void;
+  /** What will actually be composed: the fragments, then what was typed. */
+  readonly brief: string;
 
   /** Compose a new track, or add lanes to the selected one, per {@link mode}. */
   readonly run: () => void;
   readonly composing: Composing | null;
+  /**
+   * True while a mixdown is in flight.
+   *
+   * Separate from {@link composing} because it outlives it: the lanes are all on screen
+   * and the buffer they play as is not summed yet, which is the one stretch where Play was
+   * disabled with nothing on screen saying why.
+   */
+  readonly mixing: boolean;
   /** Lanes of the selected track that are on screen right now. */
   readonly lanes: readonly LoopLane[];
 
@@ -130,6 +199,16 @@ export interface LoopState {
 
   /** Set when a mixdown failed, as a sentence for the warning strip. */
   readonly error: string | null;
+
+  /**
+   * The dev-only General MIDI comparison.
+   *
+   * `bankFound` is null in a built page and whenever no bank is on the machine, which is what
+   * the screen keys the toggle off — see `lib/gm.ts` for why this can never be the player.
+   */
+  readonly bank: boolean;
+  readonly setBank: (on: boolean) => void;
+  readonly bankFound: BankStatus | null;
 }
 
 /** What the hook needs from the app around it. */
@@ -144,12 +223,19 @@ export interface LoopOptions {
   readonly provider: () => LLMProvider | null;
 }
 
-/** The three soundtracks a first visit opens on, so the screen is never empty. */
+/**
+ * The three soundtracks a first visit opens on, so the screen is never empty.
+ *
+ * Deliberately three *different kinds* of music — an ambience with no kit, a mid-tempo
+ * one, and something fast — because these three are the whole answer to "what does this
+ * screen make" for anybody who presses Play before typing. They used to be the two
+ * brightest palettes and a cave.
+ */
 function initialTracks(): readonly LoopTrack[] {
   return [
-    ['lt-overworld', 'overworld-run'],
-    ['lt-market', 'night-market'],
     ['lt-cave', 'cave-ambience'],
+    ['lt-market', 'night-market'],
+    ['lt-rooftop', 'rooftop-chase'],
   ].map(([id = '', preset = '']) => {
     const chosen = presetById(preset);
     return composeTrack(id, chosen, chosen.prompt, chosen.id, 'seed');
@@ -158,18 +244,32 @@ function initialTracks(): readonly LoopTrack[] {
 
 export function useLoop(options: LoopOptions): LoopState {
   const [tracks, setTracks] = useState<readonly LoopTrack[]>(initialTracks);
-  const [selectedId, setSelectedId] = useState('lt-overworld');
+  const [selectedId, setSelectedId] = useState('lt-cave');
   const [mode, setMode] = useState<LoopMode>('new');
-  const [preset, setPreset] = useState(LOOP_PRESETS[0]?.id ?? 'overworld-run');
-  const [prompt, setPrompt] = useState(LOOP_PRESETS[0]?.prompt ?? '');
+  const [tags, setTags] = useState<readonly string[]>([]);
+  const [prompt, setPrompt] = useState('');
   const [composing, setComposing] = useState<Composing | null>(null);
+  const [mixing, setMixing] = useState(false);
   const [muted, setMuted] = useState<ReadonlySet<string>>(() => new Set());
   const [render, setRender] = useState<LoopRender | null>(null);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /**
+   * The dev-only A/B: mix from a General MIDI sample bank instead of from soundline voices.
+   *
+   * State and not a prop, and it lives here rather than in the component, because it changes
+   * *what the mixdown is* — the effect below has to re-run on it exactly as it does on a mute.
+   * Off unless someone asks, always: the synthesized instruments are the product, and a screen
+   * that opened on a sample bank would be advertising something it cannot export.
+   */
+  const [bank, setBank] = useState(false);
+  const [bankFound, setBankStatus] = useState<BankStatus | null>(null);
 
-  const playback = useRef<Playback | null>(null);
+  const playback = useRef<BufferPlayback | null>(null);
+  /* Read inside the mixdown effect, which must not re-run when playback starts or stops —
+     the same reason `live` is a ref. A finished mix asks this whether to take over. */
+  const sounding = useRef(false);
   /** Bumped by every state change that invalidates the mix; a late render checks it. */
   const generation = useRef(0);
   /** The model call in flight, so leaving the screen does not leave a request behind. */
@@ -184,6 +284,7 @@ export function useLoop(options: LoopOptions): LoopState {
   const stop = useCallback(() => {
     playback.current?.stop();
     playback.current = null;
+    sounding.current = false;
     setPlaying(false);
   }, []);
 
@@ -197,21 +298,49 @@ export function useLoop(options: LoopOptions): LoopState {
     if (selected === null || composing !== null) return;
     const mine = ++generation.current;
     let cancelled = false;
-    void renderLoop(selected, { seed: options.seed, muted })
+    setMixing(true);
+    /* Only the current mixdown clears the flag. A superseded one finishing late would
+       otherwise announce that the screen is idle while the one that counts still runs. */
+    const settled = (): void => {
+      if (!cancelled && mine === generation.current) setMixing(false);
+    };
+    void (bank ? renderLoopFromBank(selected, { muted }) : renderLoop(selected, { seed: options.seed, muted }))
       .then((result) => {
         if (cancelled || mine !== generation.current) return;
         setRender(result);
         setError(null);
+        /* Hand over mid-lap. The previous buffer is still sounding and is the one the mute
+           was meant to change; starting the new one from bar 1 instead would make every
+           mute, ↻ and discard restart the music. Same phase, so the join is one lane
+           disappearing rather than a jump. */
+        if (sounding.current && playback.current !== null) {
+          const at = playback.current.position();
+          playback.current.stop();
+          playback.current = playBuffer(result.buffer, { loop: true, offset: at });
+        }
       })
       .catch((reason: unknown) => {
         if (cancelled || mine !== generation.current) return;
         setRender(null);
         setError(String(reason));
-      });
+      })
+      .finally(settled);
     return () => {
       cancelled = true;
     };
-  }, [selected, muted, options.seed, composing]);
+  }, [selected, muted, options.seed, composing, bank]);
+
+  /* Ask once whether there is a bank to compare against. In a built page `bankStatus` answers
+     null without a request, so the toggle simply never appears. */
+  useEffect(() => {
+    let cancelled = false;
+    void bankStatus().then((found) => {
+      if (!cancelled) setBankStatus(found?.ok === true ? found : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /* A new mixdown means whatever is sounding is the previous arrangement. Stopping is
      the honest response — restarting mid-phrase would put the playhead somewhere the
@@ -235,13 +364,17 @@ export function useLoop(options: LoopOptions): LoopState {
         if (lane === undefined) continue;
         setComposing({
           trackId: track.id,
+          phase: 'voicing',
           done: base + index,
           total: base + staged.length,
           lane: name,
           ...(lane.caption === undefined ? {} : { caption: lane.caption }),
           hue: lane.hue,
           verb,
-          writing: false,
+          attempt: 0,
+          trips: MAX_TRIPS,
+          rejected: null,
+          chars: 0,
         });
         /* Rendering the lane's voices now is what makes the reveal a measurement: the
            mixdown that follows finds them cached, so nothing is rendered twice. */
@@ -258,23 +391,66 @@ export function useLoop(options: LoopOptions): LoopState {
     const controller = new AbortController();
     abort.current = controller;
     setNote(null);
-    setComposing({ trackId: '', done: 0, total: 0, lane, hue: LANE_HUES[0] ?? 195, verb, writing: true });
+    setComposing({
+      trackId: '',
+      phase: 'writing',
+      done: 0,
+      total: 0,
+      lane,
+      hue: LANE_HUES[0] ?? 195,
+      verb,
+      attempt: 1,
+      trips: MAX_TRIPS,
+      rejected: null,
+      chars: 0,
+    });
     return controller;
+  }, []);
+
+  /**
+   * The conversation, as phases.
+   *
+   * Every one of these is an event the agent loop already emitted and nobody read: the
+   * screen said "writing the score…" from the first request to the last repair, so three
+   * trips through the model looked identical to one slow one.
+   */
+  const watch = useCallback((event: ScoreEvent): void => {
+    setComposing((current) => {
+      if (current === null) return current;
+      switch (event.type) {
+        case 'asking':
+          return { ...current, phase: 'writing', attempt: event.attempt };
+        case 'reply':
+          return { ...current, phase: 'checking', chars: event.chars };
+        case 'rejected':
+          return { ...current, phase: 'writing', rejected: event.issues[0]?.rule ?? 'score.rejected' };
+        case 'accepted':
+          return { ...current, phase: 'checking', rejected: null };
+      }
+    });
   }, []);
 
   const compose = useCallback(() => {
     if (composing !== null) return;
+    const text = brief(prompt, tags);
+    /* Nothing to compose. There is no palette to fall back on any more — the fragments and
+       the words *are* the brief — so an empty one is a press the screen should not accept,
+       and the button says so rather than inventing a request. */
+    if (text === '') return;
     stop();
-    const chosen = presetById(preset);
-    const text = prompt.trim() === '' ? chosen.prompt : prompt.trim();
-    const id = `lt${String(tracks.length)}-${String(hashPrompt(text + chosen.id))}`;
-    const takes = tracks.filter((track) => track.preset === chosen.id).length + 1;
+    const palette = paletteFor(prompt, tags);
+    const id = `lt${String(tracks.length)}-${String(hashPrompt(text))}`;
+    /* Takes are counted per brief, not per palette: pressing Compose twice on the same
+       words is the second take of that idea, and two unrelated briefs are not takes of
+       each other just because neither used a chip. */
+    const takes = tracks.filter((track) => track.prompt === text).length + 1;
     const salt = String(takes);
 
     /** The seeded composer, used with no model and after a model that could not deliver. */
     const seeded = (reason: string | null): void => {
-      const name = takes > 1 ? `${chosen.id} · take ${String(takes)}` : chosen.id;
-      const track = composeTrack(id, chosen, text, name, salt);
+      const title = briefName(prompt, tags);
+      const name = takes > 1 ? `${title} · take ${String(takes)}` : title;
+      const track = composeTrack(id, palette, text, name, salt);
       setTracks((current) => [track, ...current]);
       setSelectedId(id);
       setRender(null);
@@ -296,13 +472,14 @@ export function useLoop(options: LoopOptions): LoopState {
     const controller = startWriting('compose');
     void composeScore({
       provider,
-      request: composeRequest(text, chosen),
-      context: { mode: 'new', bars: chosen.bars, existing: [] },
+      request: composeRequest(text, palette),
+      context: { mode: 'new', bars: palette.bars, existing: [] },
       signal: controller.signal,
+      onEvent: watch,
     })
       .then((composed) => {
         if (controller.signal.aborted) return;
-        const track = trackFromScore(composed.score, { id, preset: chosen.id, prompt: text, salt });
+        const track = trackFromScore(composed.score, { id, preset: palette.id, prompt: text, salt });
         setTracks((current) => [track, ...current]);
         setSelectedId(id);
         setRender(null);
@@ -324,7 +501,7 @@ export function useLoop(options: LoopOptions): LoopState {
         }
         seeded(failure instanceof Error ? failure.message : String(failure));
       });
-  }, [composing, preset, prompt, startWriting, stop, stage, tracks]);
+  }, [composing, prompt, startWriting, stop, stage, tags, tracks, watch]);
 
   const extend = useCallback(() => {
     if (composing !== null || selected === null) return;
@@ -373,6 +550,7 @@ export function useLoop(options: LoopOptions): LoopState {
       request: extendRequest(prompt, selected),
       context: { mode: 'add', bars: selected.bars, existing: selected.lanes.map((lane) => lane.name) },
       signal: controller.signal,
+      onEvent: watch,
     })
       .then((composed) => {
         if (controller.signal.aborted) return;
@@ -383,6 +561,9 @@ export function useLoop(options: LoopOptions): LoopState {
               bars: selected.bars,
               index: base + offset,
               salt: `add-${String(base + offset)}-${prompt}`,
+              /* The track's own brief, not the box: an added lane has to land in the same
+                 register as everything already playing. */
+              prompt: selected.prompt,
             }),
             proposed: true as const,
           })),
@@ -395,7 +576,7 @@ export function useLoop(options: LoopOptions): LoopState {
         }
         seeded(failure instanceof Error ? failure.message : String(failure));
       });
-  }, [composing, prompt, selected, startWriting, stop, stage]);
+  }, [composing, prompt, selected, startWriting, stop, stage, watch]);
 
   const run = useCallback(() => {
     if (mode === 'new') compose();
@@ -454,6 +635,7 @@ export function useLoop(options: LoopOptions): LoopState {
           existing: selected.lanes.filter((lane) => lane.name !== name).map((lane) => lane.name),
         },
         signal: controller.signal,
+        onEvent: watch,
       })
         .then((composed) => {
           if (controller.signal.aborted) return;
@@ -465,6 +647,7 @@ export function useLoop(options: LoopOptions): LoopState {
             bars: selected.bars,
             index: index < 0 ? 0 : index,
             salt: `${existing.salt}+`,
+            prompt: selected.prompt,
           });
           editLane(name, (lane) => ({
             ...replacement,
@@ -481,7 +664,7 @@ export function useLoop(options: LoopOptions): LoopState {
           reroll();
         });
     },
-    [composing, editLane, selected, startWriting],
+    [composing, editLane, selected, startWriting, watch],
   );
 
   return {
@@ -490,15 +673,18 @@ export function useLoop(options: LoopOptions): LoopState {
     select: setSelectedId,
     mode,
     setMode,
-    preset,
-    pickPreset: (id) => {
-      setPreset(id);
-      setPrompt(presetById(id).prompt);
-    },
+    tags,
+    /* Adding and removing are one action, because the chip is the same chip: pressing it
+       again is how a fragment comes back out, and the × in the brief is the same call. */
+    toggleTag: (id) =>
+      setTags((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id])),
+    clearTags: () => setTags([]),
     prompt,
     setPrompt,
+    brief: brief(prompt, tags),
     run,
     composing,
+    mixing,
     /* While a track is being composed the screen shows only what is finished. The
        unfinished lanes exist in state — they have to, the staging walks them — but
        showing an empty row for a lane nobody has heard yet would be the same lie as
@@ -537,10 +723,14 @@ export function useLoop(options: LoopOptions): LoopState {
       if (render === null) return;
       stop();
       playback.current = playBuffer(render.buffer, { loop: true });
+      sounding.current = true;
       setPlaying(true);
     },
     stop,
     error,
+    bank,
+    setBank,
+    bankFound,
   };
 }
 

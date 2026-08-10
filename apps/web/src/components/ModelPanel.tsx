@@ -80,6 +80,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react';
 import { Bars } from './Bars.js';
 import { FormatMenu } from './FormatMenu.js';
+import { IconDownload, IconPause, IconPlay } from './Icons.js';
 import { bars, ghostBars } from '../lib/layers.js';
 import { ms, size } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
@@ -581,7 +582,7 @@ export function ModelPanel({
                 onClick={install}
                 disabled={status.stage === 'unavailable' || status.busy}
               >
-                ⤓ {t('model.install')}
+                <IconDownload size={12} /> {t('model.install')}
               </button>
             )}
             <div className="spacer" />
@@ -666,7 +667,7 @@ export function ModelPanel({
           the session rather than continuing it. */}
       <div className="transport">
         <button type="button" className="amber-button big" onClick={play} disabled={render === null}>
-          {playing ? '❚❚' : '▶'} {t('model.play')}
+          {playing ? <IconPause size={12} /> : <IconPlay size={12} />} {t('model.play')}
         </button>
         <button type="button" className="big" onClick={onCompare} disabled={render === null}>
           {t('model.compare')}

@@ -36,29 +36,13 @@
  * @packageDocumentation
  */
 
+import { IconGitHub, IconStar } from './Icons.js';
 import { LanguageMenu } from './LanguageMenu.js';
 import { useI18n, type Key } from '../lib/i18n.js';
 import type { BridgeStatus } from '../lib/bridge-client.js';
 
 /** Where the source is. The same string the OG tags in `index.html` point at. */
 const REPO_URL = 'https://github.com/txt2sfx/txt2sfx';
-
-/**
- * The GitHub mark, inline.
- *
- * Inline rather than an `<img>` for the reason the favicon in `index.html` is inline: a
- * file request the dev server answers with a 404, and an icon that is missing for the
- * one second the network takes, are both worse than 500 bytes of path data. It also
- * inherits `currentColor`, so it dims with the rest of the bar rather than staying a
- * bright black-and-white logo on a dark header.
- */
-function GitHubMark(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-2.91-.88-2.91-2.9 0-.65.23-1.18.61-1.6-.06-.15-.27-.75.06-1.56 0 0 .5-.16 1.64.61a5.6 5.6 0 0 1 1.49-.2c.51 0 1.02.07 1.49.2 1.14-.78 1.64-.61 1.64-.61.33.81.12 1.41.06 1.56.38.42.61.95.61 1.6 0 2.03-1.13 2.7-2.92 2.9.29.26.55.75.55 1.52 0 1.09-.01 1.98-.01 2.25 0 .21.15.46.55.38A7.99 7.99 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-    </svg>
-  );
-}
 
 /** Which screen is showing. `share` is a leaf of `studio`, not a peer. */
 export type Screen = 'gallery' | 'studio' | 'render' | 'share' | 'loop';
@@ -156,7 +140,7 @@ export function Header({ screen, onScreen, bridge, onOpenBridge, account }: Head
           than a judgement call per link. */}
       <div className="repo-group">
         <a className="repo-link" href={REPO_URL} target="_blank" rel="noreferrer noopener" title={t('repo.title')}>
-          <GitHubMark />
+          <IconGitHub />
           <span className="mono">{t('repo.label')}</span>
         </a>
         {/* Deliberately the repository page and not `/stargazers`: starring is a POST no
@@ -169,7 +153,7 @@ export function Header({ screen, onScreen, bridge, onOpenBridge, account }: Head
           rel="noreferrer noopener"
           title={t('repo.starTitle')}
         >
-          ☆ {t('repo.star')}
+          <IconStar size={12} /> {t('repo.star')}
         </a>
       </div>
 

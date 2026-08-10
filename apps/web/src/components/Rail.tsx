@@ -45,6 +45,7 @@
  */
 
 import { useMemo } from 'react';
+import { IconPause, IconPlay, IconStar } from './Icons.js';
 import { catHue } from '../lib/design.js';
 import { ago, ms } from '../lib/format.js';
 import { useI18n } from '../lib/i18n.js';
@@ -183,7 +184,7 @@ export function Rail({
                       onPlay(item.name);
                     }}
                   >
-                    {item.name === playing ? '❚❚' : '▶'}
+                    {item.name === playing ? <IconPause size={11} /> : <IconPlay size={11} />}
                   </span>
                   <span className="rail-name">{item.name}</span>
                   {dirty.includes(item.name) ? (
@@ -212,7 +213,7 @@ export function Rail({
                       onFavorite(item.name);
                     }}
                   >
-                    {item.favorite ? '★' : '☆'}
+                    <IconStar size={12} on={item.favorite} />
                   </span>
                 </div>
               ))

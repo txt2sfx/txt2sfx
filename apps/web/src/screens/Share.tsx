@@ -29,6 +29,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { CodegenResult, RenderResult } from '@txt2sfx/core';
 import { Bars } from '../components/Bars.js';
 import { FormatMenu } from '../components/FormatMenu.js';
+import { IconPause, IconPlay } from '../components/Icons.js';
 import { catColor } from '../lib/design.js';
 import { copy, type Format } from '../lib/download.js';
 import { bytes as fmtBytes, ms } from '../lib/format.js';
@@ -203,7 +204,7 @@ export function Share({
 
           <div className="share-play">
             <button type="button" className="play-big" onClick={onPlay} disabled={rendered === null}>
-              {playing ? '❚❚' : '▶'}
+              {playing ? <IconPause size={18} /> : <IconPlay size={18} />}
             </button>
             <Bars
               values={values}
