@@ -111,7 +111,8 @@ flowchart LR
 <tr>
 <td width="50%" valign="top">
 <a href="assets/Search.png"><img src="assets/Search.png" alt="The Sounds screen: a prompt box, category chips, three recipe cards with waveforms, and freesound.org results below"></a>
-<p><sub><b>Sounds</b> — the catalog, with the claim above it rather than an editor for a language nobody has heard of yet. With no model attached the button reads <b>Find in bank</b> and every surface says so. The freesound.org results underneath are recordings somebody already made: a target to aim at, never something to ship.</sub></p>
+<p><sub><b>Sounds</b> — the catalog, with the claim above it rather than an editor for a language nobody has heard of yet. With no model attached the button reads <b>Find in bank</b> and every surface says so. The freesound.org results underneath are recordings somebody already made: a target to aim at, never something to ship.<br>
+▶ <a href="assets/Search%20and%20generate.mp4">Watch: search and generate</a> — a prompt, the bank searched, a recipe generated, validated, fitted and exported.</sub></p>
 </td>
 <td width="50%" valign="top">
 <a href="assets/Studio.png"><img src="assets/Studio.png" alt="The Studio screen: waveform, a lane per layer, the soundline source, a slider per fitted slot and the exported JavaScript"></a>
@@ -121,35 +122,18 @@ flowchart LR
 <tr>
 <td width="50%" valign="top">
 <a href="assets/AiRender.png"><img src="assets/AiRender.png" alt="The AI Render screen: the same prompt rendered by Stable Audio Open Small locally, with a rail of the session's renders"></a>
-<p><sub><b>AI Render</b> — the same prompt answered by a diffusion model on your own machine, one to two megabytes where the recipe is under a kilobyte. It is here to be the <i>target</i> for Compare and for the optimizer, not the deliverable. Dev server only.</sub></p>
+<p><sub><b>AI Render</b> — the same prompt answered by a diffusion model on your own machine, one to two megabytes where the recipe is under a kilobyte. It is here to be the <i>target</i> for Compare and for the optimizer, not the deliverable. Dev server only.<br>
+▶ <a href="assets/AiRender.mp4">Watch: AI Render</a> — the local model answering the same prompt, and the A/B against the recipe.</sub></p>
 </td>
 <td width="50%" valign="top">
 <a href="assets/NeurosLoop.png"><img src="assets/NeurosLoop.png" alt="The NeurosLoop screen: prompt fragment chips, and a 16-bar loop with drums, bass, pads and fx lanes playing"></a>
-<p><sub><b>NeurosLoop</b> — a soundtrack made of the same parts. The chips assemble a brief, the attached agent writes a score, and the loop plays as four lanes of ordinary recipes: <code>45 voices · 275 hits · peak 1.68 · mix turned down -4.9 dB to fit</code>. It leaves as code or as MIDI, never as sample data.</sub></p>
+<p><sub><b>NeurosLoop</b> — a soundtrack made of the same parts. The chips assemble a brief, the attached agent writes a score, and the loop plays as four lanes of ordinary recipes: <code>45 voices · 275 hits · peak 1.68 · mix turned down -4.9 dB to fit</code>. It leaves as code or as MIDI, never as sample data.<br>
+▶ <a href="assets/Neurosloop.mp4">Watch: NeurosLoop</a> — a brief becomes a score, instruments are built, and the loop plays back seamlessly.</sub></p>
 </td>
 </tr>
 </table>
 
-### In motion
-
-<table>
-<tr>
-<td width="33%" valign="top">
-<video src="https://github.com/txt2sfx/txt2sfx/raw/main/assets/Search%20and%20generate.mp4" poster="https://github.com/txt2sfx/txt2sfx/raw/main/assets/Search.png" controls muted preload="none" width="100%"><a href="https://github.com/txt2sfx/txt2sfx/raw/main/assets/Search%20and%20generate.mp4">Search and generate (MP4)</a></video>
-<p><sub><b>Search and generate</b> — a prompt, the bank searched, a recipe generated, validated, fitted and exported.</sub></p>
-</td>
-<td width="33%" valign="top">
-<video src="https://github.com/txt2sfx/txt2sfx/raw/main/assets/AiRender.mp4" poster="https://github.com/txt2sfx/txt2sfx/raw/main/assets/AiRender.png" controls muted preload="none" width="100%"><a href="https://github.com/txt2sfx/txt2sfx/raw/main/assets/AiRender.mp4">AI Render (MP4)</a></video>
-<p><sub><b>AI Render</b> — the local diffusion model answering the same prompt, and the A/B against the recipe.</sub></p>
-</td>
-<td width="33%" valign="top">
-<video src="https://github.com/txt2sfx/txt2sfx/raw/main/assets/Neurosloop.mp4" poster="https://github.com/txt2sfx/txt2sfx/raw/main/assets/NeurosLoop.png" controls muted preload="none" width="100%"><a href="https://github.com/txt2sfx/txt2sfx/raw/main/assets/Neurosloop.mp4">NeurosLoop (MP4)</a></video>
-<p><sub><b>NeurosLoop</b> — a brief becomes a score, instruments are built, and eight bars play back seamlessly.</sub></p>
-</td>
-</tr>
-</table>
-
-<sub>The videos are large files in <code>assets/</code>; they stream from GitHub and load nothing until you press play.</sub>
+<sub>The ▶ links open the recording on GitHub's file view, which plays it with sound. Nothing loads until you click.</sub>
 
 ## Quick start
 
