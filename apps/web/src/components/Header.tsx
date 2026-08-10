@@ -6,9 +6,10 @@
  * The brand doubles as *home* — it returns to the gallery, because a logo that is
  * not a link is a piece of furniture. The screen tabs are the whole navigation, and
  * each names a different *subject*: `Sounds` is the catalog, `Studio` is one sound,
- * `NeurosLoop` is eight bars of one. The share screen has no tab on purpose — it
- * belongs to a specific recipe and is reached from it, so a tab for it would mean
- * nothing until something else had been chosen.
+ * `AI Render` is that sound as a diffusion model would have made it, `NeurosLoop` is
+ * eight bars of one. The share screen has no tab on purpose — it belongs to a specific
+ * recipe and is reached from it, so a tab for it would mean nothing until something
+ * else had been chosen.
  *
  * Then the bridge badge. It is here rather than tucked in a settings pane because it
  * answers a question that changes without the user doing anything: *can an agent
@@ -60,7 +61,7 @@ function GitHubMark(): React.JSX.Element {
 }
 
 /** Which screen is showing. `share` is a leaf of `studio`, not a peer. */
-export type Screen = 'gallery' | 'studio' | 'share' | 'loop';
+export type Screen = 'gallery' | 'studio' | 'render' | 'share' | 'loop';
 
 /**
  * The tabs, in the order the work goes.
@@ -70,10 +71,17 @@ export type Screen = 'gallery' | 'studio' | 'share' | 'loop';
  * `loop` is a peer of the other two rather than a leaf of the studio — it is a different
  * kind of subject (eight bars, not one hit) with a different set of controls, and the
  * argument for that split is in `screens/Loop.tsx`.
+ *
+ * `render` sits directly after `studio` because it is the studio's question answered a
+ * different way — the same prompt, rendered by a diffusion model, as a target to aim at.
+ * It was a tab *inside* the studio and is one out here for the reason `screens/Render.tsx`
+ * gives: it is not a view of the recipe, and it is a multi-gigabyte install that deserves
+ * to be findable rather than discovered on somebody else's fourth tab.
  */
 const TABS: readonly { readonly screen: Screen; readonly label: Key }[] = [
   { screen: 'gallery', label: 'nav.sounds' },
   { screen: 'studio', label: 'nav.studio' },
+  { screen: 'render', label: 'nav.render' },
   { screen: 'loop', label: 'nav.loop' },
 ];
 

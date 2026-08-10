@@ -15,7 +15,7 @@ Nothing about it is hosted by us and nothing leaves the machine. It binds loopba
 the one non-loopback thing it can reach — the recipe bank — is a URL the user typed.
 
 It is also how the playground gets a **reference render**: the daemon carries the
-installer for Stable Audio Open Small and drives it, so the Model tab works for someone
+installer for Stable Audio Open Small and drives it, so the AI Render tab works for someone
 who has never cloned this repository. See [the reference model](#the-reference-model).
 
 ## Getting an agent attached, in one paste
@@ -245,7 +245,7 @@ The daemon carries its own copy of the installer (`run.py` and `requirements.txt
 into the published tarball), so `npx txt2sfx-bridge` needs nothing else. It writes them
 to `~/.txt2sfx/stable-audio/` and works there; run from a checkout it uses
 `test/stable-audio/` instead, so a venv provisioned from a terminal and one provisioned
-from the Model tab are the same venv. `TXT2SFX_STABLE_AUDIO_DIR` overrides both.
+from the AI Render tab are the same venv. `TXT2SFX_STABLE_AUDIO_DIR` overrides both.
 
 ```ts
 type ModelStage = 'unavailable' | 'needs-python' | 'needs-venv' | 'needs-weights' | 'ready';
@@ -268,7 +268,7 @@ interface ModelStatus {
 The byte counts are **measured**, by walking those directories without following
 symlinks — the Hugging Face cache hard-links each blob into a snapshot, and a walk that
 followed them would report 3.4 GB for a 1.7 GB checkpoint. They are in the payload
-because the Model tab is asked to show them: an install that quietly takes six gigabytes
+because the AI Render tab is asked to show them: an install that quietly takes six gigabytes
 is something people discover when a disk fills.
 
 A `token` is used for the one call it arrives on and is never written down. It travels in

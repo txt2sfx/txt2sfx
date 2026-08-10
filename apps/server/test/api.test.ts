@@ -18,7 +18,7 @@ import { SCHEMA_VERSION, openDatabase } from '../src/schema.js';
 import { type Store, storeOver } from '../src/store.js';
 /* Seeded with `examples/` alone, not the seeder's default. These tests are about
    what the API does with a populated bank, and the shipped `presets/` catalog would
-   add fifty renders per call for nothing — plus a second recipe answering to the
+   add ninety-odd renders per call for nothing — plus a second recipe answering to the
    word "pickup", which is the very ranking these assertions pin. */
 import { EXAMPLES_DIR, seedBank } from '../src/seed.js';
 

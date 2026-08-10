@@ -1,0 +1,11 @@
+# prompt: fireball spell cast and burst
+# tags: fireball, magic, fire, spell
+# Two events in one file, because a spell is a wind-up and a payoff and neither
+# half works alone: the band-pass sweeping upwards for 220 ms is the gathering,
+# and everything delayed to 240 ms is the hit. The crackle bends *down*, which
+# is what separates fire from water in `grains`.
+sound "fireball" 950ms explosion
+  gather: noise pink >> bp ~1200Hz[500..3000] -> ~3000Hz[1500..7000] in 220ms Q1.5 | gain 0.28 attack 80ms hold 20ms decay 200ms
+  burst: noise white >> hp ~1500Hz[600..4000] -> 600Hz in 300ms | gain 0.32 decay 260ms delay 240ms
+  body: sub ~70Hz[35..140] -> 35Hz in 260ms | gain 0.36 attack 6ms decay 420ms delay 240ms
+  crackle: grains ~2600Hz[1200..6000] rate ~140[60..350] width 4ms spread 2.5 bend 0.9 | gain 0.16 attack 30ms decay 400ms delay 280ms

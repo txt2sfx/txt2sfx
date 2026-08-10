@@ -132,6 +132,12 @@ export interface BankClient {
   authConfig(): Promise<BankAuthConfig | null>;
   /** Newest-first listing for the gallery. Empty when the bank is unreachable. */
   list(query?: BankQuery): Promise<BankListing>;
+  /**
+   * One recipe, by id. `null` when it is gone, hidden, or the bank cannot be reached
+   * — the caller is a link somebody followed, and three different ways of arriving at
+   * an empty playground do not need three different apologies.
+   */
+  get(id: number, options?: { readonly via?: string }): Promise<Recipe | null>;
   /** @throws {@link BankError} when the bank refuses the recipe. */
   publish(input: PublishInput): Promise<PublishResult>;
   /** Like or unlike. Idempotent both ways. @throws {@link BankError} */
@@ -275,6 +281,26 @@ export function bankClient(baseUrl: string, options: BankClientOptions = {}): Ba
         };
       } catch {
         return EMPTY_LISTING;
+      }
+    },
+
+    async get(id: number, options: { readonly via?: string } = {}): Promise<Recipe | null> {
+      try {
+        /* `via` is a marker, not a parameter: the server reads named keys and ignores
+           the rest, so it changes no answer and costs no server code. It exists to put
+           one word in the access log — this recipe was opened from a link a chat handed
+           somebody — because that is the only number that says whether that door is
+           used, and it is worth knowing before building anything else for it. */
+        const query = options.via === undefined || options.via === '' ? '' : `?via=${encodeURIComponent(options.via)}`;
+        const response = await call(`${origin}/api/recipes/${String(id)}${query}`, {
+          method: 'GET',
+          headers: authorized(),
+        });
+        if (!response.ok) return null;
+        const body: unknown = await response.json();
+        return isRecipe(body) ? body : null;
+      } catch {
+        return null;
       }
     },
 

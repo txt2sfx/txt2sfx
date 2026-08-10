@@ -1,0 +1,10 @@
+# prompt: ocean waves on a beach, loop
+# tags: ocean, waves, sea, loop
+# One wave per loop, and the wave is a filter opening and closing rather than a
+# level doing it — the same argument `whoosh-fast` makes at a twentieth of the
+# speed. The foam is 300 grains a second scattered wide, which is the only
+# setting that stops it sounding like a hiss with a fade on it.
+sound "ocean waves" 3000ms cycle loop
+  deep: noise brown >> lp ~400Hz[150..900] | gain 0.14 attack 600ms hold 900ms decay 1400ms
+  swell: noise pink >> lp ~1200Hz[500..2600] -> ~2600Hz[1200..5000] in 900ms -> 700Hz in 900ms Q1 | gain 0.32 attack 700ms hold 300ms decay 1600ms
+  foam: grains ~5000Hz[2500..9000] rate ~300[120..550] width 3ms spread 2.5 bend 1.2 | gain 0.18 attack 900ms hold 300ms decay 1400ms

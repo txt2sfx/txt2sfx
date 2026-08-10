@@ -49,8 +49,9 @@
  * @packageDocumentation
  */
 
-import { encodeWav, type CodegenResult } from '@txt2sfx/core';
+import { codegen, encodeWav, parse, type CodegenResult } from '@txt2sfx/core';
 import { CONTAINER, DEFAULT_BITRATE, encodeCompressed, type CompressedCodec } from './encode.js';
+import { render } from './engine.js';
 import { t } from './i18n.js';
 
 /** A format the menu can offer. */
@@ -288,6 +289,42 @@ function size(bytes: number): string {
   return bytes < 1024 ? `${String(bytes)} B` : `${String(Math.round(bytes / 1024))} kB`;
 }
 
+/**
+ * What this format will weigh, before anything is encoded.
+ *
+ * The reason to show it *before* the click rather than in the toast after: the two
+ * numbers people are choosing between here differ by an order of magnitude — a
+ * two-second WAV at 24-bit is 288 kB and the same sound as MP3 is 48 — and that
+ * difference is the whole argument for one entry over another. Discovering it in the
+ * download folder is discovering it too late.
+ *
+ * WAV is exact arithmetic: header plus samples times bytes per sample, the same numbers
+ * `encodeWav` writes. The compressed pair is bitrate times duration, which is what a CBR
+ * encoder produces to within its own frame padding — a few hundred bytes on a sound this
+ * short, well inside the rounding the label does anyway. `code` formats return null: the
+ * JavaScript's size is known exactly by the compiler and is already printed on the Export
+ * card, and a soundline is the text on screen.
+ *
+ * @returns Bytes, or null when this format's size cannot be known without doing the work.
+ */
+export function estimateBytes(format: Format, buffer: AudioBuffer | null): number | null {
+  if (buffer === null || format.kind !== 'audio') return null;
+  if (format.id === 'wav16' || format.id === 'wav24') {
+    const bytesPerSample = format.id === 'wav24' ? 3 : 2;
+    /* 44 bytes of RIFF header, and the channel count `encodeWav` actually writes. */
+    return 44 + buffer.length * buffer.numberOfChannels * bytesPerSample;
+  }
+  if (CODEC[format.id] !== undefined) return Math.round((DEFAULT_BITRATE * 1000 * buffer.duration) / 8);
+  return null;
+}
+
+/** A byte count as a menu shows it. Exported so every surface rounds the same way. */
+export function sizeLabel(bytes: number): string {
+  if (bytes < 1024) return `${String(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 1024))} kB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /** What a download needs to know about the thing being downloaded. */
 export interface Downloadable {
   readonly name: string;
@@ -339,6 +376,51 @@ export async function download(subject: Downloadable, format: Format): Promise<s
   /* `slice()` for a fresh ArrayBuffer: the view may look into a larger allocation. */
   save(new Blob([bytes.slice().buffer as ArrayBuffer], { type: format.mime }), filename);
   return t('dl.savedSize', { file: filename, size: size(bytes.length) });
+}
+
+/**
+ * Download a recipe that nothing on screen has compiled or rendered.
+ *
+ * The studio hands {@link download} an `AudioBuffer` and a `CodegenResult` it is already
+ * holding; a gallery card holds neither — forty cards do not get forty compiles on the
+ * way to first paint, and `useBars` renders one only to draw it. So this does the work
+ * the chosen format actually needs and no more: `soundline` hands over the text it was
+ * given, `js` compiles without rendering, and only the audio entries pay for a render.
+ *
+ * Failures come back as the same kind of sentence {@link download} returns, because they
+ * land in the same toast: a recipe in the catalog that no longer parses is a real thing
+ * to be told about, not a button that does nothing.
+ */
+export async function downloadRecipe(
+  name: string,
+  source: string,
+  seed: number,
+  format: Format,
+): Promise<string> {
+  const empty = { name, source, code: null, buffer: null };
+  if (format.id === 'soundline') return download(empty, format);
+
+  let ast;
+  try {
+    ast = parse(source);
+  } catch {
+    return t('dl.noCompile');
+  }
+
+  if (format.kind === 'code') {
+    try {
+      return await download({ ...empty, code: codegen(ast, { seed }) }, format);
+    } catch {
+      return t('dl.noCompile');
+    }
+  }
+
+  try {
+    const rendered = await render(ast, { seed });
+    return await download({ ...empty, buffer: rendered.buffer }, format);
+  } catch (error: unknown) {
+    return t('dl.renderFail', { error: error instanceof Error ? error.message : String(error) });
+  }
 }
 
 /** Copy text and report it, for the panels full of Copy buttons. */

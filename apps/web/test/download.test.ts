@@ -15,9 +15,12 @@ import {
   AUDIO_FORMATS,
   DEFAULT_FORMAT_ID,
   FORMATS,
+  downloadRecipe,
+  estimateBytes,
   formatById,
   loadFormat,
   saveFormat,
+  sizeLabel,
 } from '../src/lib/download.js';
 import { CONTAINER, DEFAULT_BITRATE, type CompressedCodec } from '../src/lib/encode.js';
 
@@ -137,6 +140,67 @@ describe('the download menu', () => {
       expect(CONTAINER[codec].extension).toBeTruthy();
       expect(CONTAINER[codec].mime).toMatch(/^audio\//);
     }
+  });
+});
+
+/* A gallery card compiles and renders at the moment a format is picked, which means the
+   failure a studio download cannot have — a recipe that does not parse — is one this path
+   reaches on every press. It has to come back as a sentence for the toast: a Download
+   button that throws into the console is indistinguishable from one that does nothing.
+
+   Only the refusals are exercised here. Everything past them saves a file, and a test that
+   wanted to watch that happen would need a DOM and an audio stack for behaviour
+   `download()` already owns. */
+/**
+ * What the menu promises before the click.
+ *
+ * The number is shown so the choice between entries can be made on the thing that
+ * actually differs between them, so it has to be right for the reason the extension has
+ * to be right: a WAV advertised at 48 kB and delivered at 288 is the same class of lie.
+ */
+describe('what a format will weigh', () => {
+  /* One second, mono, 48 kHz — enough to check the arithmetic without a real decoder. */
+  const buffer = { length: 48_000, duration: 1, numberOfChannels: 1, sampleRate: 48_000 } as AudioBuffer;
+
+  it('counts a WAV exactly, header included', () => {
+    expect(estimateBytes(formatById('wav16'), buffer)).toBe(44 + 48_000 * 2);
+    expect(estimateBytes(formatById('wav24'), buffer)).toBe(44 + 48_000 * 3);
+  });
+
+  it('counts a stereo buffer per channel', () => {
+    const stereo = { ...buffer, numberOfChannels: 2 } as AudioBuffer;
+    expect(estimateBytes(formatById('wav16'), stereo)).toBe(44 + 48_000 * 2 * 2);
+  });
+
+  it('takes the compressed pair from the bitrate the encoder is actually given', () => {
+    expect(estimateBytes(formatById('mp3'), buffer)).toBe((DEFAULT_BITRATE * 1000) / 8);
+    expect(estimateBytes(formatById('m4a'), buffer)).toBe((DEFAULT_BITRATE * 1000) / 8);
+  });
+
+  /* The JavaScript's size is known exactly by the compiler and printed on the Export
+     card; guessing at it here would put a second, worse number on the same screen. */
+  it('says nothing about the two text formats, or about a sound not rendered yet', () => {
+    expect(estimateBytes(formatById('js'), buffer)).toBeNull();
+    expect(estimateBytes(formatById('soundline'), buffer)).toBeNull();
+    expect(estimateBytes(formatById('mp3'), null)).toBeNull();
+  });
+
+  it('rounds the way every surface showing it rounds', () => {
+    expect(sizeLabel(512)).toBe('512 B');
+    expect(sizeLabel(48_000)).toBe('47 kB');
+    expect(sizeLabel(3_500_000)).toBe('3.3 MB');
+  });
+});
+
+describe('downloading a card, which has nothing compiled behind it', () => {
+  it('reports a recipe that does not parse instead of throwing', async () => {
+    const said = await downloadRecipe('broken', 'this is not a soundline', 1, formatById('mp3'));
+    expect(said).toBe('the recipe does not compile — nothing to export');
+  });
+
+  it('says the same thing for the JavaScript, which needs the same parse', async () => {
+    const said = await downloadRecipe('broken', 'this is not a soundline', 1, formatById('js'));
+    expect(said).toBe('the recipe does not compile — nothing to export');
   });
 });
 

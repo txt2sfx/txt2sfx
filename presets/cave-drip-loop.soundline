@@ -1,0 +1,10 @@
+# prompt: dripping cave ambience loop
+# tags: cave, drip, ambience, loop
+# `grains` at four a second, which is the low end of the primitive and the one
+# place it is used as a *sequencer* rather than a texture: below about fifteen
+# the ear counts the events instead of fusing them, and counting is exactly
+# what makes a cave feel empty.
+sound "cave drips" 2400ms cycle loop
+  room: noise brown >> lp ~300Hz[120..700] | gain 0.1 attack 500ms hold 1300ms decay 600ms
+  pool: noise pink >> lp ~900Hz[350..2000] | gain 0.12 attack 400ms hold 1400ms decay 500ms
+  drip: grains ~1200Hz[500..2800] rate 4 width 40ms spread 0.6 bend ~1.6[1..2.4] | gain 0.32 attack 100ms hold 1600ms decay 600ms

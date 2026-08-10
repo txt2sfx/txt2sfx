@@ -6,7 +6,7 @@
  *
  * - **`examples`** — the repository's reference set. Writable under `vite dev`, so
  *   this is where a recipe is authored and kept.
- * - **`preset`** — the fifty sounds bundled with the build (`presets/`). Read-only
+ * - **`preset`** — the sounds bundled with the build (`presets/`). Read-only
  *   and always present, which is the point: without a key and without a bank the
  *   gallery is still a catalog with something in every category. They rank *below*
  *   the bank, because a live bank holds the same recipes with an id, a rating and a

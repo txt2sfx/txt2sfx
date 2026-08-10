@@ -3,21 +3,31 @@
  *
  * ## Why a library is in the building
  *
- * The same argument as the Model tab, one step further. What this project ships is a
- * few hundred bytes of JavaScript; a diffusion render and a field recording are both
- * **targets** — the thing you point at and say "closer to that". The Model tab makes
- * one on this machine in thirty seconds of CPU; this tab finds one somebody already
- * recorded, in one request. Neither is a deliverable, and the panel says so out loud
+ * The same argument as the AI Render screen, one step further. What this project ships
+ * is a few hundred bytes of JavaScript; a diffusion render and a field recording are
+ * both **targets** — the thing you point at and say "closer to that". The render screen
+ * makes one on this machine in thirty seconds of CPU; this finds one somebody already
+ * recorded, in one request. Neither is a deliverable, and the block says so out loud
  * rather than growing an export button that would imply otherwise.
  *
  * Everything found here ends where a dropped file ends: the B side of Compare, and
  * from there `⌖ Fit to reference` and `match reference` apply unchanged.
  *
- * ## Why the first control is a sign-in and not a field
+ * ## Why this is two exports and not one panel
+ *
+ * Because the two halves answer to different owners now. The search runs on the
+ * **gallery**, under the catalog and against the same box — somebody looking for a door
+ * slam wants both answers to that one question, and asking it twice in two places was
+ * the arrangement that made the library feel like a separate application. So
+ * {@link FreesoundResults} is the answer block, and {@link FreesoundButton} is the
+ * account, which belongs beside the search box rather than on top of the results: it is
+ * a property of the session, not of this query.
+ *
+ * ## Why the account control is a sign-in and not a field
  *
  * Because the alternative is not allowed and no longer exists. Freesound's API terms
  * forbid answering for people who are not logged in to Freesound themselves, and what
- * their settings hand out is an *application*, not a per-person key. So the panel asks
+ * their settings hand out is an *application*, not a per-person key. So the button asks
  * the user to connect their own account, and the payoff is not only compliance: the
  * download menu can then hand over the **original** file, which a pasted key never
  * could — that endpoint is OAuth2-only.
@@ -67,9 +77,9 @@
  *
  * ## Why the format menu keeps its own choice here
  *
- * The panel owns the whole download — fetch, decode, encode, name — so unlike the
+ * The block owns the whole download — fetch, decode, encode, name — so unlike the
  * recipe's and the model's menus there is nothing for the screen above to hold. The
- * choice still outlives the tab, because it lives in `lib/download.ts`'s per-scope
+ * choice still outlives the screen, because it lives in `lib/download.ts`'s per-scope
  * memory, and it starts on **Original**: re-encoding a stranger's recording before
  * anybody asked is a quality loss taken on their behalf.
  *
@@ -142,7 +152,7 @@ const DECODE_LIMIT = 2;
 /** The green the rest of the tab is drawn in — `HUE.library`, as a canvas needs it. */
 const WAVE_COLOR = 'oklch(0.78 0.11 150)';
 
-export interface SearchPanelProps {
+export interface FreesoundResultsProps {
   readonly search: LibrarySearch;
   /** Fetch this preview, decode it and make it the B side. Rejects like any fetch. */
   readonly onUseSound: (sound: FreesoundSound) => Promise<void>;
@@ -150,7 +160,7 @@ export interface SearchPanelProps {
   readonly onStatus: (message: string) => void;
 }
 
-export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps): React.JSX.Element {
+export function FreesoundResults({ search, onUseSound, onStatus }: FreesoundResultsProps): React.JSX.Element {
   const { t } = useI18n();
   const [playing, setPlaying] = useState<number | null>(null);
   const [pending, setPending] = useState<number | null>(null);
@@ -238,8 +248,6 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
 
   return (
     <div className="library">
-      <Connection connection={search.connection} />
-
       <div className="library-controls mono">
         <div className="chips">
           {(['cc0', 'any'] as const).map((id) => (
@@ -297,20 +305,11 @@ export function SearchPanel({ search, onUseSound, onStatus }: SearchPanelProps):
       <div className="library-list">
         {search.running && search.hits.length === 0 ? <p className="library-empty">{t('search.searching')}</p> : null}
 
-        {/* Nothing at all when the bank cannot connect anybody: the block above has
-            already said so, and the same sentence twice on one screen reads as a
-            rendering bug rather than as emphasis. */}
-        {!search.running &&
-        search.error === null &&
-        search.hits.length === 0 &&
-        search.connection.state !== 'unavailable' ? (
-          <p className="library-empty">
-            {search.connection.state !== 'on'
-              ? t('search.needsConnection')
-              : search.searched
-                ? t('search.nothing')
-                : t('search.idle')}
-          </p>
+        {/* Only the two states this block can be in. "Not connected" is not one of them
+            any more: the screen above does not render the block at all until an account
+            is connected, and the button that connects one is beside the search box. */}
+        {!search.running && search.error === null && search.hits.length === 0 ? (
+          <p className="library-empty">{t(search.searched ? 'search.nothing' : 'search.idle')}</p>
         ) : null}
 
         {search.hits.map(({ sound, note }) => (
@@ -552,48 +551,75 @@ function useWaveforms(): Waveforms {
  * ------------------------------------------------------------------------- */
 
 /**
- * The account this tab is acting as, in four states.
+ * The account this tab is acting as, as one control beside the search box.
  *
  * A state machine rather than a button with a disabled attribute, for the reason the
- * Model tab's install screen is one: "this bank cannot connect anybody" and "you have
+ * render screen's install view is one: "this bank cannot connect anybody" and "you have
  * not connected yet" are different problems with different answers, and a greyed-out
  * button says neither. The fourth state, `connecting`, exists because the round trip
- * leaves the page — coming back to a panel that looks untouched is how a user presses
+ * leaves the page — coming back to a control that looks untouched is how a user presses
  * connect twice.
+ *
+ * Connected, it stops being a button and becomes a *statement* with an undo on it:
+ * `● freesound.org connected · disconnect`. That is the whole reason the sentence about
+ * where the tokens are kept survives the move to the hero — it is now a tooltip rather
+ * than a paragraph, but a control that quietly holds an OAuth grant has to say so
+ * somewhere the user can find it, and the two links here are the only places.
  */
-function Connection({ connection }: { readonly connection: LibrarySearch['connection'] }): React.JSX.Element {
+export function FreesoundButton({
+  connection,
+}: {
+  readonly connection: LibrarySearch['connection'];
+}): React.JSX.Element {
   const { t } = useI18n();
   const { state } = connection;
 
+  if (state === 'on') {
+    return (
+      <div className="fs-connected mono" title={t('search.connectedNote')}>
+        <span className="ok">● {t('search.connected')}</span>
+        <button type="button" className="link" onClick={connection.disconnect}>
+          {t('search.disconnect')}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="library-key">
-      {state === 'on' ? (
-        <>
-          <span className="mono ok">● {t('search.connected')}</span>
-          {/* No tick to keep it: the connection is kept, and this line says so. What the
-              user gets instead of a checkbox is the sentence and the button that undoes
-              it — a promise about what is stored is worth more than a control that has
-              to be found and understood before the first search. */}
-          <span className="caption">{t('search.connectedNote')}</span>
-          <div className="spacer" />
-          <button type="button" className="link" onClick={connection.disconnect}>
-            {t('search.disconnect')}
-          </button>
-        </>
-      ) : (
-        <>
-          <button type="button" className="hue-button" disabled={state !== 'off'} onClick={connection.connect}>
-            {state === 'connecting' ? <span className="spinner" aria-hidden="true" /> : null}
-            {t('search.connect')}
-          </button>
-          <p className="caption">
-            {state === 'unavailable' ? t('search.noBank') : t('search.connectNote')}{' '}
-            <a className="link" href={FREESOUND_URL} target="_blank" rel="noreferrer noopener">
-              freesound.org ↗
-            </a>
-          </p>
-        </>
-      )}
+    <div className="fs-connect">
+      <button
+        type="button"
+        className="fs-button"
+        disabled={state !== 'off'}
+        title={t(state === 'unavailable' ? 'search.noBank' : 'search.connectNote')}
+        onClick={connection.connect}
+      >
+        {state === 'connecting' ? <span className="spinner" aria-hidden="true" /> : null}
+        {t('search.connect')}
+        {/* An arrow, not the magnifier this button used to carry. The label no longer
+            promises a search, and the press leaves the page for freesound's own consent
+            screen — which is the one thing about it worth warning somebody about before
+            they click. */}
+        {state === 'connecting' ? null : <span aria-hidden="true">↗</span>}
+      </button>
+
+      {/* The label promises an account, not a search box — which is honest, and leaves
+          "why does searching a public library need an account at all?" unanswered right
+          where it is asked. The mark answers it on hover and on focus: it is an OAuth
+          grant, the password is typed on freesound.org and never here, and what it buys
+          is searching the library beside the catalog. It is a link rather than a button
+          because a control whose click does nothing is worse than one that goes where
+          the tooltip points. */}
+      <a
+        className="fs-help"
+        href={FREESOUND_URL}
+        target="_blank"
+        rel="noreferrer noopener"
+        title={t('search.connectHelp')}
+        aria-label={t('search.connectHelp')}
+      >
+        ?
+      </a>
 
       {/* The code the round trip came back with, as a sentence. `cancelled` is the one
           people will actually see — they pressed Cancel on freesound's own page — and it
@@ -606,6 +632,14 @@ function Connection({ connection }: { readonly connection: LibrarySearch['connec
             : `${t('search.connFailed')} (${connection.error})`}
         </p>
       )}
+
+      {state === 'unavailable' ? (
+        <p className="caption">
+          <a className="link" href={FREESOUND_URL} target="_blank" rel="noreferrer noopener">
+            freesound.org ↗
+          </a>
+        </p>
+      ) : null}
     </div>
   );
 }

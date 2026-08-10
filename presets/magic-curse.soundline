@@ -1,0 +1,11 @@
+# prompt: dark curse, low ominous swell
+# tags: curse, dark, magic, evil
+# Dread is a slow attack on something detuned and falling. The distortion is
+# doing the work a chorus would do if v0 had one: an FM pair at ratio 1.5 is
+# already inharmonic, and driving it adds sum and difference tones that never
+# settle on a pitch.
+sound "dark curse" 1100ms
+  drone: tone saw ~110Hz[60..220] -> 70Hz in 600ms >> lp ~900Hz[300..2200] Q3 | gain 0.24 attack 40ms hold 200ms decay 700ms
+  growl: fm ~140Hz[70..300] ratio 1.5 index 8 -> 2 in 500ms >> dist drive ~3[1..8] mix 0.6 | gain 0.2 attack 30ms decay 750ms
+  whisper: noise brown >> bp ~500Hz[200..1200] Q2 | gain 0.16 attack 100ms decay 800ms
+  sting: modal metal ~1800Hz[800..4000] Q140 | gain 0.12 decay 500ms delay 40ms

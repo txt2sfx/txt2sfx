@@ -10,11 +10,16 @@
  * - **A model's render.** Send the same prompt to a diffusion model running locally and
  *   compare against what it produced. A *target*, never a competitor: the deliverable is
  *   still a recipe, and the model's output is a 400 kB file that answers "what should
- *   this sound like" and nothing else.
+ *   this sound like" and nothing else. Made on the AI Render screen — see
+ *   `screens/Render.tsx`.
  * - **A recording from a library.** The same target at a different price: someone
- *   already recorded this, and the Search tab finds it in one request instead of thirty
- *   seconds of CPU. Preview quality, under a licence the row states — see
- *   `components/SearchPanel.tsx`.
+ *   already recorded this, and freesound.org finds it in one request instead of thirty
+ *   seconds of CPU. Preview quality, under a licence the row states — searched from the
+ *   gallery, see `components/Freesound.tsx`.
+ *
+ * Two of those five are made on other screens now, so their chips are doors: pressing
+ * one with nothing loaded takes you where that kind of B comes from, rather than sitting
+ * disabled with a tooltip naming a place.
  * - **A file.** Your own recording, peak-normalized on load.
  * - **The microphone.** The same thing a second earlier: knock on the desk, hiss, click
  *   a pen. Most targets worth naming never existed as a file, and describing one in
@@ -119,8 +124,13 @@ export interface ComparePanelProps {
   /** True when what is loaded came from the library, so its chip need not go looking. */
   readonly libraryLoaded: boolean;
   readonly onLoadFile: (file: File) => void;
-  /** Go to the Search tab. Each B chip is a door to where that kind of B comes from. */
+  /**
+   * Go to the gallery, where the library search is. Each B chip is a door to where that
+   * kind of B comes from, and two of those places are now other screens.
+   */
   readonly onFindLibrary: () => void;
+  /** Go to the AI Render screen, which is where a model render is made. */
+  readonly onRenderModel: () => void;
   readonly onNewTake: () => void;
   /**
    * A recording is running right now.
@@ -178,6 +188,7 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
     libraryLoaded,
     onLoadFile,
     onFindLibrary,
+    onRenderModel,
     onNewTake,
     recording,
     onRecord,
@@ -507,12 +518,16 @@ export function ComparePanel(props: ComparePanelProps): React.JSX.Element {
                    what this chip is *for*, and bouncing to the search would throw away
                    the comparison the user came here to look at. */
                 if (entry.id === 'library' && !libraryLoaded) onFindLibrary();
+                /* Same rule for the render, and the same reason — except that this one
+                   leaves the screen even when the model is not installed, because the
+                   place that installs it is the place this goes. A disabled chip with a
+                   tooltip naming a screen is one step short of taking you there. */
+                if (entry.id === 'model' && b === null) onRenderModel();
                 if (entry.id === 'take') onNewTake();
                 /* `false`: this chip only loads B. Fitting is the other button's promise,
                    and the press that stops decides — see `onRecord`. */
                 if (entry.id === 'record') onRecord(false);
               }}
-              disabled={entry.id === 'model' && !modelAvailable}
               title={entry.id === 'model' && !modelAvailable ? t('compare.modelBlocked') : undefined}
             >
               {entry.label}

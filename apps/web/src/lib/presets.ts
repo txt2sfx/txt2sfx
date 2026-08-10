@@ -5,8 +5,8 @@
  *
  * `examples/` is editable — under `vite dev` the playground writes recipes back to
  * disk, so that module has to prefer a dev endpoint over its bundled snapshot.
- * Presets are read-only by contract (`presets/README.md`): they are the fifty
- * sounds the gallery has before anybody has a key, and saving one from the studio
+ * Presets are read-only by contract (`presets/README.md`): they are the sounds
+ * the gallery has before anybody has a key, and saving one from the studio
  * puts a copy in `examples/`, which is where authored work belongs. Read-only means
  * one code path and no endpoint, so this module is the glob and nothing else.
  *

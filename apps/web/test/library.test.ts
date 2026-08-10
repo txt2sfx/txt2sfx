@@ -1,5 +1,5 @@
 /**
- * Trash, recency and the onboarding flag — and the property that matters most about
+ * Stars, recency and the onboarding flag — and the property that matters most about
  * all three: **a corrupt entry must never stop the playground from starting**.
  *
  * These live in `localStorage`, which is shared with every other page on the origin,
@@ -49,32 +49,43 @@ describe('the per-browser library', () => {
   });
 
   it('starts empty and round-trips what it is given', () => {
-    expect(loadLibrary()).toEqual({ trashed: [], touched: {}, onboarded: false });
-    const library = { trashed: ['coin'], touched: { coin: 1_700_000_000_000 }, onboarded: true };
+    expect(loadLibrary()).toEqual({ favorites: [], touched: {}, onboarded: false });
+    const library = { favorites: ['coin'], touched: { coin: 1_700_000_000_000 }, onboarded: true };
     saveLibrary(library);
     expect(loadLibrary()).toEqual(library);
   });
 
   it('starts fresh rather than throwing on anything unreadable', () => {
-    for (const junk of ['', 'not json', '[]', 'null', '{"trashed":"coin"}', '{"touched":42}']) {
+    for (const junk of ['', 'not json', '[]', 'null', '{"favorites":"coin"}', '{"touched":42}']) {
       window.localStorage.setItem(KEY, junk);
       const library = loadLibrary();
-      expect(Array.isArray(library.trashed)).toBe(true);
+      expect(Array.isArray(library.favorites)).toBe(true);
       expect(typeof library.touched).toBe('object');
       expect(typeof library.onboarded).toBe('boolean');
     }
   });
 
-  it('drops non-string names rather than letting one into the trash list', () => {
-    window.localStorage.setItem(KEY, JSON.stringify({ trashed: ['coin', 7, null, 'laser'] }));
-    expect(loadLibrary().trashed).toEqual(['coin', 'laser']);
+  it('drops non-string names rather than letting one into the starred list', () => {
+    window.localStorage.setItem(KEY, JSON.stringify({ favorites: ['coin', 7, null, 'laser'] }));
+    expect(loadLibrary().favorites).toEqual(['coin', 'laser']);
   });
 
-  /* Trash is a view decision. `examples/` is a git-tracked directory and the bank is a
-     shared store; a button in a playground has no business unlinking either, and the
-     Trash filter would have nothing to restore from if it did. */
-  it('records a trashed name without recording anything about the file', () => {
-    saveLibrary({ trashed: ['coin'], touched: {}, onboarded: false });
+  /* A payload written before stars existed carries a `trashed` array and no favourites.
+     It must load as an ordinary empty-star library, keeping the recency map beside it —
+     that is the whole reason the storage version did not have to change. */
+  it('reads a pre-favourites payload without losing what is still meaningful in it', () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ trashed: ['coin'], touched: { laser: 1_700_000_000_000 }, onboarded: true }),
+    );
+    expect(loadLibrary()).toEqual({ favorites: [], touched: { laser: 1_700_000_000_000 }, onboarded: true });
+  });
+
+  /* A star is a view decision. `examples/` is a git-tracked directory and the bank is a
+     shared store; a button in a playground has no business writing to either, so what is
+     kept here is a name and nothing that could go stale against the recipe. */
+  it('records a starred name without recording anything about the file', () => {
+    saveLibrary({ favorites: ['coin'], touched: {}, onboarded: false });
     const raw = window.localStorage.getItem(KEY) ?? '';
     expect(raw).toContain('coin');
     expect(raw).not.toContain('soundline');

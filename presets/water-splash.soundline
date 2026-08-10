@@ -1,0 +1,11 @@
+# prompt: body falling into water, big splash
+# tags: water, splash, swim, dive
+# The two grain fields are the same primitive at opposite settings, as in
+# `footstep-water`, but scaled up: 260 grains a second over two and a half
+# octaves is the sheet of water leaving the surface, and 40 wide slow ones
+# starting 180 ms later are what falls back down.
+sound "water splash" 800ms foley
+  impact: noise white >> lp ~3000Hz[1200..6000] | gain 0.26 attack 2ms decay 90ms
+  sheet: grains ~1800Hz[800..4000] rate ~260[100..500] width 5ms spread 2.5 bend 1.4 | gain 0.32 attack 5ms decay 320ms
+  body: sub ~120Hz[60..200] -> 60Hz in 100ms | gain 0.2 attack 5ms decay 200ms
+  fallback: grains ~2600Hz[1200..6000] rate 40 width 14ms spread 1 bend 1.5 | gain 0.18 attack 60ms decay 420ms delay 180ms

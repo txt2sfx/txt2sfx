@@ -10,7 +10,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { clearShareFromLocation, shareLink, sharedFromLocation } from '../src/lib/share.js';
+import {
+  bankLink,
+  bankRefFromLocation,
+  clearShareFromLocation,
+  shareLink,
+  sharedFromLocation,
+} from '../src/lib/share.js';
 
 const RECIPE = {
   source: 'sound "bubble pop" 55ms pop\n  body: tone tri ~700Hz[500..1400] | gain 0.8 decay 38ms\n',
@@ -89,5 +95,52 @@ describe('share links', () => {
 
     clearShareFromLocation();
     expect(replaced).toEqual(['/play?debug=1']);
+  });
+});
+
+/**
+ * The id form, whose whole reason for existing is a caller that is not a browser: a
+ * chat composing a link to something it found in the bank. So the cases that matter
+ * are the ones where that caller gets it wrong — an invented id, a truncated link, a
+ * number that is not a number — and every one of them has to end at an ordinary
+ * playground rather than a request the bank will 404 or, worse, a crash.
+ */
+describe('bank links', () => {
+  it('round-trips an id through the fragment', () => {
+    expect(bankRefFromLocation(new URL(bankLink(12, 'https://example.test')).hash)).toBe(12);
+  });
+
+  /* Short is the entire trade this form makes — it gives up self-containment for a
+     link something can compose without base64-encoding a recipe in a token stream. */
+  it('is short, and puts the id in the fragment', () => {
+    const url = new URL(bankLink(12, 'https://example.test'));
+    expect(url.hash).toBe('#recipe=12');
+    expect(url.search).toBe('');
+    expect(bankLink(12, 'https://example.test').length).toBeLessThan(40);
+  });
+
+  it('does not care whether the origin was given a trailing slash', () => {
+    expect(bankLink(3, 'https://example.test/')).toBe(bankLink(3, 'https://example.test'));
+  });
+
+  /* An id is typed and re-typed by models and people. Anything that is not a positive
+     integer must read as "no link here" — a playground asking the bank for recipe NaN
+     is a request nobody can answer and an error nobody can act on. */
+  it('reads nothing out of an id that is not one', () => {
+    for (const hash of ['', '#', '#recipe=', '#recipe=abc', '#recipe=-1', '#recipe=0', '#recipe=1.5', '#play=abc']) {
+      expect(bankRefFromLocation(hash), hash).toBeNull();
+    }
+  });
+
+  it('finds the id when it is not the first fragment parameter', () => {
+    expect(bankRefFromLocation('#view=studio&recipe=41')).toBe(41);
+  });
+
+  /* Both forms coexist and must not read each other's payload: a `#play=` link is a
+     whole recipe and has no id in it, and an id link carries no recipe. */
+  it('stays out of the payload form, and the payload form stays out of it', () => {
+    const payload = new URL(shareLink(RECIPE, 'https://example.test/')).hash;
+    expect(bankRefFromLocation(payload)).toBeNull();
+    expect(sharedFromLocation('#recipe=12')).toBeNull();
   });
 });

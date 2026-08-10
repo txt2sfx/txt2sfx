@@ -1,0 +1,8 @@
+# prompt: retro 8-bit shoot, falling square blip
+# tags: shoot, retro, 8bit, arcade
+# `jump-8bit` sweeping the other way, which is the whole vocabulary the era had:
+# up is a jump, down is a shot. The noise layer is the one thing a 2A03 could
+# add on top, and it is short enough to read as the trigger rather than as air.
+sound "8bit shoot" 160ms laser
+  shot: chirp square ~1600Hz[800..3200] -> 200Hz in 120ms | gain 0.34 decay 150ms
+  snap: noise white >> hp ~2000Hz[900..5000] | gain 0.12 decay 40ms

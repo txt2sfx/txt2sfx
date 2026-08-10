@@ -30,45 +30,81 @@
  * goes amber and carries a dot, because it is then the only thing standing between the
  * prompt and a run. Who answers, when somebody does, is on hover and in the dialog.
  *
- * ## One button, whichever engine the tab is about
+ * ## One row, two screens, two engines
  *
- * The row sits above the tabs and stays put across all four, so the sentence in it is
- * the one thing every engine is asked. Pressing it therefore runs *the tab you are
- * looking at*: the loop on `Soundline`, the diffusion model on `Model`, the library
- * search on `Search`. The alternative — one button that always meant the recipe — put
- * the model's own Render button a scroll away from the prompt it renders, and left the
- * row's accent hue saying `Model` while the button meant something else. The label is
- * `Make sound` for the same reason: it is the one verb that is true of every engine,
- * where `Regenerate` described only the loop.
+ * The same row is the studio's and the AI Render screen's, and the sentence in it is the
+ * one thing either engine is asked. Which engine a press runs is the screen's business,
+ * not the row's: {@link PromptRowProps.engine} says which, the hue follows it, and the
+ * label stays `Make sound` because that is the one verb true of both — where
+ * `Regenerate` described only the loop, and `Render` only the model.
  *
- * What follows from that is that each tab is blocked by its own missing thing — except
- * the recipe, which is no longer blocked at all. With no agent and no key the press
- * *searches* the bank and the bundled catalog instead of writing anything, and the label
- * changes to `Find in bank` so the button never claims the thing it is not doing. The
- * gear stays amber beside it, because "there is no model" is still the fact.
+ * Each engine is blocked by its own missing thing — except the recipe, which is no
+ * longer blocked at all. With no agent and no key the press *searches* the bank and the
+ * bundled catalog instead of writing anything, and the label changes to `Find in bank`
+ * so the button never claims the thing it is not doing. The gear stays amber beside it,
+ * because "there is no model" is still the fact.
  *
- * On `Model` the provider and the key are not consulted at all (nothing there goes to a
+ * On `model` the provider and the key are not consulted at all (nothing there goes to a
  * vendor — the render happens on this machine through the bridge), so what blocks the
- * button is the model not being installed. On `Search` it is the library key, which is
- * a different credential living in a different field: the provider key is optional
- * there, because a search with no model still searches, it just does not get its query
- * rewritten or its results reordered. `Compare A / B` has no engine of its own and
- * keeps the recipe's.
+ * button is the model not being installed. The library search has no row of its own any
+ * more: it answers the gallery's catalog box, which is the same question asked once.
  *
  * The button also grows a spinner while a run is in flight. It is the smallest honest
  * signal there is: the stage list below says *what* is happening once a run reports
  * something, and until it does — a model render is ~30 s before its first line — the
  * only thing on screen that can say "yes, it started" is the control that was pressed.
  *
+ * ## Why the caption lives in this row on the model engine
+ *
+ * Because on that engine the sentence in this row *is* the caption. The render screen
+ * used to carry a second text field underneath — the English line t5-base actually reads
+ * — and the two sat one above the other holding almost the same words, which made the row
+ * above it look like a draft of the field below it. Only one of them was ever sent.
+ *
+ * So there is one text, and {@link PromptRowProps.caption} adds the two controls that
+ * belong to it: how long it is against what the encoder can hold, and `Rewrite`, which
+ * replaces the prompt in place with the caption a model wrote from it. That is the whole
+ * argument for the counter being here rather than under the waveform — it counts the
+ * string in the box beside it, and a length warning that is not next to the text it is
+ * about is a riddle.
+ *
  * @packageDocumentation
  */
 
+import { useEffect, useRef } from 'react';
+import { CAPTION_LIMIT, captionIssue } from '@txt2sfx/agent';
 import type { ProviderKind } from '../lib/agent.js';
 import { HUE } from '../lib/design.js';
 import { useI18n } from '../lib/i18n.js';
 
-/** Which of the four studio views is showing, so the row can take its hue. */
-export type StudioView = 'sound' | 'model' | 'compare' | 'search';
+/** What the deterministic caption check reports, in one sentence each. */
+const CAPTION_ISSUE_KEY = {
+  script: 'model.captionScript',
+  length: 'model.captionLength',
+} as const;
+
+/**
+ * The prompt-is-also-a-caption controls, on the screens where that is true.
+ *
+ * Absent everywhere else: the recipe engine sends the sentence to a model that reads any
+ * script at any length, so a counter against t5-base's 64 tokens would be a warning about
+ * a limit that does not apply.
+ */
+export interface PromptCaption {
+  /** A caption is being written right now — the row says so and holds the button. */
+  readonly writing: boolean;
+  /** Whether anything on this page can write one. False greys the button, with a why. */
+  readonly canWrite: boolean;
+  readonly onRewrite: () => void;
+}
+
+/**
+ * Which engine a press in this row runs.
+ *
+ * `recipe` is the agent loop that writes a soundline; `model` is the local diffusion
+ * render. Not a screen name: the studio has two views and both of them mean `recipe`.
+ */
+export type PromptEngine = 'recipe' | 'model';
 
 export interface PromptRowProps {
   readonly prompt: string;
@@ -79,14 +115,14 @@ export interface PromptRowProps {
   readonly onOpenSettings: () => void;
   readonly running: boolean;
   readonly stopping: boolean;
-  readonly view: StudioView;
-  /** Whether the diffusion model is installed — what gates the button on the Model tab. */
+  readonly engine: PromptEngine;
+  /** Whether the diffusion model is installed — what gates the button on `model`. */
   readonly modelReady: boolean;
-  /** Whether the library has a key — what gates the button on the Search tab. */
-  readonly searchReady: boolean;
-  /** Runs whichever engine `view` is about; the screen decides which. */
+  /** Runs whichever engine `engine` names; the screen decides which. */
   readonly onRun: () => void;
   readonly onStop: () => void;
+  /** Present only where the prompt is the caption — the model engine. */
+  readonly caption?: PromptCaption;
 }
 
 export function PromptRow({
@@ -96,37 +132,42 @@ export function PromptRow({
   onOpenSettings,
   running,
   stopping,
-  view,
+  engine,
   modelReady,
-  searchReady,
   onRun,
   onStop,
+  caption,
 }: PromptRowProps): React.JSX.Element {
   const { t } = useI18n();
 
-  /* Which engine this press means. Model and Search have one of their own; Compare has
-     no engine and regenerating from it is regenerating the recipe. */
-  const toModel = view === 'model';
-  const toSearch = view === 'search';
+  const toModel = engine === 'model';
   /**
    * The recipe engine with nothing able to write one: the press searches instead.
    *
-   * Not a disabled button any more. The bank is a searchable catalog and fifty presets
+   * Not a disabled button any more. The bank is a searchable catalog and ninety presets
    * ship in the build, so a sentence typed here still has an answer — it is simply one
    * that already existed, and the label says which of the two is about to happen. Every
    * other surface of that boundary is listed in `lib/retrieval.ts`.
    */
-  const toRetrieval = !toModel && !toSearch && model === null;
-  const blocked = prompt.trim() === '' || (toModel ? !modelReady : toSearch ? !searchReady : false);
+  const toRetrieval = !toModel && model === null;
+  const sent = prompt.trim();
+  const blocked = sent === '' || (toModel && !modelReady);
+  const issue = caption === undefined || sent === '' ? null : captionIssue(sent);
 
-  const hue =
-    view === 'model'
-      ? HUE.model
-      : view === 'compare'
-        ? HUE.compare
-        : view === 'search'
-          ? HUE.library
-          : HUE.recipe;
+  const hue = toModel ? HUE.model : HUE.recipe;
+
+  /* The box grows with the text instead of scrolling it. A caption is up to 200
+     characters and the row is one line wide at any sensible width, so the alternative is
+     the interesting half of the sentence hidden behind the left edge — on the one screen
+     where the sentence *is* the instrument. Reset to `auto` first: `scrollHeight` of an
+     element already tall enough never shrinks, so without it the box only ever grows. */
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const element = box.current;
+    if (element === null) return;
+    element.style.height = 'auto';
+    element.style.height = `${String(element.scrollHeight)}px`;
+  }, [prompt]);
 
   return (
     <div className="prompt-row" style={{ ['--hue' as string]: String(hue) }}>
@@ -138,15 +179,51 @@ export function PromptRow({
         }}
       >
         <span className="mono caret">&gt;</span>
-        <input
-          type="text"
+        <textarea
+          ref={box}
           name="prompt"
-          className="mono"
+          className="mono prompt-text"
+          rows={1}
           value={prompt}
           placeholder={t('prompt.placeholder')}
           aria-label={t('prompt.describeAria')}
-          onChange={(event) => onPromptChange(event.target.value)}
+          /* A textarea for the wrapping and *only* for the wrapping: a caption is one
+             line by the time it reaches the tokenizer, and a newline in it would reach
+             the bridge's argv and be refused there as a control character. So Enter runs
+             the prompt — the form has no other submit path once the input is not an
+             `<input>` — and a pasted paragraph collapses to one. */
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            if (!running && !blocked) onRun();
+          }}
+          onChange={(event) => onPromptChange(event.target.value.replace(/\s*\n+\s*/gu, ' '))}
         />
+
+        {caption === undefined ? null : (
+          <>
+            {/* The check runs on what will actually be sent, so a prompt that cannot
+                survive the tokenizer is flagged before the thirty seconds of CPU rather
+                than after. Amber and on hover: it is a warning about the text in the box,
+                not a second sentence competing with it. */}
+            <span
+              className={`mono prompt-count${issue === null ? '' : ' warn'}`}
+              title={t(issue === null ? 'model.captionHint' : CAPTION_ISSUE_KEY[issue], { limit: CAPTION_LIMIT })}
+            >
+              {t('model.captionCount', { count: sent.length, limit: CAPTION_LIMIT })}
+            </span>
+            <button
+              type="button"
+              className="chip-hue"
+              onClick={caption.onRewrite}
+              disabled={!caption.canWrite || caption.writing || running || sent === ''}
+              title={t(caption.canWrite ? 'model.captionHint' : 'model.captionNoProvider', { limit: CAPTION_LIMIT })}
+            >
+              {caption.writing ? <span className="spinner" aria-hidden="true" /> : <span aria-hidden="true">✎</span>}
+              {t('model.captionRewrite')}
+            </button>
+          </>
+        )}
 
         {running ? (
           <button type="button" className="hue-button" onClick={onStop} disabled={stopping}>
@@ -167,13 +244,9 @@ export function PromptRow({
                 ? modelReady
                   ? 'prompt.runsModel'
                   : 'prompt.modelMissing'
-                : toSearch
-                  ? searchReady
-                    ? 'prompt.runsSearch'
-                    : 'prompt.searchMissing'
-                  : toRetrieval
-                    ? 'prompt.runsRetrieve'
-                    : 'prompt.runsSoundline',
+                : toRetrieval
+                  ? 'prompt.runsRetrieve'
+                  : 'prompt.runsSoundline',
             )}
           >
             {/* The one exception to "the label is the verb and it does not change": a

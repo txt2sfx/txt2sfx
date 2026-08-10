@@ -1,0 +1,12 @@
+# prompt: gun reload, magazine in and bolt back
+# tags: reload, gun, magazine, weapon
+# Three events with silence between them, and the silence is the sound: a
+# reload reads as a reload because the ear can count the steps. Magazine out at
+# 0 ms, magazine seated at 380 ms, bolt released at 640 ms — move those numbers
+# and it becomes one metallic scuffle.
+sound "gun reload" 900ms foley
+  release: click 2ms >> bp ~1800Hz[800..4000] Q4 | gain 0.32 attack 0ms decay 25ms
+  spring: noise pink >> bp ~3200Hz[1500..7000] Q6 | gain 0.14 attack 8ms decay 180ms delay 60ms
+  seat: modal metal ~380Hz[180..800] Q30 | gain 0.34 decay 160ms delay 380ms
+  bolt: click ~1.5ms[1..4] >> hp ~2500Hz[1200..6000] | gain 0.28 attack 0ms decay 20ms delay 640ms
+  latch: modal metal ~900Hz[400..2000] Q60 | gain 0.2 decay 220ms delay 650ms

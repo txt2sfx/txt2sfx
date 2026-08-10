@@ -3,11 +3,12 @@
  *
  * ## Why it lives above the panel
  *
- * For the reason `useGenerate` does, minus the minute-long fit: the panel unmounts
- * every time someone switches to Compare to look at what they just found, and a result
- * list that dies on a tab switch would make the two tabs unusable together — which is
- * the whole workflow. The connection is the sharper case: it is an OAuth2 round trip
- * through another site, and losing it on a tab switch would be absurd.
+ * For the reason `useGenerate` does, minus the minute-long fit: the results are on the
+ * gallery and the thing you do with one is `→ B`, which opens the studio — so the list
+ * unmounts at the exact moment it has been useful, and a result list that died there
+ * would make the two screens unusable together, which is the whole workflow. The
+ * connection is the sharper case: it is an OAuth2 round trip through another site, and
+ * losing it on a screen switch would be absurd.
  *
  * ## Three stages, and only the middle one is ours
  *
@@ -94,6 +95,15 @@ export interface LibrarySearch {
   /** Re-run the last search under the current filters, spending no model call. */
   readonly refine: () => void;
   readonly cancel: () => void;
+  /**
+   * Forget the last answer entirely, not just stop asking for it.
+   *
+   * `cancel` leaves the rows on screen, which is right when somebody pressed Stop. This
+   * is for the other case: the gallery searches whatever is in the catalog's box, and an
+   * emptied box has no answer — leaving thirty recordings under the word that was
+   * deleted would attribute them to a query that no longer exists.
+   */
+  readonly clear: () => void;
 }
 
 export interface SearchOptions {
@@ -248,6 +258,21 @@ export function useSearch(options: SearchOptions): LibrarySearch {
     setRunning(false);
   }, []);
 
+  const clear = useCallback(() => {
+    abort.current?.abort();
+    abort.current = null;
+    /* The notes go with the rows. Keeping them would mean a later search for the same
+       words silently wearing a ranking written for a list nobody can see any more. */
+    last.current = null;
+    setRunning(false);
+    setHits([]);
+    setTotal(0);
+    setWords(null);
+    setRewritten(false);
+    setError(null);
+    setSearched(false);
+  }, []);
+
   return {
     connection,
     licence,
@@ -264,5 +289,6 @@ export function useSearch(options: SearchOptions): LibrarySearch {
     start,
     refine,
     cancel,
+    clear,
   };
 }

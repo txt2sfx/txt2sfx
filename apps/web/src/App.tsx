@@ -45,6 +45,7 @@ import {
   type CodegenResult,
   type RenderResult,
 } from '@txt2sfx/core';
+import { audioAssetName, audioCaption } from '@txt2sfx/agent';
 import { extractProfile, humanReadableDiff, soundDistance } from '@txt2sfx/analyzer';
 import { optimize } from '@txt2sfx/optimizer';
 import { GLOBAL_LIMITS } from '@txt2sfx/shared';
@@ -53,13 +54,21 @@ import { BridgeDialog } from './components/BridgeDialog.js';
 import { CommentsDialog } from './components/CommentsDialog.js';
 import { Header, type Screen } from './components/Header.js';
 import type { BKind } from './components/ComparePanel.js';
+import type { CaptionWriter } from './components/ModelPanel.js';
 import type { RailMode } from './components/Rail.js';
-import type { StudioView } from './components/PromptRow.js';
 import { Gallery, type GalleryItem } from './screens/Gallery.js';
 import { Loop } from './screens/Loop.js';
+import { RenderScreen, type NameWriter } from './screens/Render.js';
 import { Share } from './screens/Share.js';
-import { Studio } from './screens/Studio.js';
-import { chooseProvider, providerFor, recipeName, renderSignalFor, targetFromBuffer } from './lib/agent.js';
+import { Studio, type StudioView } from './screens/Studio.js';
+import {
+  captionProviderFor,
+  chooseProvider,
+  providerFor,
+  recipeName,
+  renderSignalFor,
+  targetFromBuffer,
+} from './lib/agent.js';
 import { decodeAudioFile, metricsOf, signalOf, type Reference } from './lib/analysis.js';
 import { useAccount } from './lib/account.js';
 import { BankError, bankClient, DEFAULT_BANK_URL, type BankHealth } from './lib/bank.js';
@@ -87,7 +96,7 @@ import {
   type MasterPositions,
 } from './lib/master.js';
 import { loadSession, saveSession } from './lib/session.js';
-import { clearShareFromLocation, sharedFromLocation } from './lib/share.js';
+import { bankRefFromLocation, clearShareFromLocation, sharedFromLocation } from './lib/share.js';
 import { applySlot, collectSlots, type Slot } from './lib/slots.js';
 import { vary } from './lib/variation.js';
 import { modelStatus, renderTarget } from './lib/stable-audio.js';
@@ -112,6 +121,18 @@ const AUTOPLAY_DEBOUNCE_MS = 260;
  * speed, so it fires when somebody stops rather than when they pause.
  */
 const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * How long to wait after the last keystroke before asking freesound.org the same thing.
+ *
+ * Three times {@link SEARCH_DEBOUNCE_MS}, and the extra is deliberate rather than
+ * cautious. This request leaves for another company's servers on the connected user's own
+ * rate limit, and — with a provider configured — it is preceded by a model call that
+ * rewrites the query, so a keystroke here can cost a token bill as well as a round trip.
+ * The catalog below the box is already answering at 300 ms, which means nobody is looking
+ * at a blank screen while this waits.
+ */
+const LIBRARY_DEBOUNCE_MS = 900;
 
 /**
  * How long to wait after the last edit before writing this tab's unsaved recipes down.
@@ -228,6 +249,11 @@ export function App(): React.JSX.Element {
   /** Editor buffers, keyed by recipe name. Absent means "as stored". */
   const [edits, setEdits] = useState<Readonly<Record<string, string>>>({});
   const [seed, setSeed] = useState(DEFAULT_SEED);
+  /* One draw, two buttons: the bar at the bottom of every screen and the one beside the
+     length on the render screen. Sixteen bits because that is what the recipes and the
+     bridge both round-trip legibly — a seed is meant to be read off the screen and typed
+     back in. */
+  const reseed = useCallback(() => setSeed(Math.floor(Math.random() * 0xffff)), []);
   const [rendered, setRendered] = useState<RenderResult | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [playingName, setPlayingName] = useState<string | null>(null);
@@ -286,12 +312,42 @@ export function App(): React.JSX.Element {
   const agentReady = bridgeStatus.health?.agent.connected === true;
   const model = chooseProvider(settings, agentReady);
 
+  /**
+   * Who writes English on this page's behalf: the search query, the ranking, the caption.
+   *
+   * One choice for all three, because all three are *about words in English* rather than
+   * about sound design, and there is one model in this tab to ask any of them. Null is
+   * not a failure for the search — it then runs on the prompt as typed and on the
+   * library's own relevance, which is a working search — and it is not one for the
+   * caption either, which then sends the prompt as written and says so.
+   */
+  const wordsProvider = useMemo(() => captionProviderFor(settings, agentReady), [settings, agentReady]);
+
+  /* Built here rather than in the render screen because *which* model answers is this
+     file's decision, and the panel that needs it knows nothing about keys or bridges. */
+  const writeCaption = useMemo<CaptionWriter | null>(() => {
+    if (wordsProvider === null) return null;
+    return ({ prompt: text, seconds, signal }) =>
+      audioCaption({ prompt: text, provider: wordsProvider, seconds, signal });
+  }, [wordsProvider]);
+
+  /* The same model, asked a different question about the same English: what a game
+     project would call this. See `@txt2sfx/agent`'s `audioAssetName` for why it writes
+     the title and a script derives the file name. */
+  const writeName = useMemo<NameWriter | null>(() => {
+    if (wordsProvider === null) return null;
+    return async ({ text, signal }) => {
+      const named = await audioAssetName({ text, provider: wordsProvider, signal });
+      return { title: named.title, file: named.file };
+    };
+  }, [wordsProvider]);
+
   /* --- the library -------------------------------------------------------- */
 
-  /* Above the screens for the reason the run is: the Search tab unmounts every time
-     someone switches to Compare to look at what they just found, and a result list —
-     never mind a pasted key — that died on a tab switch would make the two unusable
-     together, which is the whole workflow. */
+  /* Above the screens for the reason the run is: the results live on the gallery and the
+     one thing to do with one is `→ B`, which opens the studio — so the list unmounts at
+     the moment it becomes useful, and a result list, never mind an OAuth grant, that died
+     on a screen switch would make the two unusable together. */
   const search = useSearch({ bankUrl });
 
   /* --- the soundtrack screen ---------------------------------------------- */
@@ -371,7 +427,7 @@ export function App(): React.JSX.Element {
     }
     let cancelled = false;
     const q = query.trim();
-    const category = filter === 'all' || filter === 'trash' ? undefined : filter;
+    const category = filter === 'all' || filter === 'favorites' ? undefined : filter;
 
     const ask = (): void => {
       void bank
@@ -393,6 +449,37 @@ export function App(): React.JSX.Element {
     };
   }, [bank, bankHealth, bankNonce, account.account, query, filter]);
 
+  /**
+   * The library's half of the same question, one debounce further out.
+   *
+   * The gallery's box asks two indexes now, and this is the second: with an account
+   * connected, whatever is typed there is also sent to freesound.org and answered in its
+   * own block under the catalog. Nothing happens without a connection, and nothing
+   * happens with an empty box — an emptied box is not a search for nothing, it is the
+   * front page, so the previous answer is dropped rather than left hanging under a word
+   * that has been deleted.
+   *
+   * Read through a ref, and that is load-bearing rather than tidy: `useFreesoundAuth`
+   * hands back a fresh object every render, so `search.start` is a new function every
+   * render — an effect that depended on it would fire on every render and search in a
+   * loop. What this effect may depend on is the *query*, the connection's state and which
+   * model writes the words, all three of which are values.
+   */
+  const searchLive = useRef(search);
+  searchLive.current = search;
+  const connected = search.connection.state === 'on';
+
+  useEffect(() => {
+    if (!connected) return;
+    const q = query.trim();
+    if (q === '') {
+      if (searchLive.current.searched || searchLive.current.hits.length > 0) searchLive.current.clear();
+      return;
+    }
+    const timer = window.setTimeout(() => searchLive.current.start(q, wordsProvider), LIBRARY_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [connected, query, wordsProvider]);
+
   /* Re-asked whenever the bridge's state changes, not once at mount: the ordinary way
      this goes from "no model" to "ready" is somebody running `npx txt2sfx-bridge` while
      the tab is already open, and a Compare panel still saying the model is missing
@@ -412,18 +499,42 @@ export function App(): React.JSX.Element {
      means every later reload re-imports the same sound over whatever the user has since
      edited. */
   useEffect(() => {
+    const open = (recipe: { name: string; source: string; prompt: string }): void => {
+      setSession((current) => [
+        ...current.filter((entry) => entry.name !== recipe.name),
+        { name: recipe.name, source: recipe.source, origin: 'session', prompt: recipe.prompt },
+      ]);
+      setSelected(recipe.name);
+      setPrompt(recipe.prompt);
+      setScreen('studio');
+      lastPlayed.current = ' ';
+    };
+
     const shared = sharedFromLocation();
-    if (shared === null) return;
+    if (shared !== null) {
+      clearShareFromLocation();
+      open(shared);
+      return;
+    }
+
+    /* The other form: a recipe the bank holds, named by id. This is the link an
+       outside model hands somebody, so the failure to design for is arriving at a
+       playground that silently ignored the address — the fetch can miss (bank down,
+       recipe hidden, id invented) and every one of those must land in an ordinary
+       playground rather than a spinner. The address is cleared before the request,
+       not after: a reload while it is in flight must not re-import on top of edits. */
+    const id = bankRefFromLocation();
+    if (id === null) return;
     clearShareFromLocation();
-    setSession((current) => [
-      ...current.filter((entry) => entry.name !== shared.name),
-      { name: shared.name, source: shared.source, origin: 'session', prompt: shared.prompt },
-    ]);
-    setSelected(shared.name);
-    setPrompt(shared.prompt);
-    setScreen('studio');
-    lastPlayed.current = ' ';
-  }, []);
+    let cancelled = false;
+    void bank.get(id, { via: 'chat' }).then((recipe) => {
+      if (cancelled || recipe === null) return;
+      open({ name: recipe.name, source: recipe.soundline, prompt: recipe.prompt });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bank]);
 
   /* --- derived ------------------------------------------------------------ */
 
@@ -523,7 +634,7 @@ export function App(): React.JSX.Element {
           durationMs: parsedEntry.ast === null ? 0 : declaredDurationMs(parsedEntry.ast),
           origin: entry.origin,
           editedAt: library.touched[entry.name],
-          trashed: library.trashed.includes(entry.name),
+          favorite: library.favorites.includes(entry.name),
           ...(entry.id === undefined
             ? {}
             : {
@@ -692,12 +803,18 @@ export function App(): React.JSX.Element {
    * The preview is fetched here rather than in the panel because this is where the
    * reference lives, and because the road a library sound takes must be the same one a
    * dropped file takes — one decode, one failure message, one place that knows what B is.
+   *
+   * It also *goes* there. The results are on the gallery now, and a recording loaded as B
+   * with nothing on screen changing would be a button whose effect is two clicks away on
+   * another screen. `→ B` therefore means what it says: this is B, and here is B.
    */
   const useSound = useCallback(
     async (sound: FreesoundSound): Promise<void> => {
       const file = await fetchPreview(sound);
       loadReference(file, true);
       setBKind('library');
+      setScreen('studio');
+      setView('compare');
     },
     [loadReference],
   );
@@ -887,12 +1004,12 @@ export function App(): React.JSX.Element {
     [account, bank],
   );
 
-  const trash = useCallback((name: string) => {
+  const favorite = useCallback((name: string) => {
     setLibrary((current) => {
-      const trashed = current.trashed.includes(name)
-        ? current.trashed.filter((entry) => entry !== name)
-        : [...current.trashed, name];
-      const next = { ...current, trashed };
+      const favorites = current.favorites.includes(name)
+        ? current.favorites.filter((entry) => entry !== name)
+        : [...current.favorites, name];
+      const next = { ...current, favorites };
       saveLibrary(next);
       return next;
     });
@@ -1209,13 +1326,17 @@ export function App(): React.JSX.Element {
      second press in the meantime. */
   const onDownload = useCallback(
     async (format: Format): Promise<void> => {
+      /* The render screen's menu and the studio's are the same handler, told apart by
+         where the press came from: on `render` what is being saved is the model's file,
+         everywhere else it is the recipe's buffer. The `bKind` check is the second half —
+         the screen can be open with a dropped file still loaded as B. */
       const subject =
-        view === 'model' && b !== null && bKind === 'model'
+        screen === 'render' && b !== null && bKind === 'model'
           ? { name: b.name.replace(/\.[^.]+$/, ''), source, code, buffer: b.buffer }
           : { name: selected, source, code, buffer: rendered?.buffer ?? null };
       setStatus(await download(subject, format));
     },
-    [b, bKind, code, rendered, selected, source, view],
+    [b, bKind, code, rendered, screen, selected, source],
   );
 
   /* --- the devtools bridge and the agent bridge --------------------------- */
@@ -1468,7 +1589,11 @@ export function App(): React.JSX.Element {
   }, [measure]);
 
   /* Ctrl/Cmd+Enter plays, Ctrl/Cmd+S saves. Space is off limits — it belongs to the
-     textarea, and an editor that swallows spaces is not an editor. */
+     textarea, and an editor that swallows spaces is not an editor.
+
+     Ctrl/Cmd+S is now the only surface for the write: the button beside Keep was two
+     spellings of one gesture (`SoundPanel.tsx` argues it out), and the people who write
+     `examples/` are the ones already holding a keyboard or driving the bridge. */
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (!(event.ctrlKey || event.metaKey)) return;
@@ -1526,8 +1651,6 @@ export function App(): React.JSX.Element {
         <Gallery
           items={items}
           seed={seed}
-          prompt={prompt}
-          onPromptChange={setPrompt}
           onGenerate={generateFromGallery}
           query={query}
           onQueryChange={setQuery}
@@ -1535,7 +1658,7 @@ export function App(): React.JSX.Element {
           onFilterChange={setFilter}
           /* The bank's rows are the answer to the query only while there *is* a query;
              an empty box is a plain listing, and filtering that locally is what makes
-             the trash chip and the category chips work offline and online alike. */
+             the star chip and the category chips work offline and online alike. */
           serverFiltered={bankHealth !== null && query.trim() !== ''}
           allCategories={bankHealth !== null}
           canGenerate={model !== null}
@@ -1550,12 +1673,15 @@ export function App(): React.JSX.Element {
           playing={playingName}
           onOpen={open}
           onPlay={(name) => playNamed(name, items.find((item) => item.name === name)?.source ?? '')}
-          onTrash={trash}
+          onFavorite={favorite}
           onLike={like}
           onComments={(item) => {
             if (item.bankId === undefined) return;
             setDiscussing({ id: item.bankId, name: item.name, soundline: item.source });
           }}
+          search={search}
+          onUseSound={useSound}
+          onStatus={setStatus}
         />
       ) : null}
 
@@ -1576,7 +1702,7 @@ export function App(): React.JSX.Element {
               : playNamed(name, items.find((item) => item.name === name)?.source ?? '')
           }
           railPlaying={playingName}
-          onTrash={trash}
+          onFavorite={favorite}
           onNew={() => {
             setPrompt('');
             setScreen('gallery');
@@ -1609,17 +1735,12 @@ export function App(): React.JSX.Element {
           onOpenSettings={() => setBridgeOpen(true)}
           generation={generation}
           agentReady={agentReady}
-          search={search}
-          onUseSound={useSound}
-          onStatus={setStatus}
           playing={playingName === selected}
           looping={looping && playingName === selected}
           onPlay={play}
           onLoop={loop}
           formatId={formatId}
           onFormat={chooseFormat}
-          modelFormatId={modelFormatId}
-          onModelFormat={chooseModelFormat}
           onDownload={onDownload}
           onShare={() => setScreen('share')}
           b={b}
@@ -1628,15 +1749,19 @@ export function App(): React.JSX.Element {
           candidateLayers={layerBuffers}
           modelAvailable={modelAvailable}
           libraryLoaded={libraryLoaded}
-          onModelReady={setModelAvailable}
           onLoadFile={loadReference}
           onNewTake={newTake}
           recording={recording}
           onRecord={onRecord}
-          onModelRendered={(file) => {
-            setBKind('model');
-            loadReference(file);
+          /* The two B sides that are made elsewhere. The query is cleared on the way to
+             the gallery: the box is the library's search now, and arriving at it with the
+             last catalog filter still in it would answer a question nobody just asked. */
+          onFindLibrary={() => {
+            setQuery('');
+            setFilter('all');
+            setScreen('gallery');
           }}
+          onRenderModel={() => setScreen('render')}
           composing={composing}
           matchReference={settings.matchReference}
           onMatchReference={(next) => setSettings((current) => ({ ...current, matchReference: next }))}
@@ -1647,6 +1772,38 @@ export function App(): React.JSX.Element {
           onFit={fit}
           onStopFit={stopFit}
           maxPeak={GLOBAL_LIMITS.maxPeak}
+        />
+      ) : null}
+
+      {screen === 'render' ? (
+        <RenderScreen
+          prompt={prompt}
+          onPromptChange={setPrompt}
+          model={model}
+          onOpenSettings={() => setBridgeOpen(true)}
+          writeCaption={writeCaption}
+          writeName={writeName}
+          onStatus={setStatus}
+          /* Only when B *is* a render. The panel draws what it last made, and drawing a
+             dropped file or a microphone take there would attribute somebody else's
+             recording to the model. */
+          render={bKind === 'model' ? b : null}
+          onRendered={(file) => {
+            setBKind('model');
+            loadReference(file);
+          }}
+          onCompare={() => {
+            setBKind('model');
+            setScreen('studio');
+            setView('compare');
+          }}
+          formatId={modelFormatId}
+          onFormat={chooseModelFormat}
+          onDownload={onDownload}
+          seed={seed}
+          onReseed={reseed}
+          onModelReady={setModelAvailable}
+          modelAvailable={modelAvailable}
         />
       ) : null}
 
@@ -1736,24 +1893,21 @@ export function App(): React.JSX.Element {
             onChange={(event) => setSeed(Number(event.target.valueAsNumber || 0))}
           />
         </label>
-        <button type="button" title={t('app.rndTitle')} onClick={() => setSeed(Math.floor(Math.random() * 0xffff))}>
+        <button type="button" title={t('app.rndTitle')} onClick={reseed}>
           {t('app.rnd')}
         </button>
         {/* The seed belongs to the soundtrack screen too — it is the draw every noise
-            generator in every lane takes — but Save and Publish do not: they act on the
-            studio's current recipe, and a Publish button under an arrangement nobody is
-            looking at would publish something else entirely. */}
-        {screen === 'loop' ? null : (
-          <>
-            {canSave ? (
-              <button type="button" onClick={save} title={t('app.saveTitle')}>
-                {t('app.save')}
-              </button>
-            ) : null}
-            <button type="button" onClick={() => void publish().then(setStatus)} disabled={rendered === null}>
-              {t('app.publish')}
-            </button>
-          </>
+            generator in every lane takes, and the render screen hands it to the model —
+            but Publish does not: it acts on the studio's current recipe, and a Publish
+            button under an arrangement, or under somebody's diffusion render, would
+            publish something else entirely. Save used to stand here beside it and now
+            lives in the sound panel, next to Share: it acts on one recipe, so it belongs
+            where that recipe is drawn rather than in a bar that floats over every
+            screen. */}
+        {screen === 'loop' || screen === 'render' ? null : (
+          <button type="button" onClick={() => void publish().then(setStatus)} disabled={rendered === null}>
+            {t('app.publish')}
+          </button>
         )}
       </div>
     </div>

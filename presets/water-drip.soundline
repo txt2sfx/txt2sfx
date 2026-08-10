@@ -1,0 +1,11 @@
+# prompt: single water drip in a cave
+# tags: water, drip, drop, cave
+# Minnaert again, one bubble instead of a field: the resonance of a collapsing
+# cavity climbs as it shrinks, so the plink sweeps *up* over 30 ms. The reverb
+# is the only thing here that says cave, and it is kept to 160 ms because a
+# real cave tail belongs to the engine.
+sound "water drip" 340ms foley
+  plink: tone sine ~900Hz[500..1800] -> 1600Hz in 30ms >> lp ~3000Hz[1200..6000] Q1 | gain 0.42 hold 5ms decay 90ms
+  tick: click 1ms >> bp ~3400Hz[1500..7000] Q2 | gain 0.18 attack 0ms decay 8ms
+  pool: grains ~700Hz[300..1600] rate 20 width 20ms spread 0.8 bend 1.4 | gain 0.14 decay 180ms delay 40ms
+  room: noise pink >> lp ~2500Hz[1000..5000] >> verb 160ms mix 0.35 | gain 0.08 decay 120ms delay 20ms

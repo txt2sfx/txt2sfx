@@ -1,0 +1,11 @@
+# prompt: bullet ricochet whine off stone
+# tags: ricochet, bullet, whine, impact
+# The whine is a Doppler shift, so it falls and it must start *after* the
+# impact — the bullet is already leaving when you hear it. A sine rather than a
+# saw for the sweep: a ricochet has almost no harmonics left by the time it
+# reaches the listener, and a saw here reads as a cartoon.
+sound "bullet ricochet" 520ms impact
+  hit: noise white >> hp ~3000Hz[1500..7000] | gain 0.4 attack 0ms decay 30ms
+  spark: modal metal ~5200Hz[2500..9000] Q120 | gain 0.16 decay 200ms
+  whine: chirp sine ~3800Hz[2000..8000] -> ~900Hz[400..2000] in 380ms | gain 0.26 attack 5ms decay 420ms delay 15ms
+  room: noise pink >> lp ~3000Hz[1200..6000] >> verb 220ms mix 0.4 | gain 0.1 decay 180ms delay 20ms

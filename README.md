@@ -172,11 +172,10 @@ then point an MCP client at it:
 { "mcpServers": { "txt2sfx": { "command": "npx", "args": ["-y", "txt2sfx-bridge", "--stdio"] } } }
 ```
 
-Or skip all of that: **Copy agent prompt** in the playground's bridge dialog — and
-`npx txt2sfx-bridge doctor` — gives you a paragraph to paste straight into Claude Code or
-Codex. The agent registers the server itself, and where it cannot restart to pick the
-config up, it drives the same twelve tools over loopback HTTP (`POST /tools/<name>`) in
-the turn you asked.
+Or skip all of that: `npx txt2sfx-bridge doctor` prints a paragraph to paste straight
+into Claude Code or Codex. The agent registers the server itself, and where it cannot
+restart to pick the config up, it drives the same twelve tools over loopback HTTP
+(`POST /tools/<name>`) in the turn you asked.
 
 The badge in the playground header turns green and an agent can now design sounds here.
 **No API key is involved anywhere in that path** — that is the point rather than a
@@ -194,19 +193,42 @@ where what it writes is a score rather than a recipe.
 Loopback only, a token on the socket, and an honest account of what that does and does not
 protect against, in [docs/BRIDGE.md](docs/BRIDGE.md).
 
-Under `pnpm dev` the Compare panel can also produce its own reference: **⤓ Render target**
-sends the same prompt to Stable Audio Open Small running locally, and loads the result as
-the reference to A/B against, fit sliders to, and tick **match reference** for. The render
-arrives inside the response and is never written to disk — a target is consumed once. That is
-a diffusion render used as the *target*, not as the output — the shipped artifact is still a
-recipe. It needs the one-time provisioning in [test/stable-audio/README.md](test/stable-audio/README.md),
+Under `pnpm dev` the **AI Render** screen can also produce its own reference: **Make sound**
+there sends the same prompt to Stable Audio Open Small running locally, and hands the result
+to Compare as the reference to A/B against, fit sliders to, and tick **match reference** for.
+The render arrives inside the response and is never written to your file system without a
+Download; it is kept in the browser instead, in a rail down the right of that screen where
+every render of the session stays playable, named by the model and one click from a file.
+That is a diffusion render used as the *target*, not as the output — the shipped artifact
+is still a recipe. It needs the one-time provisioning in [test/stable-audio/README.md](test/stable-audio/README.md),
 and nothing about it exists in a static build.
 
 That model reads English through a 64-token t5 encoder, so the prompt is captioned before it
-is sent: one model call turns a request in any language into one line of concrete acoustics,
-and the caption is shown in an editable field because on a diffusion model it *is* the
-instrument. Any other script tokenizes into holes — the measurement is in
+is sent: one model call turns a request in any language into one line of concrete acoustics.
+The caption then *replaces* the prompt in the row, because on a diffusion model it is the
+instrument and there should be exactly one editable text on the screen — what is on it is
+what was sent. Any other script tokenizes into holes — the measurement is in
 [test/stable-audio/README.md](test/stable-audio/README.md).
+
+## From an ordinary chat
+
+Everything above needs a terminal. If all you have is a chat with a fetch button —
+ChatGPT, Gemini, Claude — paste one line:
+
+```
+Fetch https://txt2sfx.github.io/chat.txt and follow it.
+```
+
+That file is the instructions, served rather than pasted, so the paste stays one line
+and a chat opened next year reads the current text. The model searches the bank
+(`GET /api/retrieve`, no key, no account), hands you `https://txt2sfx.github.io/#recipe=<id>`
+for each candidate, and repeats the soundline back when you have picked one.
+
+It is deliberately not allowed to design. A chat cannot hear, cannot measure and cannot
+be told which invariant it broke — the validator, the renderer and the optimizer are all
+on the other side of a `GET`. Asking it for a sound anyway produces plausible Web Audio
+nobody has listened to, which is what it would have written without us. So its job is to
+find and hand over; the ear in that loop is yours, one click away in the playground.
 
 ## NeurosLoop: the same claim, eight bars long
 
