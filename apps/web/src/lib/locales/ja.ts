@@ -265,4 +265,9 @@ export const ja: Partial<Readonly<Record<Key, string>>> = {
   'what.soundline': 'soundline',
   'what.link': 'リンク',
   'what.numbers': '数値（markdown）',
+
+  /* --- the installed application ------------------------------------------- */
+
+  'update.ready': '新しいバージョンがインストール済みです',
+  'update.apply': '再読み込み',
 };

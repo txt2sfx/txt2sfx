@@ -5,6 +5,7 @@ import { chatPrompt } from './plugins/chat-prompt.js';
 import { examplesFs } from './plugins/examples-fs.js';
 import { gmBank } from './plugins/gm-bank.js';
 import { metrika } from './plugins/metrika.js';
+import { pwa } from './plugins/pwa.js';
 import { stableAudio } from './plugins/stable-audio.js';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -56,6 +57,11 @@ export default defineConfig({
     gmBank(),
     chatPrompt(),
     metrika(metrikaId),
+    /* Takes `base` rather than reading it back off the resolved config, because the
+       manifest's `id` and `scope` and the worker's precache list are all built from it and
+       a site published under a path is exactly the case where a second reading could
+       disagree with the first. */
+    pwa(base),
   ],
   resolve: {
     alias: {

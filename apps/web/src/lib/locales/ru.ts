@@ -579,4 +579,9 @@ export const ru: Partial<Readonly<Record<Key, string>>> = {
   'what.soundline': 'soundline',
   'what.link': 'ссылка',
   'what.numbers': 'числа в markdown',
+
+  /* --- the installed application ------------------------------------------- */
+
+  'update.ready': 'установлена новая версия',
+  'update.apply': 'перезагрузить',
 };

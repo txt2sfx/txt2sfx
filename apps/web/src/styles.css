@@ -3190,6 +3190,32 @@ button.chip-recording {
   animation: rise 0.18s ease both;
 }
 
+/* The update prompt wears the toast, with two differences that both come from it being a
+   choice rather than a notice: it is not dismissed by clicking it, and it carries the one
+   thing to do about it. `lib/updates.ts` explains why that is a button at all. */
+.toast.update {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: default;
+}
+
+.toast.update button {
+  padding: 4px 11px;
+  border: 1px solid var(--line-hard);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.toast.update button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .seedbar {
   position: fixed;
   right: 14px;

@@ -681,6 +681,14 @@ export const en = {
   'what.soundline': 'the soundline',
   'what.link': 'the link',
   'what.numbers': 'the numbers as markdown',
+
+  /* --- the installed application ------------------------------------------- */
+
+  /* "installed", not "available": the download has already happened — this is the offline
+     cache, and the only thing left is the reload. Saying "available" would suggest the
+     button starts a download and make it look expensive on a bad connection. */
+  'update.ready': 'a newer version is installed',
+  'update.apply': 'reload',
 } as const;
 
 /** Every string the playground can show. Invented here and nowhere else. */

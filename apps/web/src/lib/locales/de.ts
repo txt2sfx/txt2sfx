@@ -270,4 +270,9 @@ export const de: Partial<Readonly<Record<Key, string>>> = {
   'what.soundline': 'die Soundline',
   'what.link': 'den Link',
   'what.numbers': 'die Zahlen als Markdown',
+
+  /* --- the installed application ------------------------------------------- */
+
+  'update.ready': 'eine neuere Version ist installiert',
+  'update.apply': 'neu laden',
 };

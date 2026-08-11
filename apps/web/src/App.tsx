@@ -53,6 +53,7 @@ import { AccountPill } from './components/AccountPill.js';
 import { BridgeDialog } from './components/BridgeDialog.js';
 import { CommentsDialog } from './components/CommentsDialog.js';
 import { Header, type Screen } from './components/Header.js';
+import { UpdateBar } from './components/UpdateBar.js';
 import type { BKind } from './components/ComparePanel.js';
 import type { CaptionWriter } from './components/ModelPanel.js';
 import type { RailMode } from './components/Rail.js';
@@ -1880,6 +1881,12 @@ export function App(): React.JSX.Element {
           {status}
         </div>
       )}
+
+      {/* Draws nothing until a newer build has installed and is waiting. Above the seed
+          bar and below the dialogs, which is where the toast is — the two never appear
+          together often enough to be worth stacking, and when they do the update is the
+          one that can wait. */}
+      <UpdateBar />
 
       {/* The seed belongs to the whole session rather than to a panel: a recipe auditioned
           under one seed and exported under another is two different sounds with one name. */}

@@ -265,4 +265,9 @@ export const ko: Partial<Readonly<Record<Key, string>>> = {
   'what.soundline': 'soundline',
   'what.link': '링크',
   'what.numbers': '수치(markdown)',
+
+  /* --- the installed application ------------------------------------------- */
+
+  'update.ready': '최신 버전이 설치되었습니다',
+  'update.apply': '새로고침',
 };

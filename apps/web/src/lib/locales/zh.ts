@@ -260,4 +260,9 @@ export const zh: Partial<Readonly<Record<Key, string>>> = {
   'what.soundline': ' soundline',
   'what.link': '链接',
   'what.numbers': ' markdown 格式的数值',
+
+  /* --- the installed application ------------------------------------------- */
+
+  'update.ready': '已安装新版本',
+  'update.apply': '重新加载',
 };

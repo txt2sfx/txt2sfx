@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-804-brightgreen.svg">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1826-brightgreen.svg">
   <img alt="Library runtime dependencies" src="https://img.shields.io/badge/library%20runtime%20deps-0-brightgreen.svg">
 </p>
 
@@ -143,12 +143,21 @@ absent there and only there, because both are dev-server endpoints rather than f
 the app: writing an edited recipe back to `examples/`, and the local diffusion model behind
 the `Model` view.
 
+It also **installs**, and then works with no network at all. That is less of a feature than
+an admission: the parser, the validator, the compiler, the renderer and the optimizer all
+run in the tab already, so the network was never in the loop of making a sound — only of
+loading the page. What still needs one is what always did, and each says so on its own: the
+model, the recipe bank, the freesound.org library. An update installs in the background and
+then waits, because a reload would take unsaved recipes and a running fit with it, so the
+page asks first and keeps asking until you agree. The worker is
+[`apps/web/plugins/pwa.ts`](apps/web/plugins/pwa.ts), which is also where the reasoning is.
+
 To run it from a clone:
 
 ```powershell
 npm install -g pnpm@10        # corepack is gone from Node 25
 pnpm install
-pnpm test                     # 804 tests
+pnpm test                     # 1826 tests
 pnpm dev                      # playground on http://localhost:5173
 ```
 
