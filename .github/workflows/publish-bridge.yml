@@ -1,9 +1,11 @@
 name: Publish bridge
 
-# `txt2sfx-bridge` is the one package in this repository that ships to a
-# registry, and the thing it ships is a single bundled file — everything the
-# workspace packages contribute is inlined by esbuild, because those packages
-# are `private: true` and unpublishable. That makes the release interesting in
+# The thing `txt2sfx-bridge` ships is a single bundled file — everything the
+# workspace packages contribute is inlined by esbuild, because `npx
+# txt2sfx-bridge` must be self-contained regardless of what is on the registry
+# (the `@txt2sfx/*` packages publish separately, via publish-packages.yml, and
+# the bridge deliberately does not depend on them). That makes the release
+# interesting in
 # exactly one way: the tarball is not the repository, so the only honest test
 # is to install the tarball somewhere that has never seen this repository and
 # run the binary. This workflow does that before it publishes anything.

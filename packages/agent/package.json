@@ -1,10 +1,16 @@
 {
   "name": "@txt2sfx/agent",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "The LLM half of the pipeline: providers, the system prompt built from the live grammar tables, and the generate-validate-render-optimize loop. Zero runtime dependencies — providers speak HTTP through `fetch`.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/txt2sfx/txt2sfx.git",
+    "directory": "packages/agent"
+  },
+  "homepage": "https://github.com/txt2sfx/txt2sfx/tree/main/packages/agent#readme",
+  "bugs": "https://github.com/txt2sfx/txt2sfx/issues",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -13,9 +19,13 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "src"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "prepack": "tsc -b"
   },
   "dependencies": {
     "@txt2sfx/analyzer": "workspace:*",

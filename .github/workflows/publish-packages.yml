@@ -1,0 +1,244 @@
+name: Publish packages
+
+# The five library packages — shared, core, analyzer, optimizer, agent — ship
+# to npm as `@txt2sfx/*` so a consumer (the first one is the pix3 editor) can
+# depend on the DSL without cloning this repository. They ship together, in
+# lockstep, at one version from one commit: the packages pin each other with
+# `workspace:*`, which `pnpm pack` rewrites to the exact version, so a set
+# published from two different commits could pair a `core` with a `shared` it
+# was never tested against. One tag, five tarballs, or nothing.
+#
+# Same authentication story as publish-bridge.yml: no npm token exists.
+# Trusted publishing exchanges GitHub's OIDC token for one-off credentials,
+# and the trust is configured on each package's npm settings page against this
+# repository AND this file's name. Renaming this file breaks all five releases
+# until the npm side is updated to match — the filename is part of the
+# credential, not a detail.
+#
+# Failure semantics are worse than the bridge's, and worth knowing before
+# retrying anything: the five publishes are sequential, so a failure partway
+# leaves some versions spent and some free. Published versions are immutable —
+# do not re-run the tag; bump to the next patch and tag again, which publishes
+# a complete, coherent set.
+
+on:
+  push:
+    tags: ['packages-v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and smoke-test the tarballs, but do not publish'
+        type: boolean
+        default: true
+
+concurrency:
+  group: publish-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Dependency order. `npm publish` does not check that dependencies exist,
+  # but installs do — publishing leaves-first keeps the window in which a
+  # published package has unpublishable dependencies as small as possible.
+  PACKAGES: shared core analyzer optimizer agent
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      # Same bounds and the same reasons as publish-bridge.yml: node22 is the
+      # supported floor, and trusted publishing needs npm >= 11.5.1, which no
+      # Node 22 ships.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.16'
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # See publish-bridge.yml for why both halves exist: setup-node writes an
+      # empty _authToken that short-circuits the OIDC exchange, and Node 22's
+      # bundled npm predates trusted publishing entirely.
+      #
+      # This workflow has never published `0.1.0`: npm can only attach a
+      # trusted publisher to a package that already exists, so that one version
+      # was published by hand from a laptop on 2026-08-19 to bring the five
+      # names into being. It is therefore the only `@txt2sfx/*` release without
+      # a provenance attestation, and the reason there is no token branch here
+      # — every release from `0.1.1` on goes through trusted publishing, and a
+      # repository secret that could silently take precedence over OIDC would
+      # be a step backwards from that.
+      - name: Make npm capable of trusted publishing
+        run: |
+          set -euo pipefail
+          npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          if [ -f "$npmrc" ]; then sed -i '/_authToken/d' "$npmrc"; fi
+          npm install -g "npm@^11.5.1"
+          npm --version
+
+      - run: pnpm install --frozen-lockfile
+
+      # Lockstep is a claim; this is the check. Every manifest must carry the
+      # same version, and on a tag run that version must be the tag's.
+      - name: The five manifests must agree, with each other and the tag
+        run: |
+          set -euo pipefail
+          version=""
+          for name in $PACKAGES; do
+            v="$(node -p "require('./packages/${name}/package.json').version")"
+            if [ -z "$version" ]; then version="$v"; fi
+            if [ "$v" != "$version" ]; then
+              echo "::error::packages/${name} says ${v}, but the set is at ${version} — the five publish in lockstep"
+              exit 1
+            fi
+          done
+          if [ "${GITHUB_REF}" != "${GITHUB_REF#refs/tags/}" ]; then
+            tagged="${GITHUB_REF_NAME#packages-v}"
+            if [ "$tagged" != "$version" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} claims ${tagged}, the manifests say ${version}"
+              exit 1
+            fi
+          fi
+          echo "version=${version}" >> "$GITHUB_ENV"
+
+      # All five or none: finding out at publish #3 that #3 is taken would
+      # leave a half-published set, so ask about the whole set up front.
+      - name: No version in the set may already be on the registry
+        run: |
+          set -euo pipefail
+          for name in $PACKAGES; do
+            if npm view "@txt2sfx/${name}@${version}" version --json > /dev/null 2>&1; then
+              echo "::error::@txt2sfx/${name}@${version} is already published; versions are immutable, bump the whole set"
+              exit 1
+            fi
+            echo "@txt2sfx/${name}@${version} is free"
+          done
+
+      - name: Typecheck sources, tests and the playground
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      # `pnpm pack`, not `npm pack`: it runs each package's `prepack` (so dist
+      # is rebuilt from this commit rather than trusted from disk) and rewrites
+      # the `workspace:*` ranges into the exact version being published.
+      - name: Build the tarballs
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for name in $PACKAGES; do
+            pnpm --filter "@txt2sfx/${name}" pack --pack-destination "$PWD/release"
+          done
+          ls -l release
+
+      # Every tarball must carry its compiled entry point, its types, the
+      # license and a README — and nothing from outside dist/ and src/ (src
+      # ships because declarationMap points into it; a map to a file that is
+      # not there is a promise the tarball cannot honour).
+      - name: Inspect what is inside them
+        run: |
+          set -euo pipefail
+          for name in $PACKAGES; do
+            tarball="release/txt2sfx-${name}-${version}.tgz"
+            contents="$(tar -tzf "$tarball")"
+            for required in package/package.json package/README.md package/LICENSE package/dist/index.js package/dist/index.d.ts; do
+              echo "$contents" | grep -qxF "$required" \
+                || { echo "::error::${tarball} is missing ${required}"; exit 1; }
+            done
+            stray="$(echo "$contents" | grep -Ev '^package/(dist/|src/|package\.json$|README\.md$|LICENSE$)' || true)"
+            if [ -n "$stray" ]; then
+              echo "::error::${tarball} carries files outside the manifest's promise:"
+              echo "$stray"
+              exit 1
+            fi
+          done
+
+      # The real test: a directory with no relationship to this checkout, an
+      # install from the tarballs alone (overrides point the inter-package
+      # pins at the local files, since nothing is on the registry yet), and
+      # the DSL asked to do its job.
+      - name: Install them like a stranger would, and use them
+        run: |
+          set -euo pipefail
+          release="$PWD/release"
+          stranger="$(mktemp -d)"
+          cd "$stranger"
+          RELEASE="$release" VERSION="$version" node -e '
+            const names = process.env.PACKAGES.split(" ");
+            const spec = Object.fromEntries(names.map((n) =>
+              [`@txt2sfx/${n}`, `file:${process.env.RELEASE}/txt2sfx-${n}-${process.env.VERSION}.tgz`]));
+            require("fs").writeFileSync("package.json", JSON.stringify(
+              { name: "stranger", private: true, type: "module", dependencies: spec, overrides: spec }, null, 2));
+          '
+          npm install
+          node -e '
+            import("@txt2sfx/core").then(async ({ parse, serialize, codegen }) => {
+              const src = "sound \"pop\" 35ms pop\n  body: tone sine 480Hz | gain 0.9 decay 30ms\n";
+              const canonical = serialize(parse(src));
+              if (serialize(parse(canonical)) !== canonical) {
+                console.error("serialize is not a fixpoint on its own output"); process.exit(1);
+              }
+              const { code } = codegen(parse(canonical));
+              if (typeof code !== "string" || code.length < 100) {
+                console.error("codegen returned nothing usable"); process.exit(1);
+              }
+              const agent = await import("@txt2sfx/agent");
+              if (typeof agent !== "object") process.exit(1);
+              console.log("parse/serialize/codegen OK from the tarballs; the full graph resolves");
+            }).catch((error) => { console.error(error); process.exit(1); });
+          '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: txt2sfx-packages-${{ env.version }}
+          path: release/*.tgz
+
+      # The bytes that were just smoke-tested are the bytes that go to npm.
+      # No `env:` — the absence of a token is what starts the OIDC exchange.
+      - name: Publish, leaves first
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          for name in $PACKAGES; do
+            npm publish "release/txt2sfx-${name}-${version}.tgz" --provenance --access public
+          done
+
+      - name: Confirm the attestations are on the registry
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          for name in $PACKAGES; do
+            attested=""
+            for attempt in 1 2 3 4 5; do
+              if [ -n "$(npm view "@txt2sfx/${name}@${version}" dist.attestations.url 2>/dev/null)" ]; then
+                echo "@txt2sfx/${name}: attested"
+                attested=yes
+                break
+              fi
+              echo "@txt2sfx/${name}: no attestation yet (attempt ${attempt})"
+              sleep 10
+            done
+            if [ -z "$attested" ]; then
+              echo "::error::@txt2sfx/${name}@${version} published without a provenance attestation"
+              exit 1
+            fi
+          done
+
+      - name: Say where they went
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: |
+          {
+            echo "### @txt2sfx/*@${version} published"
+            echo
+            for name in $PACKAGES; do
+              echo "- <https://www.npmjs.com/package/@txt2sfx/${name}/v/${version}>"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

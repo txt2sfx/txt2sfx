@@ -11,9 +11,12 @@ Four principles that are valid arguments in review (see [docs/ARCHITECTURE.md](d
 ## Environment
 
 `pnpm` **is** on PATH on this machine — 10.11.0, installed globally with npm. Run every command
-below as plain `pnpm …`. This paragraph used to say the opposite and to require `corepack pnpm`;
-that stopped being true when this machine went to Node 25, which no longer ships Corepack at all,
-so `corepack pnpm test` now fails with "corepack is not recognized".
+below as plain `pnpm …`. This machine has flip-flopped: Node 25 dropped Corepack and pnpm was
+installed globally; then the machine moved to Node 24.15 (which ships Corepack again) and the
+global pnpm vanished with it, so it was reinstalled with `npm install -g pnpm@10` on 2026-08-19.
+The global install is required regardless of Corepack: package scripts here re-invoke `pnpm`
+(root `typecheck` calls `pnpm --filter @txt2sfx/web typecheck`), and a `corepack pnpm`-launched
+script does not put `pnpm` on the child's PATH.
 
 ## Commands
 
@@ -134,8 +137,10 @@ Three things about that server are easy to undo by accident:
 ## Releasing `txt2sfx-bridge`
 
 Triggered by any request to publish, release or ship an update to the bridge — "опубликуй
-обновление", "выпусти новую версию", "release the bridge". `packages/bridge` is the only
-package in this repository that reaches a registry.
+обновление", "выпусти новую версию", "release the bridge". Two things in this repository
+reach a registry: `txt2sfx-bridge` (this section) and the five `@txt2sfx/*` library
+packages (the next one). They release independently — a bridge release never requires a
+packages release or vice versa.
 
 There is no manual publish step. Pushing a `bridge-v*` tag is what publishes, via
 [`.github/workflows/publish-bridge.yml`](.github/workflows/publish-bridge.yml), which
@@ -195,3 +200,45 @@ retrying the same number.
 The trusted publisher on npm is configured against this repository **and the filename**
 `publish-bridge.yml`. Renaming or moving that workflow, or publishing from a different
 one, breaks releases until the package's npm settings are changed to match.
+
+## Releasing `@txt2sfx/*` (the library packages)
+
+Triggered by any request to publish or release the library packages — "опубликуй пакеты",
+"release the packages", "выпусти @txt2sfx". The five packages `shared`, `core`,
+`analyzer`, `optimizer` and `agent` publish to npm **in lockstep, at one version, from
+one commit** — they pin each other with `workspace:*`, which `pnpm pack` rewrites to the
+exact version, so a set from two commits pairs a `core` with a `shared` it was never
+tested against. `test/packages.test.ts` enforces the lockstep and the publishable shape.
+The first consumer is the pix3 editor.
+
+Pushing a `packages-v*` tag is what publishes, via
+[`.github/workflows/publish-packages.yml`](.github/workflows/publish-packages.yml) —
+same trusted-publishing story as the bridge, including the rule that the workflow's
+**filename** is part of the credential on all five packages' npm settings.
+
+**`0.1.0` did not go through it.** npm can only attach a trusted publisher to a package
+that already exists, so the five names were brought into being by a hand publish from a
+laptop on 2026-08-19 (`npm publish <tarball> --access public`, tarballs built with
+`pnpm pack` so the `workspace:*` pins were rewritten). That release is consequently the
+only `@txt2sfx/*` one without a provenance attestation. Everything from `0.1.1` on goes
+through the workflow; the next release cannot reuse `0.1.0`, and the workflow's
+"already on the registry" check enforces that.
+
+If a hand publish is ever needed again, `pnpm pack` or `pnpm publish` are the only safe
+routes: `npm publish` from a package directory does **not** rewrite `workspace:*`, and
+would put a manifest on the registry that no consumer can install.
+
+The procedure is the bridge's, with these substitutions:
+
+- The version lives in **five** manifests (`packages/{shared,core,analyzer,optimizer,agent}/package.json`)
+  and they must all move together; there is no `version.ts` here.
+- Check all five names are free: `npm view @txt2sfx/<name>@<version> version` must 404
+  for every one — a set where any member is taken cannot publish.
+- The tag prefix is exactly `packages-v`; stage only the five manifests.
+- Failure semantics are stricter: the five publishes are sequential, so a run that dies
+  partway leaves *some* versions spent. Never re-run the tag — bump the whole set to the
+  next patch and tag again, which publishes a complete, coherent set.
+
+The bridge is unaffected by all of this: it still bundles the workspace sources with
+esbuild rather than depending on the published packages, because `npx txt2sfx-bridge`
+must be one self-contained file regardless of registry state.

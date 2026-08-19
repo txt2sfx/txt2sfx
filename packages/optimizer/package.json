@@ -1,10 +1,16 @@
 {
   "name": "@txt2sfx/optimizer",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Differential evolution over a soundline's `~value[min..max]` slots. Zero runtime dependencies.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/txt2sfx/txt2sfx.git",
+    "directory": "packages/optimizer"
+  },
+  "homepage": "https://github.com/txt2sfx/txt2sfx/tree/main/packages/optimizer#readme",
+  "bugs": "https://github.com/txt2sfx/txt2sfx/issues",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -13,9 +19,13 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "src"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "prepack": "tsc -b"
   },
   "dependencies": {
     "@txt2sfx/analyzer": "workspace:*",

@@ -37,8 +37,9 @@ describe('the package manifest', () => {
   });
 
   it('ships the bundle, the installer scripts, and nothing else from dist', () => {
-    // `tsc -b` fills dist with modules that import `@txt2sfx/*`, and those
-    // packages are private and unpublishable. Shipping the whole directory
+    // `tsc -b` fills dist with modules that import `@txt2sfx/*`, which this
+    // package deliberately does not depend on — the bundle inlines them so
+    // `npx txt2sfx-bridge` is self-contained. Shipping the whole directory
     // put files in the tarball that throw ERR_MODULE_NOT_FOUND on the first
     // import — plus a source map for every one of them. So the list is
     // enumerated, and every entry has to earn its place.
@@ -85,7 +86,8 @@ describe('the package manifest', () => {
 
   it('advertises no library entry, because the unbundled one cannot resolve for a consumer', () => {
     // The bundle is the product. `import('txt2sfx-bridge')` reaching
-    // `dist/index.js` would pull the private workspace packages with it, so
+    // `dist/index.js` would need `@txt2sfx/*` installed beside it, which the
+    // manifest deliberately does not declare (the bundle inlines them), so
     // the manifest must not promise an entry the tarball cannot honour;
     // in-repo consumers import `../src/index.js` directly and are unaffected.
     expect(manifest['main']).toBeUndefined();
